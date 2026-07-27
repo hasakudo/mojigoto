@@ -1,0 +1,2522 @@
+:root {
+  color-scheme: light dark;
+  --note-footer-height: 45px;
+  --note-footer-gap: 8px;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+
+.noteShell {
+  position: relative;
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: 8px 10px calc(var(--note-footer-height) + var(--note-footer-gap) + 8px);
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+}
+
+.layout {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(520px, 1fr) minmax(350px, 0.90fr);
+  align-items: stretch;
+  min-height: 0;
+  padding: 12px 0 10px;
+  overflow: hidden;
+}
+
+.card {
+  padding: 0 14px;
+  background: var(--vscode-editor-background);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.globalPanelsRoot:empty {
+  display: none;
+}
+
+.globalPanelsRoot {
+  width: 800px;
+  margin: 10px auto 0;
+}
+
+.noteFooterBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--note-footer-gap);
+  z-index: 70;
+
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+
+  min-height: var(--note-footer-height);
+  padding: 8px 15px 0;
+  box-sizing: border-box;
+
+  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+#toggleInputAssistBtn {
+  position: relative;
+  z-index: 85;
+  flex: 0 0 auto;
+}
+
+#deleteNoteBtn {
+  margin-left: auto;
+  position: relative;
+  z-index: 85;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .noteShell {
+    height: 100dvh;
+    padding: 8px 0 calc(var(--note-footer-height) + 16px) 5px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    overflow: auto;
+    padding: 0;
+  }
+
+  .card {
+    border: none;
+    overflow-y: initial;
+    min-height: initial;
+    height: auto;
+    padding: 8px 5px;
+  }
+
+  .editorPane {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    border-radius: 0;
+  }
+
+  .previewPane {
+    padding: 0 16px;
+  }
+
+  .globalPanelsRoot {
+    width: 100%;
+  }
+}
+
+.paneHeaderGlobal {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.topbarGroupActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width:900px) {
+  .topbarGroupActions .kbdHint {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .noteFooterBar .kbdHint {
+    display: none;
+  }
+}
+
+.dirtyMark {
+  margin-left: 6px;
+  color: var(--vscode-editorWarning-foreground, #d19a00);
+  font-weight: 700;
+}
+
+.dirtyBadge {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-editorWarning-foreground, #d19a00);
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground) 34%, var(--vscode-panel-border));
+  white-space: nowrap;
+}
+
+.toastStatus {
+  position: absolute;
+  top: 70px;
+  left: 20%;
+  z-index: 80;
+
+  min-width: 220px;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 5px 12px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+
+  background: var(--vscode-editorInfo-foreground);
+  color: var(--vscode-editor-background);
+
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
+.toastStatus.isVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toastStatus {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.paneHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.paneHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.status {
+  margin-top: 5px;
+  min-height: 1em;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.kbdHint {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.65;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.layout.isPreviewOnly {
+  grid-template-columns: minmax(0, 1fr);
+  opacity: 1;
+  min-height: 0;
+  padding-top: 0;
+  height: 100%;
+}
+
+.layout.isPreviewOnly .editorPane {
+  display: none;
+}
+
+.layout.isPreviewOnly .previewPane {
+  grid-column: 1 / -1;
+  width: 1020px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.layout.isPreviewOnly .previewPane.isBoardMode {
+  height: calc(100dvh - var(--note-footer-height) - var(--note-footer-gap) - 92px);
+  min-height: 0;
+  width: 1200px;
+}
+
+.layout.isPreviewOnly .previewPane.isBoardMode .noteBoardRootInline {
+  height: 100%;
+}
+
+.layout.isPreviewOnly .previewPane.isBoardMode .noteBoardColumn {
+  height: 100%;
+}
+
+#toggleEditorPaneBtn {
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
+.previewJumpBtn {
+  display: none;
+}
+
+@media (max-width: 1019px) {
+  .layout.isPreviewOnly .previewPane {
+    grid-column: 1 / -1;
+    width: auto;
+    margin: initial;
+  }
+
+  .previewJumpBtn {
+    display: inline-flex;
+  }
+}
+
+h1 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.row {
+  margin-bottom: 10px;
+}
+
+.groupSticky {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  padding-bottom: 10px;
+  padding-top: 8px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
+}
+
+input[type="text"],
+textarea,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 6px;
+}
+
+textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.groupItem {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 18px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 98%, var(--vscode-panel-border) 2%);
+}
+
+.groupImagePanel {
+  margin: 12px 0 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 96%, var(--vscode-panel-border) 4%);
+}
+
+.groupImagePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.groupImagePanelTitle {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.82;
+}
+
+.groupImagePopupWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.groupImageToggleBtn.isActive {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.allImagesPopupPanel {
+  position: fixed;
+  top: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1300;
+
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(72vh, 660px);
+  overflow: auto;
+
+  padding: 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 12px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.allImagesPopupPanel .groupImagePanel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.allImagesGrid {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+.groupImageNameBlock {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.allImageGroupName {
+  font-size: 11px;
+  opacity: 0.62;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupImagePopupPanel {
+  position: fixed;
+  top: 185px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1300;
+
+  width: min(640px, calc(100vw - 48px));
+  max-height: min(70vh, 620px);
+  overflow: auto;
+
+  padding: 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 12px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 700px) {
+  .allImagesPopupPanel {
+    top: 120px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    width: auto;
+    max-height: calc(100vh - 180px);
+  }
+  
+  .allImagesGrid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .groupImagePopupPanel {
+    top: 120px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    width: auto;
+    max-height: calc(100vh - 180px);
+  }
+}
+
+.groupImagePreviewOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.groupImagePreviewBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.58);
+  cursor: zoom-out;
+}
+
+.groupImagePreviewDialog {
+  position: relative;
+  z-index: 1;
+
+  width: min(1100px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding: 14px;
+  box-sizing: border-box;
+
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 14px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.38);
+}
+
+.groupImagePreviewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupImagePreviewMetaBlock {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.groupImagePreviewTitle {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.groupImagePreviewMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.groupImagePreviewBody {
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 92%, black 8%);
+}
+
+.groupImagePreviewImage {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 180px);
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.groupImagePreviewNav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+
+  width: 44px;
+  height: 44px;
+  padding: 0 0 5px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+  background: color-mix(in srgb, var(--vscode-editor-background) 84%, black 16%);
+  color: var(--vscode-editor-foreground);
+
+  font-size: 0;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.groupImagePreviewNav::before {
+  display: block;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 500;
+  transform: translateY(-1px);
+}
+
+.groupImagePreviewPrev::before {
+  content: "‹";
+  transform: translate(-1px, -1px);
+}
+
+.groupImagePreviewNext::before {
+  content: "›";
+  transform: translate(1px, -1px);
+}
+
+.groupImagePreviewNav:hover:not(:disabled) {
+  opacity: 1;
+  background: color-mix(in srgb, var(--vscode-editor-background) 72%, black 28%);
+}
+
+.groupImagePreviewNav:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.groupImagePreviewPrev {
+  left: 15px;
+}
+
+.groupImagePreviewNext {
+  right: 15px;
+}
+
+@media (max-width: 700px) {
+  .groupImagePreviewOverlay {
+    padding: 12px;
+  }
+
+  .groupImagePreviewDialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+    padding: 10px;
+  }
+
+  .groupImagePreviewImage {
+    max-height: calc(100vh - 150px);
+  }
+
+  .groupImagePreviewNav {
+    width: 30px;
+    height: 30px;
+    padding: 0 0 3px;
+  }
+
+  .groupImagePreviewNav::before {
+    font-size: 26px;
+  }
+
+  .groupImagePreviewPrev {
+    left: 8px;
+  }
+
+  .groupImagePreviewNext {
+    right: 8px;
+  }
+}
+
+.groupImagePopupPanel .groupImagePanel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.groupImagePanelActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.groupImageGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.groupImageEmpty {
+  font-size: 12px;
+  opacity: 0.65;
+  min-width: 160px;
+}
+
+.groupImageCard {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+}
+
+.groupImageOpenBtn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.groupImageOpenBtn:hover .groupImageThumb {
+  transform: scale(1.02);
+}
+
+.groupImageThumbWrap {
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-panel-border) 8%);
+}
+
+.groupImageThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 140ms ease;
+}
+
+.groupImageCaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.86;
+  word-break: break-word;
+}
+
+.groupImageName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupImageActions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.groupImageRenameBtn,
+.groupImageDeleteBtn {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  min-height: 24px;
+  font-size: 11px;
+  background: transparent;
+  border-radius: 5px;
+}
+
+.groupImageRenameBtn {
+  color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.groupImageDeleteBtn {
+  color: var(--vscode-errorForeground, #c33);
+  border: 1px solid color-mix(in srgb, var(--vscode-errorForeground, #c33) 65%, transparent);
+}
+
+.groupHead {
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 75%, transparent);
+}
+
+.groupTitle {
+  font-weight: 700;
+  font-size: 15px;
+  opacity: 0.95;
+  letter-spacing: 0.03em;
+}
+
+.groupButtons,
+.itemButtons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.itemButtons button[disabled],
+.groupButtons button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.itemMoreMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.itemMoreMenuBtn {
+  min-width: 36px;
+  padding: 0 10px;
+}
+
+.itemMoreMenuPanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 340px;
+  padding: 6px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.itemMoreMenuPanel .menuItem {
+  width: 100%;
+  text-align: left;
+  color: var(--vscode-editor-foreground);
+}
+
+.itemCard {
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 85%, transparent);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 97%, var(--vscode-panel-border) 3%);
+  box-shadow: none;
+}
+
+.dividerCard {
+  border: 0;
+  border-left: 4px solid var(--vscode-editorInfo-foreground);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 8%, transparent);
+  padding: 10px 12px;
+  margin-top: 16px;
+}
+
+.dividerCard .itemHead {
+  margin-bottom: 8px;
+}
+
+.dividerCard .itemTitle {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
+.dividerCard .row {
+  margin-bottom: 8px;
+}
+
+.dividerCard input[type="text"] {
+  background: color-mix(in srgb, var(--vscode-input-background) 92%, var(--vscode-editorInfo-foreground) 8%);
+}
+
+.itemCard .label {
+  font-size: 12px;
+  opacity: 0.85;
+  letter-spacing: 0.02em;
+}
+
+.groupActions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px dashed var(--vscode-panel-border);
+}
+
+.groupActionsBottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.groupContextLabel {
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.45;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.groupJumpLink {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 28px;
+}
+
+.groupMoreMenuWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.groupMoreMenuPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 300px;
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  z-index: 1200;
+}
+
+.groupMoreMenuPanel .menuItem {
+  width: 100%;
+  text-align: left;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button {
+  padding: 5px 14px;
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  cursor: pointer;
+}
+
+.groupButtons button,
+.itemButtons button,
+.toolbar button,
+.actions button,
+.groupActions button {
+  min-height: 34px;
+}
+
+.groupButtons,
+.itemButtons {
+  gap: 5px;
+}
+
+.groupButtons .danger,
+.itemButtons .danger {
+  margin-left: 4px;
+}
+
+.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.secondary {
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, transparent);
+}
+
+.danger {
+  color: var(--vscode-errorForeground, #fff);
+  background: transparent;
+  border-color: var(--vscode-errorForeground, #c33);
+}
+
+.muted {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.groupCollapsedNote {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 8px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.previewGroup {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
+}
+
+.previewGroup:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.previewGroup h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.previewItem {
+  margin-top: 10px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+}
+
+.previewItem h4 {
+  margin: 0 0 4px;
+  font-size: 1em;
+  font-weight: 700;
+}
+
+.previewBody {
+  line-height: 1.75;
+  opacity: 0.92;
+  font-size: 1em;
+}
+
+.previewDivider {
+  margin: 16px 0 8px;
+  padding: 4px 0;
+}
+
+.previewDividerText {
+  display: inline-block;
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.82;
+  padding-bottom: 4px;
+  border-bottom: 2px solid color-mix(in srgb, var(--vscode-editorInfo-foreground) 75%, transparent);
+}
+
+.previewItemHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 1em;
+}
+
+.previewItemHead h4 {
+  margin: 0 0 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 1em;
+}
+
+.previewItemActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.previewMiniAction {
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.previewMovePicker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.previewMovePicker select {
+  min-width: 180px;
+}
+
+.paneTitle {
+  margin: 0 0 14px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+@media (max-width: 650px) {
+  .paneTitle {
+    display: none;
+  }
+}
+
+.paneTitleSub {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.5;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.previewCollapsed {
+  font-size: 12px;
+  opacity: 0.6;
+  padding: 6px 0 10px;
+}
+
+.previewItem,
+.previewDivider,
+.previewGroup {
+  cursor: pointer;
+}
+
+.previewItem:hover,
+.previewDivider:hover,
+.previewGroup:hover {
+  opacity: 0.92;
+}
+
+.previewGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.previewGroupTitle {
+  margin: 0;
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+
+.previewGroupToggle {
+  flex: 0 0 auto;
+}
+
+.previewHelp {
+  margin: -4px 0 14px;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.58;
+}
+
+.previewPane {
+  padding-top: 0;
+}
+
+.previewHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "info actions"
+    "notice notice";
+  align-items: start;
+  gap: 8px 12px;
+
+  margin-bottom: 5px;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  padding: 16px 3px 10px;
+  background: var(--vscode-editor-background);
+}
+
+.previewHeadInfo {
+  grid-area: info;
+  min-width: 0;
+}
+
+.previewModeToggle {
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.previewModeToggle .isActive {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.previewSearchNotice {
+  grid-area: notice;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .previewHead {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "info"
+      "actions"
+      "notice";
+    padding-top: 8px;
+  }
+
+  .previewModeToggle {
+    justify-content: flex-start;
+  }
+}
+
+.itemMemoIcon,
+.previewMemoIcon {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  padding: 5px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.previewJumpHighlight {
+  border-radius: 10px;
+  outline: 2px solid color-mix(in srgb, var(--vscode-focusBorder) 70%, transparent);
+  outline-offset: 2px;
+  transition: outline-color 160ms ease;
+}
+
+.menuWrap {
+  position: relative;
+}
+
+.menuButton {
+  min-width: 38px;
+  padding: 6px 10px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.moreMenuPanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.menuItem {
+  display: block;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: var(--vscode-editor-foreground);
+}
+
+.menuItem:hover {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 100%, transparent);
+}
+
+.menuDivider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--vscode-panel-border);
+}
+
+.menuItemDanger {
+  color: var(--vscode-errorForeground, #c33);
+}
+
+.searchPanel {
+  padding: 8px 10px;
+}
+
+.searchRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.searchRow input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.searchActions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.searchActions button {
+  white-space: nowrap;
+}
+
+#noteSearchInput {
+  width: 100%;
+}
+
+.searchNotice {
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--vscode-editorWarning-foreground, var(--vscode-editor-foreground));
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground) 28%, var(--vscode-panel-border));
+}
+
+.panelMeta {
+  font-size: 12px;
+  opacity: 0.78;
+  line-height: 1.5;
+}
+
+.templatePanelMessage {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 12%, var(--vscode-editor-background));
+  border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground) 30%, var(--vscode-panel-border));
+}
+
+.templatePanel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0;
+  padding: 20px;
+  box-sizing: border-box;
+
+  background: rgba(0, 0, 0, 0.4);
+  border: 0;
+  border-radius: 0;
+}
+
+.templatePanel[hidden] {
+  display: none !important;
+}
+
+.templatePanelInner {
+  width: min(920px, 92vw);
+  max-height: 82vh;
+
+  display: flex;
+  flex-direction: column;
+
+  padding: 16px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 12px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.templateList {
+  overflow: auto;
+  min-height: 0;
+  max-height: 52vh;
+  padding-right: 6px;
+}
+
+.templatePanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.templatePanelTitle {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.templateEmpty {
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 6px 0;
+}
+
+.templateInsertBtn {
+  white-space: nowrap;
+}
+
+.templateDeleteBtn {
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.templateRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  padding: 12px;
+  position: relative;
+}
+
+.templateRowHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.templateMeta {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.templateName {
+  font-weight: 600;
+}
+
+.templateSub {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.templateActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.templatePreviewBox {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: normal;
+  word-break: break-word;
+  color: var(--vscode-editor-foreground);
+}
+
+.templatePreviewGroup {
+  padding: 8px 0;
+}
+
+.templatePreviewGroup+.templatePreviewGroup {
+  border-top: 1px solid var(--vscode-panel-border);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.templatePreviewGroupTitle {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.templatePreviewItems {
+  display: grid;
+  gap: 6px;
+}
+
+.templatePreviewDivider,
+.templatePreviewItemHead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.templatePreviewMark {
+  flex: 0 0 auto;
+  opacity: 0.75;
+}
+
+.templatePreviewDividerLabel,
+.templatePreviewItemTitle {
+  font-weight: 600;
+}
+
+.templatePreviewDividerValue {
+  opacity: 0.8;
+}
+
+.templatePreviewItem {
+  padding-left: 1em;
+}
+
+.templatePreviewBodySummary {
+  display: block;
+  margin: 3px 0 0 1.4em;
+  opacity: 0.85;
+  line-height: 1.6;
+  max-width: calc(100% - 1.4em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.templatePreviewBodyDetails {
+  margin: 3px 0 0 1.4em;
+}
+
+.templatePreviewBodyDetails summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.templatePreviewBodyDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.templatePreviewBodyToggle {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.85em;
+  opacity: 0.75;
+  text-decoration: underline;
+}
+
+.templatePreviewBodyFull {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--vscode-panel-border);
+  white-space: pre-wrap;
+  line-height: 1.7;
+  opacity: 0.95;
+}
+
+.templatePreviewEmpty {
+  opacity: 0.7;
+}
+
+.templateInsertTarget {
+  font-size: 11px;
+  text-align: right;
+  padding-bottom: 8px;
+  opacity: 0.65;
+}
+
+.templateHelp {
+  font-size: 11px;
+  text-align: right;
+  padding-top: 8px;
+  opacity: 0.65;
+}
+
+.movePicker {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 96%, var(--vscode-panel-border) 4%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.movePickerLabel {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.movePicker select {
+  min-width: 220px;
+}
+
+.itemMemoPanel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: var(--vscode-sideBar-background);
+}
+
+.itemMemoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.itemMemoTitle {
+  font-weight: 600;
+}
+
+.itemMemoMeta {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.memoItemTitle {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+}
+
+.itemMemoPanel textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.itemMemoActions {
+  display: flex;
+  gap: 8px;
+}
+
+.itemMemoActionsLabel {
+  font-size: 12px;
+  opacity: 0.8;
+  align-self: center;
+}
+
+.itemMemoClearButton {
+  margin-left: auto;
+}
+
+@media (max-width: 620px) {
+  .itemMemoActionsLabel {
+    display: none;
+  }
+}
+
+.editorJumpHighlight {
+  animation: jumpFlash 0.9s ease;
+}
+
+.noteAssistPanel {
+  position: fixed;
+  left: 400px;
+  right: auto;
+  bottom: 0;
+  z-index: 75;
+
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.noteAssistPanel .inputAssistWrap {
+  width: min(700px, calc(100vw - 610px));
+  pointer-events: auto;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.18);
+  margin-left: 0;
+}
+
+.noteAssistPanel[hidden] {
+  display: none;
+}
+
+.noteAssistPanel .inputAssistBody {
+  padding: 8px 10px;
+}
+
+@media (max-width: 800px) {
+  .noteAssistPanel {
+    left: 12px;
+    right: 12px;
+    bottom: 55px;
+    justify-content: center;
+  }
+
+  .noteAssistPanel .inputAssistWrap {
+    width: min(700px, calc(100vw - 24px));
+    margin-left: 0;
+  }
+}
+
+.previewSideDots {
+  text-emphasis: filled dot;
+  -webkit-text-emphasis: filled dot;
+}
+
+.previewBody ruby {
+  ruby-align: center;
+}
+
+.previewBody rt {
+  font-size: 0.65em;
+}
+
+.noteBoardPanel {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.noteBoardPanel[hidden] {
+  display: none !important;
+}
+
+.noteBoardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  grid-row: 1;
+
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background);
+}
+
+.noteBoardTitle {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.noteBoardHint {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.68;
+}
+
+.noteBoardHead {
+  grid-row: 1;
+}
+
+.noteBoardSearchNotice {
+  grid-row: 2;
+}
+
+.noteBoardRoot {
+  grid-row: 3;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.previewPane.isBoardMode {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.previewPane.isBoardMode .previewHead {
+  grid-row: 1;
+}
+
+.previewPane.isBoardMode .noteBoardRootInline {
+  grid-row: 2;
+}
+
+.noteBoardRootInline {
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+  padding: 8px 5px;
+  box-sizing: border-box;
+}
+
+.noteBoardRootInline[hidden] {
+  display: none !important;
+}
+
+.noteBoardRootInline .noteBoardColumn {
+  flex-basis: clamp(260px, 42vw, 340px);
+  min-width: 260px;
+}
+
+.noteBoardColumn {
+  flex: 0 0 clamp(290px, 24vw, 360px);
+  min-width: 290px;
+  min-height: 0;
+  align-self: stretch;
+  box-sizing: border-box;
+
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 97%, var(--vscode-panel-border) 3%);
+  overflow: hidden;
+}
+
+.noteBoardColumnHead {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-panel-border) 6%);
+}
+
+.noteBoardColumnTitle {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+
+  text-align: left;
+  font-weight: 700;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.noteBoardColumnTitle:hover {
+  text-decoration: underline;
+}
+
+.noteBoardColumnMeta {
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.62;
+}
+
+.noteBoardColumnBody {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.noteBoardDivider {
+  margin: 10px 0 8px;
+  padding: 7px 8px;
+  border-left: 3px solid var(--vscode-editorInfo-foreground);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 9%, transparent);
+}
+
+.noteBoardDivider:first-child {
+  margin-top: 0;
+}
+
+.noteBoardDividerBlock {
+  position: relative;
+  margin: 14px 0;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 78%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--vscode-editor-background) 96%, var(--vscode-panel-border) 4%);
+}
+
+.noteBoardDividerBlock:first-child {
+  margin-top: 0;
+}
+
+.noteBoardDividerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 72%, transparent);
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 8%, var(--vscode-editor-background));
+}
+
+.noteBoardDividerCards {
+  padding: 10px;
+}
+
+.noteBoardDividerCards .noteBoardCard:first-child {
+  margin-top: 0;
+}
+
+.noteBoardPlainCards {
+  display: block;
+}
+
+.noteBoardBlockEmpty {
+  padding: 8px 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.62;
+}
+
+.noteBoardDividerLabel {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.noteBoardDividerJumpBtn {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.noteBoardDividerJumpBtn:hover .noteBoardDividerLabel {
+  text-decoration: underline;
+}
+
+.noteBoardDividerJumpBtn .noteBoardDividerValue {
+  display: block;
+}
+
+.noteBoardDividerMoveBtn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.noteBoardDividerMovePicker {
+  margin: 8px 10px 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 45%, var(--vscode-panel-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-focusBorder) 8%);
+}
+
+.noteBoardMoveHelp {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.68;
+}
+
+.noteBoardDividerValue {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.78;
+}
+
+.noteBoardCard {
+  position: relative;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 85%, transparent);
+  border-radius: 10px;
+  background: var(--vscode-editor-background);
+}
+
+.noteBoardCard:first-child {
+  margin-top: 0;
+}
+
+.noteBoardCard.isExpanded {
+  border-color: color-mix(in srgb, var(--vscode-focusBorder) 58%, var(--vscode-panel-border));
+}
+
+.noteBoardCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.noteBoardCardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+
+  text-align: left;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.noteBoardCardTitle:hover {
+  text-decoration: underline;
+}
+
+.noteBoardCardActions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.noteBoardMiniBtn {
+  min-height: 26px;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.noteBoardSearchNotice {
+  grid-row: 2;
+  margin: 8px 14px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--vscode-editorWarning-foreground, var(--vscode-editor-foreground));
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d19a00) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground, #d19a00) 28%, var(--vscode-panel-border));
+}
+
+.noteBoardSearchNotice[hidden] {
+  display: none !important;
+}
+
+.noteBoardCard {
+  position: relative;
+}
+
+.noteBoardDragHandle {
+  flex: 0 0 auto;
+  min-width: 24px;
+  min-height: 26px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+  background: color-mix(in srgb, var(--vscode-button-secondaryBackground, transparent) 92%, transparent);
+  cursor: grab;
+  user-select: none;
+  opacity: 0.72;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.noteBoardDragHandle:hover {
+  opacity: 1;
+  outline: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+}
+
+.noteBoardDragHandle:active {
+  cursor: grabbing;
+}
+
+.noteBoardDragHandle.isDisabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.noteBoardCard.isBoardDragging {
+  opacity: 0.45;
+}
+
+.noteBoardCard.isBoardDragOverBefore::before,
+.noteBoardCard.isBoardDragOverAfter::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 3;
+
+  height: 3px;
+  border-radius: 999px;
+  background: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-editor-background) 65%, transparent);
+}
+
+.noteBoardCard.isBoardDragOverBefore::before {
+  top: -6px;
+}
+
+.noteBoardCard.isBoardDragOverAfter::after {
+  bottom: -6px;
+}
+
+.noteBoardEmptyDividerDrop {
+  border: 1px dashed color-mix(in srgb, var(--vscode-focusBorder) 42%, var(--vscode-panel-border));
+  border-radius: 8px;
+  min-height: 34px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    opacity 120ms ease;
+}
+
+.noteBoardEmptyDividerDrop.isBoardEmptyDropTarget {
+  opacity: 1;
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
+}
+
+.noteBoardDividerDragHandle {
+  flex: 0 0 auto;
+  min-width: 24px;
+  min-height: 26px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground));
+  background: color-mix(in srgb, var(--vscode-button-secondaryBackground, transparent) 92%, transparent);
+  cursor: grab;
+  user-select: none;
+  opacity: 0.72;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.noteBoardDividerDragHandle:hover {
+  opacity: 1;
+  outline: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 55%, transparent);
+}
+
+.noteBoardDividerDragHandle:active {
+  cursor: grabbing;
+}
+
+.noteBoardDividerDragHandle.isDisabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.noteBoardDividerBlock.isBoardDividerDragging {
+  opacity: 0.45;
+}
+
+.noteBoardDividerBlock.isBoardDividerDragOverBefore::before,
+.noteBoardDividerBlock.isBoardDividerDragOverAfter::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 4;
+
+  height: 3px;
+  border-radius: 999px;
+  background: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-editor-background) 65%, transparent);
+}
+
+.noteBoardDividerBlock.isBoardDividerDragOverBefore::before {
+  top: 0;
+}
+
+.noteBoardDividerBlock.isBoardDividerDragOverAfter::after {
+  bottom: 0;
+}
+
+.noteBoardMoveBtn:disabled,
+.noteBoardDividerMoveBtn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.noteBoardMoveBtn:disabled:hover,
+.noteBoardDividerMoveBtn:disabled:hover {
+  text-decoration: none;
+}
+
+.noteBoardMovePicker {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-focusBorder) 45%, var(--vscode-panel-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-focusBorder) 8%);
+}
+
+.noteBoardMoveTitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.noteBoardMoveLabel {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  opacity: 0.86;
+}
+
+.noteBoardMoveLabel select {
+  width: 100%;
+  font-size: 12px;
+}
+
+.noteBoardMoveActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.noteBoardCardBody {
+  display: -webkit-box;
+  width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.65;
+  opacity: 0.88;
+
+  line-clamp: 4;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.noteBoardCardBody.isExpanded {
+  display: block;
+  line-clamp: unset;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.noteBoardEmpty,
+.noteBoardNoResult {
+  padding: 10px;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.noteBoardHeadText {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.noteBoardSearch {
+  flex: 0 1 420px;
+  min-width: 240px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.noteBoardSearch input[type="text"] {
+  min-width: 0;
+}
+
+.noteBoardSearch button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.noteBoardCloseArea {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.noteBoardSaveArea {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  margin-left: 4px;
+  padding-left: 14px;
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.noteBoardDirtyBadge {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.noteBoardSaveBtn {
+  white-space: nowrap;
+}
+
+.noteBoardCloseBtn {
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .noteBoardHead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "title save close"
+      "search search search";
+    align-items: start;
+    gap: 10px 12px;
+  }
+
+  .noteBoardHeadText {
+    grid-area: title;
+  }
+
+  .noteBoardSearch {
+    grid-area: search;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .noteBoardSaveArea {
+    grid-area: save;
+    margin-left: 0;
+    padding-left: 12px;
+  }
+
+  .noteBoardCloseArea {
+    grid-area: close;
+    margin-left: 0;
+    padding-left: 12px;
+  }
+}
+
+@media (max-width: 900px) {
+  .previewPane.isBoardMode {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+
+    min-height: 560px;
+    height: min(82vh, 830px);
+  }
+
+  .previewPane.isBoardMode .noteBoardRootInline {
+    min-height: 0;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .previewPane.isBoardMode .noteBoardColumn {
+    height: 100%;
+    min-height: 0;
+    flex-basis: min(82vw, 340px);
+    min-width: 250px;
+  }
+
+  .layout.isPreviewOnly {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .layout.isPreviewOnly .previewPane.isBoardMode {
+    height: calc(100dvh - var(--note-footer-height) - var(--note-footer-gap) - 92px);
+    min-height: 0;
+  }
+
+  .layout.isPreviewOnly .previewPane.isBoardMode .noteBoardRootInline {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .layout.isPreviewOnly .previewPane.isBoardMode .noteBoardColumn {
+    height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .noteBoardHead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title title"
+      "search search"
+      "close save";
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 12px;
+  }
+
+  .noteBoardHeadText {
+    grid-area: title;
+  }
+
+  .noteBoardHint {
+    max-width: 48ch;
+  }
+
+  .noteBoardSearch {
+    grid-area: search;
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .noteBoardSearch input[type="text"] {
+    min-width: 0;
+  }
+
+  .noteBoardSearch button {
+    white-space: nowrap;
+  }
+
+  .noteBoardSaveArea {
+    grid-area: save;
+    justify-self: end;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .noteBoardCloseArea {
+    grid-area: close;
+    justify-self: start;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .noteBoardSaveBtn,
+  .noteBoardCloseBtn {
+    min-height: 32px;
+    padding: 5px 12px;
+  }
+
+  .noteBoardColumn {
+    flex-basis: min(86vw, 360px);
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 520px) {
+
+  .noteBoardSaveArea .kbdHint,
+  .noteBoardCloseArea .kbdHint {
+    display: none;
+  }
+}
+
+/* =========================================
+   Preview inline board height fix
+   ========================================= */
+
+.previewPane.isBoardMode {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.previewPane.isBoardMode .previewHead {
+  grid-row: 1;
+}
+
+.previewPane.isBoardMode .noteBoardRootInline {
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+
+.previewPane.isBoardMode .noteBoardColumn {
+  height: 100%;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.previewPane.isBoardMode .noteBoardColumnBody {
+  min-height: 0;
+  overflow: auto;
+}
+
+@keyframes jumpFlash {
+  0% {
+    background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 60%, transparent);
+  }
+
+  100% {
+    background: transparent;
+  }
+}

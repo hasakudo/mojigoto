@@ -1,0 +1,807 @@
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+}
+
+.noteShell {
+  position: relative;
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: 8px 10px 10px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.paneHeaderGlobal {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.paneHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.paneHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.status {
+  margin-top: 5px;
+  min-height: 1em;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.kbdHint {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.65;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+h1 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.row {
+  margin-bottom: 10px;
+}
+
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 6px;
+}
+
+button {
+  padding: 5px 14px;
+  font: inherit;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  cursor: pointer;
+}
+
+.primary {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.secondary {
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, transparent);
+}
+
+.copySummaryLine {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  column-gap: 10px;
+  align-items: start;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.copySummaryLabel {
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.copySummaryValue {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.copyPanelSettings {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.copyPanelSettings[hidden] {
+  display: none !important;
+}
+
+.copySettingsSection {
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 3%, transparent);
+}
+
+.copySettingsSectionTitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.copyItemList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.copyItemName {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.copyPanelBody {
+  margin-top: 10px;
+}
+
+.copyItemMeta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.copyItemExpanded {
+  margin-top: 8px;
+}
+
+.copyItemExpandedBody {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, transparent);
+  line-height: 1.7;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.copyItemExpandedBody.isEmpty {
+  opacity: 0.7;
+}
+
+.copyPanelOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.copyPanelOverlay[hidden] {
+  display: none !important;
+}
+
+.copyPanelDialog {
+  width: min(1180px, calc(100vw - 40px));
+  height: min(82vh, 860px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 12px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+}
+
+.copyPanelDialogHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.copyPanelDialogTitle {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.copyStandaloneRoot {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.copyPanelDialogBody {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(280px, 360px) minmax(320px, 1fr);
+  grid-template-areas: "controls preview source";
+  gap: 16px;
+  align-items: stretch;
+}
+
+.copyPanelControls {
+  grid-area: controls;
+}
+
+.copyPanelPreview {
+  grid-area: preview;
+}
+
+.copyPanelSource {
+  grid-area: source;
+}
+
+.copyPanelControls,
+.copyPanelSource,
+.copyPanelPreview {
+  min-height: 0;
+}
+
+.copyPanelControls,
+.copyPanelPreview {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 6px 8px 0;
+  box-sizing: border-box;
+}
+
+.copyPanelSource {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-left: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--vscode-panel-border);
+  padding: 2px 16px 8px;
+  box-sizing: border-box;
+}
+
+.copyPanelSource .copyGroupCard+.copyGroupCard {
+  margin-top: 12px;
+}
+
+.copyPanelSource .copyItemRow+.copyItemRow {
+  margin-top: 10px;
+}
+
+.copyPanelSource .templateList,
+.copyPanelSource #copySourceContent {
+  overflow: visible;
+  max-height: none;
+  padding-right: 0;
+}
+
+.copyPanelPreview {
+  justify-content: flex-start;
+}
+
+.copyPanelSummaryCard {
+  padding: 12px 14px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  background: var(--vscode-sideBar-background);
+}
+
+.copyPanelSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copyPanelBody {
+  margin-top: 0;
+  min-height: 100%;
+}
+
+#copySourceContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.copyTargetPreviewTitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.copyTargetPreviewLine {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.copyTargetPreviewLabel {
+  opacity: 0.75;
+}
+
+.copyTargetPreviewValue {
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.copyTargetPreviewHint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.72;
+  line-height: 1.6;
+}
+
+.copyTargetPreviewContext {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--vscode-panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.copyTargetPreviewContextRow {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.copyTargetPreviewMiniLabel {
+  opacity: 0.7;
+}
+
+.copyTargetPreviewMiniValue {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.copyTargetPreviewInsertRow {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground) 24%, var(--vscode-panel-border));
+}
+
+.copyTargetPreviewBlockTitle {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--vscode-panel-border);
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.copyTargetPreviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.copyTargetPreviewListItem {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 97%, var(--vscode-panel-border) 3%);
+}
+
+.copyTargetPreviewListItemLabel {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.copyTargetPreviewListItemSub {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  opacity: 0.75;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.copyTargetPreviewListInsert {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground) 24%, var(--vscode-panel-border));
+}
+
+.copyTargetPreviewListInsertMark {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.copyTargetPreviewListInsertText {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#copyTargetPreview {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.copyPreviewModeToggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 3px;
+  padding: 0 2px 0 0;
+}
+
+.copyPreviewModeToggle .isActive {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.copyPanelPreviewActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.copyPanelPreviewActions button {
+  width: 100%;
+}
+
+.copyPanelPreviewActions button[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.copyPanelActionStatus {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--vscode-editorInfo-foreground, var(--vscode-editor-foreground));
+  background: color-mix(in srgb, var(--vscode-editorInfo-foreground) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground) 24%, var(--vscode-panel-border));
+}
+
+.copyItemNameRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.copyItemKind {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.82;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+}
+
+.copyItemName {
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.copyItemSub {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.72;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copyItemSubCollapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.copyItemRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+  border-radius: 8px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-background) 97%, var(--vscode-panel-border) 3%);
+}
+
+.copyItemActions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.copyMiniToggle {
+  min-width: 56px;
+}
+
+.copyItemExpanded {
+  margin-top: 8px;
+}
+
+.copyItemExpandedBody {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, transparent);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.copyGroupCard {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  padding: 10px;
+  margin: 0;
+  background: color-mix(in srgb, var(--vscode-editor-background) 98%, var(--vscode-panel-border) 2%);
+}
+
+.copyGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.copyGroupTitle {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.toastStatus {
+  position: absolute;
+  top: 72px;
+  left: 20px;
+  z-index: 80;
+
+  min-width: 220px;
+  max-width: min(520px, calc(100% - 40px));
+  padding: 6px 12px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+
+  background: var(--vscode-editorInfo-foreground);
+  color: var(--vscode-editor-background);
+
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.toastStatus.isVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.copyStandaloneRoot.isCompact .copyOpenSummary {
+  display: none;
+}
+
+.copyStandaloneRoot.isCompact .copyPanelPreview {
+  display: none;
+}
+
+@media (min-width: 1400px) {
+  .copyStandaloneRoot.isCompact .copyPanelPreview {
+    display: flex;
+  }
+}
+
+@media (max-width: 1100px) {
+
+  html,
+  body {
+    overflow: hidden;
+  }
+
+  .noteShell {
+    height: 100dvh;
+    min-height: 0;
+    padding: 8px 8px 10px;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .copyStandaloneRoot {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .copyPanelDialogBody {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(220px, 260px) minmax(240px, 300px) minmax(0, 1fr);
+    grid-template-areas: "controls preview source";
+    gap: 12px;
+  }
+
+  .copyPanelControls,
+  .copyPanelSource,
+  .copyPanelPreview {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .copyPanelControls,
+  .copyPanelPreview {
+    padding-right: 0;
+  }
+
+  .copyPanelSource {
+    padding: 2px 10px 8px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .copyStandaloneRoot.isCompact .copyPanelDialogBody {
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    grid-template-areas: "controls source";
+    gap: 12px;
+  }
+
+  .copyStandaloneRoot.isCompact .copyPanelPreview {
+    display: none;
+  }
+
+  .copyStandaloneRoot.isCompact .copyPanelSource {
+    border-right: none;
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .copySummaryLine {
+    grid-template-columns: 1fr;
+    row-gap: 2px;
+  }
+
+  .copySummaryValue {
+    text-align: left;
+  }
+
+  .copyItemRow {
+    grid-template-columns: 1fr;
+  }
+
+  .copyItemActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 620px) {
+
+  html,
+  body {
+    overflow: auto;
+  }
+
+  .noteShell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .copyStandaloneRoot {
+    height: auto;
+    overflow: visible;
+  }
+
+  .copyPanelDialogBody {
+    height: auto;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "preview"
+      "source";
+    gap: 12px;
+  }
+
+  .copyPanelControls,
+  .copyPanelSource,
+  .copyPanelPreview {
+    overflow: visible;
+    min-height: auto;
+    padding-right: 0;
+  }
+
+  .copyPanelSource {
+    border-left: none;
+    border-right: none;
+    border-top: 1px solid var(--vscode-panel-border);
+    padding: 12px 0 0;
+  }
+
+  .copyPanelPreview {
+    border-top: 1px solid var(--vscode-panel-border);
+    padding-top: 12px;
+  }
+
+  .copyStandaloneRoot.isCompact .copyPanelDialogBody {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "controls"
+      "source";
+  }
+
+  .copyStandaloneRoot.isCompact .copyPanelSource {
+    border-left: none;
+    border-top: 1px solid var(--vscode-panel-border);
+    padding: 12px 0 0;
+  }
+}

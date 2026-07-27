@@ -1,0 +1,22 @@
+.agents/**
+.git/**
+.github/**
+.vscode/**
+.vscode-test/**
+node_modules/**
+
+.env
+.env.*
+*.vsix
+*.log
+vertical-preview.html
+
+# README screenshots are loaded from the public GitHub repository.
+images/**
+!images/favicon.ico
+!images/icon.png
+!images/mojigoto.png
+!images/mojigoto.svg
+
+.gitignore
+.vscodeignore

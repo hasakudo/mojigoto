@@ -1,0 +1,1615 @@
+{
+  "name": "mojigoto",
+  "displayName": "もじごと",
+  "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
+  "version": "1.0.0",
+  "publisher": "hasakudo",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./extension.js",
+  "icon": "images/icon.png",
+  "license": "MIT",
+  "categories": [
+    "Other"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hasakudo/mojigoto.git"
+  },
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onLanguage:plaintext",
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "もじごと（執筆補助）",
+      "properties": {
+        "mojigoto.mode": {
+          "type": "string",
+          "enum": [
+            "single",
+            "multi"
+          ],
+          "markdownEnumDescriptions": [
+            "1つの作品だけを管理する",
+            "複数の作品を切り替えて管理する"
+          ],
+          "default": "single",
+          "description": "初回セットアップで選択した運用モード",
+          "category": "もじごと:セットアップ",
+          "order": 0
+        },
+        "mojigoto.defaultFileExtension": {
+          "type": "string",
+          "default": ".txt",
+          "enum": [
+            ".txt",
+            ".md"
+          ],
+          "description": "もじごとで新規作成する原稿ファイルの既定拡張子",
+          "category": "もじごと:セットアップ",
+          "order": 1
+        },
+        "mojigoto.manuscriptRoot": {
+          "type": "string",
+          "default": "",
+          "description": "プレビュー同期や進捗管理などを行う基準フォルダ",
+          "category": "もじごと:セットアップ",
+          "order": 2
+        },
+        "mojigoto.manuscriptCandidates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "manuscript",
+            "原稿"
+          ],
+          "description": "作品フォルダ内で「原稿フォルダ」として認識する名前候補（作品切替の検出に使用）",
+          "category": "もじごと:セットアップ",
+          "order": 3
+        },
+        "mojigoto.workRoot": {
+          "type": "string",
+          "default": "",
+          "description": "作品フォルダが入っているルートフォルダのパス（作品切替に使用）",
+          "category": "もじごと:作品",
+          "order": 10
+        },
+        "mojigoto.workPickLimit": {
+          "type": "number",
+          "default": 10,
+          "description": "作品切替ダイアログに表示する作品の最大件数",
+          "category": "もじごと:作品",
+          "order": 11
+        },
+        "mojigoto.workExclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".vscode",
+            "CSS",
+            "node_modules",
+            "publish",
+            "tools",
+            "_WORK",
+            "manuscript",
+            "docs",
+            "Doc",
+            "Doc(s)",
+            "temp",
+            "tmp",
+            "dist",
+            ".git"
+          ],
+          "description": "指定したフォルダ名は作品ツリーおよび作品切替の一覧から除外されます。通常は変更不要です。",
+          "category": "もじごと:作品",
+          "order": 12
+        },
+        "mojigoto.totalGoal": {
+          "type": "number",
+          "default": 0,
+          "description": "作品全体の目標文字数（進捗％の計算に使用）\n例：100000",
+          "category": "もじごと:執筆",
+          "order": 20
+        },
+        "mojigoto.countMode": {
+          "type": "string",
+          "default": "default",
+          "enum": [
+            "default",
+            "withFullWidthSpaces",
+            "withNewlines",
+            "withSpacesAndNewlines",
+            "allInclusive",
+            "allExceptNewlines"
+          ],
+          "markdownEnumDescriptions": [
+            "ルビ/見出し記号・空白・改行を除いて数えます。",
+            "ルビ/見出し記号・改行を除き、全角空白を含めて数えます。",
+            "ルビ/見出し記号・空白を除き、改行を含めて数えます。",
+            "ルビ/見出し記号を除き、空白と改行を含めて数えます。",
+            "ルビ/見出し記号・空白・改行を含め、すべて数えます。",
+            "ルビ/見出し記号・空白を含めて数えます。改行のみ除きます。"
+          ],
+          "markdownDescription": "文字数カウント方式を切り替えます。",
+          "category": "もじごと:執筆",
+          "order": 21
+        },
+        "mojigoto.rubyPipeStyle": {
+          "type": "string",
+          "default": "half",
+          "enum": [
+            "half",
+            "full"
+          ],
+          "markdownEnumDescriptions": [
+            "半角 `|` ",
+            "全角 `｜`"
+          ],
+          "markdownDescription": "ルビ挿入コマンドで使う記号を選びます。`half` は `|`、`full` は `｜` です。",
+          "category": "もじごと:執筆",
+          "order": 22
+        },
+        "mojigoto.autoIndentEnabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "改行時に次の行へ全角スペースを自動挿入します。Shift を押しながらの改行では挿入しません。",
+          "category": "もじごと:執筆",
+          "order": 23
+        },
+        "mojigoto.autoCloseAssistEnabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "`「` と `（` の閉じ記号を自動補完する機能の ON / OFF です。",
+          "category": "もじごと:執筆",
+          "order": 24
+        },
+        "mojigoto.writingMemoDecorationsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "エディタ上で執筆メモの下線表示を有効にします。",
+          "category": "もじごと:執筆",
+          "order": 25
+        },
+        "mojigoto.highlightsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "ハイライト機能全体の ON / OFF です。不要な場合はここで無効化できます。",
+          "category": "もじごと:ハイライト",
+          "order": 30
+        },
+        "mojigoto.highlightDecorationsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "ハイライト装飾の ON / OFF です。不要な場合はここで無効化できます。",
+          "category": "もじごと:ハイライト",
+          "order": 31
+        },
+        "mojigoto.highlightGroups": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "ハイライト分析で使う検出グループです。\n\n通常は設定画面から直接編集せず、Dashboard のハイライト分析にある **ハイライト設定** ボタン、または `もじごと:ハイライト設定を開く` から編集してください。\n\n既存グループへの語句追加、新規グループ作成、装飾スタイル変更に使用します。",
+          "category": "もじごと:ハイライト",
+          "order": 32,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "内部識別名"
+              },
+              "label": {
+                "type": "string",
+                "description": "表示名"
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "有効/無効"
+              },
+              "words": {
+                "type": "array",
+                "description": "単語一致の対象一覧",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "regex": {
+                "type": "string",
+                "description": "行単位で評価する正規表現"
+              },
+              "style": {
+                "type": "object",
+                "description": "装飾スタイル",
+                "properties": {
+                  "backgroundColor": {
+                    "type": "string"
+                  },
+                  "color": {
+                    "type": "string"
+                  },
+                  "border": {
+                    "type": "string"
+                  },
+                  "fontWeight": {
+                    "type": "string"
+                  },
+                  "textDecoration": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "tags": [
+            "advanced"
+          ]
+        },
+        "mojigoto.dashboardShowTextMemos": {
+          "type": "boolean",
+          "default": false,
+          "description": "ダッシュボードで通常メモを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 40
+        },
+        "mojigoto.dashboardShowListMemos": {
+          "type": "boolean",
+          "default": false,
+          "description": "ダッシュボードでリストメモを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 41
+        },
+        "mojigoto.dashboardShowTodoMemos": {
+          "type": "boolean",
+          "default": true,
+          "description": "ダッシュボードでTODOメモを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 42
+        },
+        "mojigoto.exportRoot": {
+          "type": "string",
+          "default": "",
+          "description": "書き出し先の親フォルダ。未設定の場合、初回の書き出し時に選択します。作品ごとに用途別フォルダを自動作成します。",
+          "category": "もじごと:書き出し",
+          "order": 50
+        },
+        "mojigoto.mergedManuscriptJoinMode": {
+          "type": "string",
+          "default": "headingAware",
+          "enum": [
+            "headingAware",
+            "single",
+            "double"
+          ],
+          "markdownEnumDescriptions": [
+            "見出し付きなら改行1つ、見出しなしなら改行2つ",
+            "常に改行1つ",
+            "常に改行2つ"
+          ],
+          "markdownDescription": "原稿結合書き出し時のファイル間改行ルール",
+          "category": "もじごと:書き出し",
+          "order": 51
+        },
+        "mojigoto.verticalPunctuationLayout": {
+          "type": "string",
+          "default": "hanging",
+          "enum": [
+            "hanging",
+            "pushout"
+          ],
+          "markdownEnumDescriptions": [
+            "句読点は行末にぶら下げる。閉じ括弧や ！？ が行頭に来ないよう追い出します。",
+            "句読点と閉じ括弧を行末に追い込み寄りに配置します。"
+          ],
+          "markdownDescription": "縦書きHTML書き出し時の句読点・閉じ括弧の配置方法を切り替えます。",
+          "category": "もじごと:書き出し",
+          "order": 52
+        },
+        "mojigoto.useTypographyAdjustments": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "縦書きプレビューと原稿書き出しで、ぶら下げ・追い込みなどの自動体裁調整を使用します。OFFでは本文の並びを優先し、自動調整を行いません。",
+          "category": "もじごと:書き出し",
+          "order": 53
+        },
+        "mojigoto.exportIncludeFolderName": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "作品設定のHTML書き出しにフォルダ名を含めます。",
+          "category": "もじごと:書き出し",
+          "order": 54
+        },
+        "mojigoto.exportIncludeGenre": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "作品設定のHTML書き出しにジャンルを含めます。",
+          "category": "もじごと:書き出し",
+          "order": 55
+        },
+        "mojigoto.exportIncludeTargetChars": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "作品設定のHTML書き出しに目標文字数を含めます。",
+          "category": "もじごと:書き出し",
+          "order": 56
+        },
+        "mojigoto.exportIncludeDeadline": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "作品設定のHTML書き出しに締切日を含めます。",
+          "category": "もじごと:書き出し",
+          "order": 57
+        },
+        "mojigoto.exportIncludeMemo": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "作品設定のHTML書き出しにメモを含めます。",
+          "category": "もじごと:書き出し",
+          "order": 58
+        },
+        "mojigoto.exportIncludeUpdatedAt": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "作品設定のHTML書き出しに更新日時を含めます。単一書き出しのみ",
+          "category": "もじごと:書き出し",
+          "order": 59
+        },
+        "mojigoto.sheetsEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "執筆記録をGoogle Sheetsへ記録する機能を有効にする（Webhook送信/シート作成/送信ボタン等）",
+          "category": "もじごと:統計送信",
+          "order": 60
+        },
+        "mojigoto.projectName": {
+          "type": "string",
+          "default": "",
+          "description": "統計送信用の作品名（Sheets側の「作品」列に入る名前）空なら現在の作品名を自動使用（設定には保存しません）",
+          "category": "もじごと:統計送信",
+          "order": 61
+        },
+        "mojigoto.webhookUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Apps Script WebアプリのURL",
+          "category": "もじごと:統計送信",
+          "order": 62
+        },
+        "mojigoto.webhookSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Apps Script用のSECRET",
+          "category": "もじごと:統計送信",
+          "order": 63
+        },
+        "mojigoto.webhookProgressMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "onSave"
+          ],
+          "markdownEnumDescriptions": [
+            "送らない",
+            "保存時に送る"
+          ],
+          "default": "onSave",
+          "description": "Progress（進捗）を送るタイミング",
+          "category": "もじごと:統計送信",
+          "order": 64
+        },
+        "mojigoto.webhookEventsMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "onSave",
+            "onCommand"
+          ],
+          "markdownEnumDescriptions": [
+            "送らない",
+            "保存時に1件ずつ",
+            "ボタン実行で未送信分だけ送る"
+          ],
+          "default": "off",
+          "description": "日時ログ（Daily_Log）を送るタイミング。ボタンでの送信は執筆記録から行う。",
+          "category": "もじごと:統計送信",
+          "order": 66
+        },
+        "mojigoto.eventLogIntervalMinutes": {
+          "type": "number",
+          "enum": [
+            0,
+            1,
+            5,
+            15,
+            30,
+            60
+          ],
+          "default": 5,
+          "description": "日時ログを保存する最小間隔（分）。0=毎回保存",
+          "category": "もじごと:統計",
+          "order": 70
+        },
+        "mojigoto.webhookEventsRemindMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "weekly",
+            "monthly"
+          ],
+          "markdownEnumDescriptions": [
+            "通知しない",
+            "7日超",
+            "30日超"
+          ],
+          "default": "off",
+          "description": "日時ログ（Daily_Log）の送信忘れ通知。最後の送信からの日数（未送信がある場合に通知）",
+          "category": "もじごと:統計",
+          "order": 71
+        },
+        "mojigoto.eventsMaxCount": {
+          "type": "number",
+          "default": 4000,
+          "description": "日時ログの最大保存件数。超えた分は古い順に削除します。",
+          "category": "もじごと:統計",
+          "order": 72
+        },
+        "mojigoto.eventsRetentionDays": {
+          "type": "number",
+          "default": 90,
+          "description": "日時ログの保持日数。0=無制限。件数制限より前でも、保持日数を過ぎたデータは削除します。",
+          "category": "もじごと:統計",
+          "order": 73
+        },
+        "mojigoto.dailyRetentionDays": {
+          "type": "number",
+          "default": 365,
+          "description": "進捗データ・更新ファイル履歴の保持日数。0=無制限。",
+          "category": "もじごと:統計",
+          "order": 74
+        },
+        "mojigoto.statusBarCountsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "ステータスバーの文字数カウンター（ファイル / 章 / 総）を表示します。",
+          "category": "もじごと:表示",
+          "order": 90
+        },
+        "mojigoto.hideChapterNumber": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "作品ツリーで章フォルダ名の先頭番号を非表示にします。実際のフォルダ名は変更しません。",
+          "category": "もじごと:表示",
+          "order": 91
+        },
+        "mojigoto.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "デバッグログを有効にします（通常はオフでOK）",
+          "category": "もじごと:その他",
+          "order": 999
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "mojigoto.resetFirstRun",
+        "title": "初回リセット"
+      },
+      {
+        "command": "mojigoto.ping",
+        "title": "プレビューサーバー接続確認",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.toggle",
+        "title": "プレビュー自動同期 ON/OFF",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.openPreviewBeside",
+        "title": "縦書きプレビューを開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.serverStop",
+        "title": "プレビューサーバーを停止",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.serverRestart",
+        "title": "プレビューサーバーを再起動",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.switchWorkAndRestart",
+        "title": "作品を切り替え",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.copyPreviewUrl",
+        "title": "プレビューURLをコピー",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.doctor",
+        "title": "自己診断（Doctor）",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.selectCountMode",
+        "title": "文字数カウント方式を変更",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.openStats",
+        "title": "ダッシュボードを開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.setExportRoot",
+        "title": "書き出し先の親フォルダを設定",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.exportStatsCsv",
+        "title": "執筆記録CSVを出力",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.refreshHighlights",
+        "title": "ハイライトを更新",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.toggleHighlights",
+        "title": "ハイライトをON/OFF",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.openHighlightSettings",
+        "title": "ハイライト設定を開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.typeWithAutoIndent",
+        "title": "自動字下げ機能",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.treeOpenSettings",
+        "title": "作品設定を開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.createEmptyConceptMemos",
+        "title": "構想メモを開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.addWritingMemo",
+        "title": "== 執筆メモを追加 ==",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.treeCreatePlot",
+        "title": "プロットを新規作成",
+        "category": "もじごと",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mojigoto.treeCreateReference",
+        "title": "資料を新規作成",
+        "category": "もじごと",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mojigoto.treeCreateWork",
+        "title": "作品を新規作成",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.createManuscriptFile",
+        "title": "原稿ファイルを新規作成",
+        "category": "もじごと",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "mojigoto.createManuscriptFolder",
+        "title": "章フォルダを新規作成",
+        "category": "もじごと",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "mojigoto.treeRenameEntry",
+        "title": "名前を変更",
+        "category": "もじごと",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "mojigoto.moveManuscriptFile",
+        "title": "移動...",
+        "category": "もじごと",
+        "icon": "$(move)"
+      },
+      {
+        "command": "mojigoto.refreshWorkTree",
+        "title": "作品ツリーを更新",
+        "category": "もじごと",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mojigoto.treeOpenReorder",
+        "title": "原稿/章の並び順エディタを開く",
+        "category": "もじごと",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "mojigoto.openGuide",
+        "title": "もじごとガイドを開く",
+        "category": "もじごと",
+        "icon": "$(question)"
+      },
+      {
+        "command": "mojigoto.openInitialSetup",
+        "title": "初回セットアップを開く",
+        "category": "もじごと",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "mojigoto.openVsCodeSettings",
+        "title": "VS Code 設定を開く",
+        "category": "もじごと",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "mojigoto.filterWorksByStatus",
+        "title": "作品一覧を状態で絞り込み",
+        "category": "もじごと",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "mojigoto.filterWorksByGenre",
+        "title": "作品一覧をジャンルで絞り込み",
+        "category": "もじごと",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "mojigoto.noteEditor.closeFromShortcut",
+        "title": "ノートを閉じる",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.importIntoCurrentNote",
+        "title": "ノートをインポート",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.importPlotNote",
+        "title": "プロットをインポート",
+        "category": "もじごと",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "mojigoto.importReferenceNote",
+        "title": "資料をインポート",
+        "category": "もじごと",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "mojigoto.openExportLauncher",
+        "title": "書き出しメニューを開く",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.treeExportItem",
+        "title": "ノートの書き出し",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.exportPlotBundle",
+        "title": "プロットをまとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.exportReferenceBundle",
+        "title": "資料をまとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.exportTargetWorkBundle",
+        "title": "この作品の設定/プロット/資料まとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.revealCurrentViewManuscript",
+        "title": "View 原稿フォルダを開く",
+        "category": "もじごと",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "mojigoto.exportMergedManuscript",
+        "title": "View 原稿ファイルを結合して書き出し",
+        "category": "もじごと",
+        "icon": "$(combine)"
+      },
+      {
+        "command": "mojigoto.exportCurrentViewPlotBundle",
+        "title": "View プロットをまとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(note)"
+      },
+      {
+        "command": "mojigoto.exportCurrentViewReferenceBundle",
+        "title": "View 資料をまとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "mojigoto.exportViewBundle",
+        "title": "View 設定/プロット/資料まとめて書き出し",
+        "category": "もじごと",
+        "icon": "$(export)"
+      },
+      {
+        "command": "mojigoto.deleteManuscriptFile",
+        "title": "原稿ファイルをゴミ箱へ移動",
+        "category": "もじごと",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mojigoto.deleteChapterFolder",
+        "title": "章フォルダをゴミ箱へ移動",
+        "category": "もじごと",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mojigoto.deleteNote",
+        "title": "ノートをゴミ箱へ移動",
+        "category": "もじごと",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mojigoto.openTrashFolder",
+        "title": "ゴミ箱フォルダを開く",
+        "category": "もじごと",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "mojigoto.restoreTrashItem",
+        "title": "元に戻す",
+        "category": "もじごと",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "mojigoto.openTrashEntry",
+        "title": "ゴミ箱内ファイルを表示",
+        "category": "もじごと",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "mojigoto.revealTrashEntryInExplorer",
+        "title": "ゴミ箱内フォルダを表示",
+        "category": "もじごと",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "mojigoto.emptyTrash",
+        "title": "ゴミ箱を空にする",
+        "category": "もじごと",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mojigoto.deleteWork",
+        "title": "作品をOSのごみ箱へ移動",
+        "category": "もじごと",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "mojigoto.insertRubyFromSelection",
+        "title": "- ルビを挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertSideDotsFromSelection",
+        "title": "- 傍点を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.stripRubyFromSelection",
+        "title": "- 選択範囲のルビ/傍点を解除",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertEllipsis",
+        "title": "……（リーダー）を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertDashPair",
+        "title": "――（ダッシュ）を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithDoublePrime",
+        "title": "〝〟で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithKagiKakko",
+        "title": "「」で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithDoubleKagiKakko",
+        "title": "『』で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithMaruKakko",
+        "title": "（）で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithSumiKakko",
+        "title": "【】で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithAngleKakko",
+        "title": "〈〉で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.wrapWithDoubleAngleKakko",
+        "title": "《》で囲む または 挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertHeading1",
+        "title": "大見出し（# ）を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertHeading2",
+        "title": "中見出し（## ）を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertHeading3",
+        "title": "小見出し（### ）を挿入",
+        "category": "もじごと"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "mojigoto.submenu.extraWrap",
+        "label": "記号で囲む（その他）"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mojigoto",
+          "title": "もじごと",
+          "icon": "images/mojigoto.svg"
+        }
+      ]
+    },
+    "views": {
+      "mojigoto": [
+        {
+          "id": "mojigoto.workTree",
+          "name": "作品ツリー",
+          "icon": "images/mojigoto.svg"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "mojigoto.refreshWorkTree",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mojigoto.revealCurrentViewManuscript",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mojigoto.treeOpenReorder",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "mojigoto.openExportLauncher",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@4"
+        },
+        {
+          "command": "mojigoto.openGuide",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@5"
+        },
+        {
+          "command": "mojigoto.openVsCodeSettings",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@6"
+        },
+        {
+          "command": "mojigoto.openInitialSetup",
+          "when": "view == mojigoto.workTree",
+          "group": "navigation@7"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mojigoto.exportTargetWorkBundle",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "inline@7"
+        },
+        {
+          "command": "mojigoto.exportTargetWorkBundle",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "navigation@7"
+        },
+        {
+          "command": "mojigoto.treeCreatePlot",
+          "when": "view == mojigoto.workTree && viewItem == plotRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.importPlotNote",
+          "when": "view == mojigoto.workTree && viewItem == plotRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.exportPlotBundle",
+          "when": "view == mojigoto.workTree && viewItem == plotRoot",
+          "group": "inline@3"
+        },
+        {
+          "command": "mojigoto.importReferenceNote",
+          "when": "view == mojigoto.workTree && viewItem == referenceRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.exportReferenceBundle",
+          "when": "view == mojigoto.workTree && viewItem == referenceRoot",
+          "group": "inline@3"
+        },
+        {
+          "command": "mojigoto.treeCreateReference",
+          "when": "view == mojigoto.workTree && viewItem == referenceRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.treeCreateWork",
+          "when": "view == mojigoto.workTree && viewItem == createWorkAction",
+          "group": "inline"
+        },
+        {
+          "command": "mojigoto.createManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == currentViewManuscriptRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.createManuscriptFolder",
+          "when": "view == mojigoto.workTree && viewItem == currentViewManuscriptRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.treeExportItem",
+          "when": "view == mojigoto.workTree && viewItem == settingsEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.treeExportItem",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.createManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.createManuscriptFolder",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.createManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.createManuscriptFolder",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.deleteManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "inline@9"
+        },
+        {
+          "command": "mojigoto.deleteManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mojigoto.deleteChapterFolder",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mojigoto.deleteChapterFolder",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "inline@9"
+        },
+        {
+          "command": "mojigoto.openTrashFolder",
+          "when": "view == mojigoto.workTree && viewItem == trashRoot",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.openTrashFolder",
+          "when": "view == mojigoto.workTree && viewItem == trashRoot",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mojigoto.openTrashEntry",
+          "when": "view == mojigoto.workTree && viewItem == trashFileEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.openTrashEntry",
+          "when": "view == mojigoto.workTree && viewItem == trashFileEntry",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mojigoto.revealTrashEntryInExplorer",
+          "when": "view == mojigoto.workTree && viewItem == trashFolderEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.revealTrashEntryInExplorer",
+          "when": "view == mojigoto.workTree && viewItem == trashFolderEntry",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mojigoto.restoreTrashItem",
+          "when": "view == mojigoto.workTree && viewItem == trashFileEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.restoreTrashItem",
+          "when": "view == mojigoto.workTree && viewItem == trashFileEntry",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mojigoto.restoreTrashItem",
+          "when": "view == mojigoto.workTree && viewItem == trashFolderEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "mojigoto.restoreTrashItem",
+          "when": "view == mojigoto.workTree && viewItem == trashFolderEntry",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mojigoto.emptyTrash",
+          "when": "view == mojigoto.workTree && viewItem == trashRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.emptyTrash",
+          "when": "view == mojigoto.workTree && viewItem == trashRoot",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mojigoto.deleteWork",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "inline@9"
+        },
+        {
+          "command": "mojigoto.deleteWork",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mojigoto.moveManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "inline@7"
+        },
+        {
+          "command": "mojigoto.moveManuscriptFile",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "navigation@7"
+        },
+        {
+          "command": "mojigoto.deleteNote",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "inline@9"
+        },
+        {
+          "command": "mojigoto.deleteNote",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "inline@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == manuscriptFile",
+          "group": "navigation@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "inline@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "navigation@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "inline@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == work",
+          "group": "navigation@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "inline@8"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "navigation@8"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "mojigoto.insertEllipsis",
+          "when": "editorTextFocus",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mojigoto.insertDashPair",
+          "when": "editorTextFocus",
+          "group": "navigation@2"
+        },
+        {
+          "command": "mojigoto.insertRubyFromSelection",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "navigation@3"
+        },
+        {
+          "command": "mojigoto.insertSideDotsFromSelection",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "navigation@4"
+        },
+        {
+          "command": "mojigoto.stripRubyFromSelection",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "navigation@5"
+        },
+        {
+          "command": "mojigoto.addWritingMemo",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "navigation@6"
+        },
+        {
+          "command": "mojigoto.wrapWithKagiKakko",
+          "when": "editorTextFocus",
+          "group": "navigation@7"
+        },
+        {
+          "command": "mojigoto.wrapWithMaruKakko",
+          "when": "editorTextFocus",
+          "group": "navigation@8"
+        },
+        {
+          "command": "mojigoto.wrapWithDoublePrime",
+          "when": "editorTextFocus",
+          "group": "navigation@9"
+        },
+        {
+          "submenu": "mojigoto.submenu.extraWrap",
+          "when": "editorTextFocus",
+          "group": "navigation@10"
+        }
+      ],
+      "mojigoto.submenu.extraWrap": [
+        {
+          "command": "mojigoto.wrapWithDoubleKagiKakko",
+          "when": "editorTextFocus",
+          "group": "1_extra@1"
+        },
+        {
+          "command": "mojigoto.wrapWithDoubleAngleKakko",
+          "when": "editorTextFocus",
+          "group": "1_extra@2"
+        },
+        {
+          "command": "mojigoto.wrapWithSumiKakko",
+          "when": "editorTextFocus",
+          "group": "1_extra@3"
+        },
+        {
+          "command": "mojigoto.wrapWithAngleKakko",
+          "when": "editorTextFocus",
+          "group": "1_extra@4"
+        },
+        {
+          "command": "mojigoto.insertHeading1",
+          "when": "editorTextFocus",
+          "group": "2_heading@1"
+        },
+        {
+          "command": "mojigoto.insertHeading2",
+          "when": "editorTextFocus",
+          "group": "2_heading@2"
+        },
+        {
+          "command": "mojigoto.insertHeading3",
+          "when": "editorTextFocus",
+          "group": "2_heading@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mojigoto.ping",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.toggle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.setExportRoot",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportStatsCsv",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.refreshHighlights",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.typeWithAutoIndent",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeOpenSettings",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.createEmptyConceptMemos",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.addWritingMemo",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeCreatePlot",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeCreateReference",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeCreateWork",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.createManuscriptFile",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.createManuscriptFolder",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeRenameEntry",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.moveManuscriptFile",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeOpenReorder",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.filterWorksByStatus",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.filterWorksByGenre",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.noteEditor.closeFromShortcut",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.importIntoCurrentNote",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.importPlotNote",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.importReferenceNote",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.treeExportItem",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportPlotBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportReferenceBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.refreshWorkTree",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.revealCurrentViewManuscript",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportMergedManuscript",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportCurrentViewPlotBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportCurrentViewReferenceBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportViewBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.exportTargetWorkBundle",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.deleteManuscriptFile",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.deleteChapterFolder",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.deleteNote",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.openTrashFolder",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.restoreTrashItem",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.openTrashEntry",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.revealTrashEntryInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.emptyTrash",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.deleteWork",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertRubyFromSelection",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertSideDotsFromSelection",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.stripRubyFromSelection",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertEllipsis",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertDashPair",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithDoublePrime",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithKagiKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithDoubleKagiKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithMaruKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithSumiKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithAngleKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.wrapWithDoubleAngleKakko",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertHeading1",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertHeading2",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.insertHeading3",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "key": "ctrl+alt+v",
+        "command": "mojigoto.openPreviewBeside"
+      },
+      {
+        "key": "ctrl+alt+s",
+        "command": "mojigoto.serverStop"
+      },
+      {
+        "key": "ctrl+alt+r",
+        "command": "mojigoto.serverRestart"
+      },
+      {
+        "key": "alt+r",
+        "command": "mojigoto.insertRubyFromSelection",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "key": "alt+b",
+        "command": "mojigoto.insertSideDotsFromSelection",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "key": "shift+alt+c",
+        "command": "mojigoto.stripRubyFromSelection",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "key": "alt+m",
+        "command": "mojigoto.addWritingMemo",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "mojigoto.typeWithAutoIndent",
+        "key": "enter",
+        "when": "editorTextFocus && !editorReadonly",
+        "args": {
+          "text": "\n"
+        }
+      },
+      {
+        "command": "mojigoto.typeWithAutoIndent",
+        "key": "shift+enter",
+        "when": "editorTextFocus && !editorReadonly",
+        "args": {
+          "text": "\n",
+          "shift": true
+        }
+      },
+      {
+        "command": "mojigoto.insertEllipsis",
+        "key": "shift+alt+.",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mojigoto.insertDashPair",
+        "key": "shift+alt+-",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mojigoto.wrapWithDoublePrime",
+        "key": "shift+alt+2",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "mojigoto.noteEditor.closeFromShortcut",
+        "key": "ctrl+w",
+        "mac": "cmd+w",
+        "when": "activeWebviewPanelId == 'mojigoto.noteEditor'"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "plaintext",
+        "path": "./snippets/plaintext.json"
+      },
+      {
+        "language": "markdown",
+        "path": "./snippets/plaintext.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.7.1"
+  },
+  "keywords": [
+    "novel",
+    "writing",
+    "japanese",
+    "vertical-writing",
+    "manuscript",
+    "text",
+    "markdown",
+    "ruby",
+    "authoring"
+  ],
+  "author": "",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/hasakudo/mojigoto/issues"
+  },
+  "homepage": "https://github.com/hasakudo/mojigoto#readme"
+}

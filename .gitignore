@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Local agent workspace
+.agents/
+
+# Packaged extensions
+*.vsix
+
+# Generated preview
+vertical-preview.html
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.vscode-test/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
