@@ -48,9 +48,11 @@ function createCountsStatusController(context, deps) {
     const tooltipSuffix = `\n現在の方式: ${modeLabel}\nクリックで変更`;
     const scopeLabel = meta.scopeLabel ? `\n対象: ${meta.scopeLabel}` : "";
 
+    const diffHint = "\n括弧内: 前回保存からの未保存差分（保存すると0に戻ります）";
+
     itemFile.tooltip = `現在のファイル文字数${tooltipSuffix}`;
-    itemChap.tooltip = `章の文字数${scopeLabel}${tooltipSuffix}`;
-    itemTotal.tooltip = `原稿全体の文字数と目標達成率${scopeLabel}${tooltipSuffix}`;
+    itemChap.tooltip = `章の文字数${scopeLabel}${diffHint}${tooltipSuffix}`;
+    itemTotal.tooltip = `原稿全体の文字数と目標達成率${scopeLabel}${diffHint}${tooltipSuffix}`;
   }
 
   function updateVisibility() {

@@ -487,6 +487,29 @@ async function openReorderEditor(context, deps = {}) {
         vscode.window.showInformationMessage(
           "もじごと: フォルダ順を保存しました。",
         );
+
+        const promptKey = "mojigoto.reorderHideChapterNumberPrompted";
+        const wasPrompted = !!context.globalState.get(promptKey, false);
+        if (!wasPrompted) {
+          await context.globalState.update(promptKey, true);
+
+          const answer = await vscode.window.showInformationMessage(
+            "作品ツリーの章フォルダに付いた先頭番号を非表示にしますか？",
+            { modal: true },
+            "はい",
+            "いいえ",
+          );
+
+          if (answer === "はい") {
+            const cfg = vscode.workspace.getConfiguration("mojigoto");
+            await cfg.update(
+              "hideChapterNumber",
+              true,
+              vscode.ConfigurationTarget.Workspace,
+            );
+            await refreshMojigotoTreeAfterReorder();
+          }
+        }
         return;
       }
 

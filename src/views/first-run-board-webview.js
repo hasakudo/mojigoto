@@ -176,6 +176,36 @@ function getFirstRunBoardHtml(webview) {
       color: var(--vscode-descriptionForeground);
       font-size: 0.92rem;
     }
+
+    .callout {
+      margin-top: 16px;
+      padding: 16px 18px;
+      border-left: 4px solid var(--vscode-textLink-foreground);
+      border-radius: 10px;
+      background: var(--vscode-textBlockQuote-background, var(--vscode-editorWidget-background));
+    }
+
+    .callout h2 {
+      margin: 0 0 8px;
+    }
+
+    code {
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      background: var(--vscode-textCodeBlock-background);
+    }
+
+    details {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 10px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -221,26 +251,37 @@ function getFirstRunBoardHtml(webview) {
       </div>
     </div>
 
-    <h2>補足</h2>
+    <section class="callout">
+      <h2>既存の原稿を使う場合</h2>
+
+      <p>次のどちらかの方法で原稿を配置してください。</p>
+
+      <ul>
+        <li>既存の作品フォルダ内に <code>manuscript</code> または <code>原稿</code> フォルダを作り、その中に原稿ファイルを入れる</li>
+        <li>初回セットアップで新規作品を作り、作成された作品フォルダ内の <code>manuscript</code> に原稿ファイルを入れる</li>
+      </ul>
+
+      <p class="note">原稿ファイルは <code>.txt</code> または <code>.md</code> を使用してください。</p>
+    </section>
+
+    <h2>利用時の補足</h2>
 
     <ul>
       <li>運用モードは Multi モード がオススメですが、とりあえず触ってみたい場合は Single モード で始めて、あとから変更も可能です。</li>
       <li>縦書きプレビューを使う場合は Node.js 18 LTS 以上が必要です。</li>
       <li>初回セットアップ と もじごとガイド は作品ツリーのヘッダーからいつでも開くことができます。</li>
-      <li>詳しい説明は「もじごとガイド」から確認できます。</li>
-      <li>既存の原稿を読み込む時の注意
-        <ul>
-          <li>ご利用のエディタソフトの標準書き出しが <code>Shift JIS</code> のことがあり、そのまま開くと文字化けする場合があります。</li>
-        </ul>
-      </li>
-      <li>文字化けしたら
-        <ul>
-          <li>まず VS Code 右下の文字コード表示、またはコマンドパレットの「エンコード付きで再度開く」から <code>Japanese (Shift JIS)</code> などを選び、読める状態にしてください。そのあと <code>UTF-8</code> で保存し直すと以降のトラブルを減らせます。</li>
-          <li>設定で <code>Files: Auto Guess Encoding</code> を有効にしていると、開いた時点で文字化けしにくくなります。<br>画面上で正しく読めていることを確認してから <code>UTF-8</code> で保存してください。</li>
-          <li><code>UTF-8 with BOM</code> は文字化けしませんが、縦書きプレビューの見出し変換に影響する場合があります。<br>基本は <code>UTF-8</code> で保存してください。</li>
-        </ul>
-      </li>
     </ul>
+
+    <details>
+      <summary>既存原稿が文字化けした場合</summary>
+      <p class="note">他のエディタから書き出した原稿は <code>Shift JIS</code> の場合があります。</p>
+      <ul>
+        <li>VS Code右下の文字コード表示、または「エンコード付きで再度開く」から <code>Japanese (Shift JIS)</code> などを選びます。</li>
+        <li>正しく読めることを確認してから <code>UTF-8</code> で保存し直してください。</li>
+        <li><code>Files: Auto Guess Encoding</code> を有効にすると、文字コードを自動判定できます。</li>
+        <li><code>UTF-8 with BOM</code> ではなく、基本的に <code>UTF-8</code> を使用してください。</li>
+      </ul>
+    </details>
   </main>
 
   <script>

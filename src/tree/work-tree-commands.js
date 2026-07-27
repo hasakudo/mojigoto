@@ -69,7 +69,8 @@ function applyDefaultExtension(fileName) {
   const name = String(fileName || "").trim();
   if (!name) return "";
 
-  if (/\.[^./\\]+$/.test(name)) {
+  const extension = path.extname(name).toLowerCase();
+  if (extension === ".txt" || extension === ".md") {
     return name;
   }
 
@@ -512,13 +513,20 @@ async function handleTreeRename(item, context, treeProvider, workTreeView) {
 
   // 原稿ファイル
   if (item.kind === "manuscriptFile") {
+    const detectedExt = path.extname(oldName);
+    const oldExt = [".txt", ".md"].includes(detectedExt.toLowerCase())
+      ? detectedExt
+      : "";
+    const oldBase = path.basename(oldName, oldExt);
     const inputName = await promptRenameTarget(
-      oldName,
-      "原稿ファイルの名前変更",
+      oldBase,
+      oldExt
+        ? `原稿ファイルの名前変更（${oldExt} は維持されます）`
+        : "原稿ファイルの名前変更",
     );
-    if (!inputName || inputName === oldName) return;
+    if (!inputName || inputName === oldBase) return;
 
-    const newName = applyDefaultExtension(inputName);
+    const newName = `${inputName}${oldExt}`;
     const newPath = path.join(path.dirname(oldPath), newName);
 
     if (await pathExists(newPath)) {
@@ -834,11 +842,43 @@ async function moveManuscriptFileToTarget(item, treeProvider, workTreeView) {
   );
 }
 
+async function collectChapterFolderItems(treeProvider, parentItem) {
+  const result = [];
+  const children = await treeProvider?.getChildren?.(parentItem);
+
+  for (const child of Array.isArray(children) ? children : []) {
+    if (child?.kind !== "chapterFolder") continue;
+    result.push(child);
+    result.push(...(await collectChapterFolderItems(treeProvider, child)));
+  }
+
+  return result;
+}
+
 async function registerMojigotoTreeCommands(
   context,
   treeProvider,
   workTreeView,
 ) {
+  const expandedChapterPaths = new Set();
+
+  if (workTreeView?.onDidExpandElement) {
+    context.subscriptions.push(
+      workTreeView.onDidExpandElement(({ element }) => {
+        if (element?.kind !== "chapterFolder" || !element?.fsPath) return;
+        expandedChapterPaths.add(normalizeFsPath(element.fsPath));
+      }),
+      workTreeView.onDidCollapseElement(({ element }) => {
+        if (element?.contextValue === "currentViewManuscriptRoot") {
+          expandedChapterPaths.clear();
+          return;
+        }
+        if (element?.kind !== "chapterFolder" || !element?.fsPath) return;
+        expandedChapterPaths.delete(normalizeFsPath(element.fsPath));
+      }),
+    );
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand("mojigoto.refreshWorkTree", () => {
       treeProvider.refresh();
@@ -1418,6 +1458,88 @@ async function registerMojigotoTreeCommands(
         } catch (e) {
           vscode.window.showErrorMessage(
             `もじごと: 原稿フォルダを開けませんでした: ${String(e)}`,
+          );
+        }
+      },
+    ),
+
+    vscode.commands.registerCommand(
+      "mojigoto.toggleCurrentViewChapterFolders",
+      async (rootItem) => {
+        try {
+          const item =
+            rootItem?.contextValue === "currentViewManuscriptRoot"
+              ? rootItem
+              : treeProvider.getCurrentViewManuscriptItem?.();
+
+          if (!item) {
+            vscode.window.showWarningMessage(
+              "もじごと: View の原稿フォルダを取得できませんでした。",
+            );
+            return;
+          }
+
+          const chapterItems = await collectChapterFolderItems(
+            treeProvider,
+            item,
+          );
+
+          if (!chapterItems.length) {
+            await workTreeView.reveal(item, {
+              expand: true,
+              focus: false,
+              select: false,
+            });
+            vscode.window.showInformationMessage(
+              "もじごと: 開閉する章フォルダがありません。",
+            );
+            return;
+          }
+
+          const allExpanded = chapterItems.every((chapterItem) =>
+            expandedChapterPaths.has(normalizeFsPath(chapterItem.fsPath)),
+          );
+
+          if (allExpanded) {
+            // TreeView API には項目単位の collapse がないため、深い階層から
+            // 対象をフォーカスして VS Code 標準のリスト折りたたみを実行する。
+            for (const chapterItem of [...chapterItems].reverse()) {
+              await workTreeView.reveal(chapterItem, {
+                expand: false,
+                focus: true,
+                select: true,
+              });
+              await vscode.commands.executeCommand("list.collapse");
+              expandedChapterPaths.delete(
+                normalizeFsPath(chapterItem.fsPath),
+              );
+            }
+
+            await workTreeView.reveal(item, {
+              expand: true,
+              focus: false,
+              select: true,
+            });
+            return;
+          }
+
+          await workTreeView.reveal(item, {
+            expand: true,
+            focus: false,
+            select: false,
+          });
+
+          for (const chapterItem of chapterItems) {
+            await workTreeView.reveal(chapterItem, {
+              expand: true,
+              focus: false,
+              select: false,
+            });
+            expandedChapterPaths.add(normalizeFsPath(chapterItem.fsPath));
+          }
+        } catch (e) {
+          vscode.window.showErrorMessage(
+            `もじごと: 章フォルダを一括開閉できませんでした: ${String(e)}`,
           );
         }
       },

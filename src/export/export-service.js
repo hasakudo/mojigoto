@@ -198,9 +198,7 @@ async function resolveExportDir(context, item, source = null) {
   if (isSingleMode() && source?.sourceType !== "settings") {
     const dir = await ensureNamedExportDir(context, "ノート書き出し");
 
-    if (!dir) {
-      throw new Error("ノート書き出し先フォルダを解決できませんでした。");
-    }
+    if (!dir) return "";
 
     return dir;
   }
@@ -221,9 +219,7 @@ async function resolveExportDir(context, item, source = null) {
     "ノート書き出し",
   );
 
-  if (!dir) {
-    throw new Error("ノート書き出し先フォルダを解決できませんでした。");
-  }
+  if (!dir) return "";
 
   return dir;
 }
@@ -650,6 +646,7 @@ async function exportTreeItem(context, item) {
 
   const source = await loadSourceData(item);
   const dir = await resolveExportDir(context, item, source);
+  if (!dir) return;
   const formatters = getFormatters(source.sourceType);
   const formatter = formatters[format];
 

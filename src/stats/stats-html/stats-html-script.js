@@ -9,7 +9,10 @@ function makeStatsScript() {
     let isDashboardNoteModalOpen = Boolean(uiState.isDashboardNoteModalOpen);
     let isRetentionOpen = Boolean(uiState.isRetentionOpen);
     let expandedDashboardSections = uiState.expandedDashboardSections || {};
-    let editingWritingMemoId = uiState.editingWritingMemoId || "";
+    // Webview の再描画後は、保存済み UI 状態ではなくホストが描画した編集欄を正とする。
+    let editingWritingMemoId =
+      document.querySelector("[data-writing-memo-edit-body]")
+        ?.getAttribute("data-writing-memo-edit-body") || "";
     let openWritingMemoId = uiState.openWritingMemoId || "";
     let openWritingMemoStatus = uiState.openWritingMemoStatus || {
       memoId: "",
@@ -654,6 +657,10 @@ function makeStatsScript() {
         vscode.postMessage({ type: "openExportLauncher" });
       });
 
+      document.getElementById("btnOpenMojigotoSettings")?.addEventListener("click", () => {
+        vscode.postMessage({ type: "openMojigotoSettings" });
+      });
+
       document.getElementById("btnRunDoctor")?.addEventListener("click", () => {
         vscode.postMessage({ type: "runDoctor" });
       });
@@ -943,7 +950,9 @@ function makeStatsScript() {
           if (!memoId) return;
 
           vscode.postMessage({
-            type: "startEditingWritingMemo",
+            type: editingWritingMemoId === memoId
+              ? "cancelEditingWritingMemo"
+              : "startEditingWritingMemo",
             memoId,
           });
         });

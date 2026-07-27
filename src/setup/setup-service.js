@@ -301,9 +301,17 @@ async function pickExistingWorkForInitialSetup(workRoot) {
       )
     : [];
 
+  const hasCandidates = candidates.length > 0;
   const skipSelectionItem = {
-    label: "作品を選択せず完了",
-    description: "従来どおり空の _WORK/manuscript を作成します",
+    label: hasCandidates
+      ? "作品を選択せず完了"
+      : "新規作品をあとで作成して完了",
+    description: hasCandidates
+      ? "空のViewを作成し、あとから作品ツリーで新規作品を作成します"
+      : "認識できる既存作品がありません。完了後に作品ツリーから作成します",
+    detail: hasCandidates
+      ? ""
+      : "既存作品を表示するには、作品フォルダ内に manuscript または 原稿 フォルダが必要です。",
     skipExistingWork: true,
   };
 
@@ -563,6 +571,8 @@ async function applyInitialSetup(context, payload) {
     workName: createdWorkName,
     linkedToView,
     selectedExistingWork: !!selectedExistingWork,
+    needsCreateWork:
+      mode === "multi" && !createWorkNow && !selectedExistingWork,
   };
 }
 

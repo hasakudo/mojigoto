@@ -1736,7 +1736,8 @@ const guideSections = [
 
       <p>
         書き出されたHTMLファイルを Word で開くと、見出しやルビを維持したまま表示されます。<br>
-        体裁は Word で編集してください。
+        体裁は Word で編集してください。<br>
+        <strong>現在のWord変換用HTMLでは、原稿中の空行は省略されます。</strong>
       </p>
 
       <h4>ルビの見た目を調整したい場合</h4>

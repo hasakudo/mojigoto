@@ -287,7 +287,7 @@ async function pickMergedManuscriptExportPreset() {
       },
       {
         label: "Word用 HTML",
-        description: "見出し・ルビを保持しWordで開く",
+        description: "見出し・ルビを保持しWordで開く（空行は省略）",
         value: {
           format: "html",
           htmlTarget: "word",

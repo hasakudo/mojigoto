@@ -8,8 +8,12 @@
     "vscode": "^1.80.0"
   },
   "main": "./extension.js",
+  "scripts": {
+    "vsix:list": "vsce ls --tree",
+    "vsix:package": "vsce package"
+  },
   "icon": "images/icon.png",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "categories": [
     "Other"
   ],
@@ -733,6 +737,12 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "mojigoto.toggleCurrentViewChapterFolders",
+        "title": "View 原稿の章フォルダをすべて開く／閉じる",
+        "category": "もじごと",
+        "icon": "$(expand-all)"
+      },
+      {
         "command": "mojigoto.exportMergedManuscript",
         "title": "View 原稿ファイルを結合して書き出し",
         "category": "もじごと",
@@ -1003,6 +1013,11 @@
           "command": "mojigoto.createManuscriptFolder",
           "when": "view == mojigoto.workTree && viewItem == currentViewManuscriptRoot",
           "group": "inline@2"
+        },
+        {
+          "command": "mojigoto.toggleCurrentViewChapterFolders",
+          "when": "view == mojigoto.workTree && viewItem == currentViewManuscriptRoot",
+          "group": "inline@3"
         },
         {
           "command": "mojigoto.treeExportItem",
@@ -1607,5 +1622,5 @@
   "bugs": {
     "url": "https://github.com/hasakudo/mojigoto/issues"
   },
-  "homepage": "https://github.com/hasakudo/mojigoto#readme"
+  "homepage": "https://mojigoto.hasakudo.com"
 }

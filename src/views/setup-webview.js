@@ -388,9 +388,9 @@ function getSetupWebviewHtml(webview, initialState = {}) {
     </section>
 
     <section class="card hidden" id="setupFollowBoard">
-      <h2 class="finishBoardTitle">作品を作成しました</h2>
+      <h2 class="finishBoardTitle" id="setupFollowTitle">作品を作成しました</h2>
 
-      <p>次にできること：</p>
+      <p id="setupFollowIntro">次にできること：</p>
 
       <ul class="followList">
         <li>作品設定を確認する</li>
@@ -601,6 +601,25 @@ function getSetupWebviewHtml(webview, initialState = {}) {
       });
 
       setupFollowBoard?.classList.remove("hidden");
+
+      const followTitle = document.getElementById("setupFollowTitle");
+      const followIntro = document.getElementById("setupFollowIntro");
+      const followList = setupFollowBoard?.querySelector(".followList");
+      const needsCreateWork = !!result?.needsCreateWork;
+
+      if (needsCreateWork) {
+        if (followTitle) followTitle.textContent = "セットアップが完了しました";
+        if (followIntro) {
+          followIntro.textContent = "連携中の作品はまだありません。次の操作を行ってください。";
+        }
+        if (followList) {
+          followList.innerHTML = [
+            "<li>作品ツリーの「新規作品」から作品を作成する</li>",
+            "<li>作成した作品の <strong>manuscript</strong> に原稿ファイルを入れる</li>",
+            "<li>作品切り替えで、縦書きプレビューやダッシュボードの対象作品を確認する</li>"
+          ].join("");
+        }
+      }
 
       const isMulti = result?.mode === "multi";
       multiFollowNote?.classList.toggle("hidden", !isMulti);
@@ -824,7 +843,7 @@ async function openInitialSetupWebview(context, initialState, onFinish) {
             return;
           }
 
-          if (result?.createdWork) {
+          if (result?.createdWork || result?.needsCreateWork) {
             panel.webview.postMessage({
               type: "setupFollow",
               result,

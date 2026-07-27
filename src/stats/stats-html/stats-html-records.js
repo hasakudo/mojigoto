@@ -633,6 +633,7 @@ function renderWritingMemoItem(
             class="writingMemoMiniAction"
             data-writing-memo-edit="${esc(item?.id || "")}"
             onclick="event.stopPropagation()"
+            title="${isEditing ? "編集を閉じる" : "メモを編集"}"
           >
             ${isEditing ? "編集中" : "編集"}
           </button>
@@ -646,6 +647,7 @@ function renderWritingMemoItem(
               <textarea
                 class="writingMemoEditTextarea"
                 data-writing-memo-edit-body="${esc(item?.id || "")}"
+                title=""
               >${esc(item?.body || "")}</textarea>
 
               <div class="writingMemoEditActions">
@@ -654,6 +656,7 @@ function renderWritingMemoItem(
                   class="writingMemoMiniAction"
                   data-writing-memo-save="${esc(item?.id || "")}"
                   data-writing-memo-file="${esc(item?.writingMemoFilePath || "")}"
+                  title="編集内容を保存"
                 >
                   保存
                   <span class="writingMemoHint">Ctrl/Cmd+S</span>
@@ -663,6 +666,7 @@ function renderWritingMemoItem(
                   type="button"
                   class="writingMemoMiniAction"
                   data-writing-memo-copy-to-concept="${esc(item?.id || "")}"
+                  title="構想メモへコピー"
                 >
                   構想メモへコピー
                 </button>
@@ -671,6 +675,7 @@ function renderWritingMemoItem(
                   type="button"
                   class="writingMemoMiniAction"
                   data-writing-memo-cancel="${esc(item?.id || "")}"
+                  title="編集をキャンセル"
                 >
                   キャンセル
                 </button>

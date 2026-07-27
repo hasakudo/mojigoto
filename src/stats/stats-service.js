@@ -33,6 +33,7 @@ const {
   getCurrentWorkDisplayName,
   getWorkId,
   getCurrentWorkGoal,
+  diffKeyForWork,
 } = require("../work/work-settings");
 
 function safeRead(filePath) {
@@ -73,13 +74,6 @@ function listTextFiles(dirPath) {
 
 function countChars(text) {
   return countLikeCountChars(text);
-}
-
-function diffKeyForWork(context, scope, key) {
-  const workName = String(
-    context.globalState.get("mojigoto.currentWorkName", "") || "default",
-  );
-  return `mojigoto.diff.${workName}.${scope}.${key}`;
 }
 
 function detectChapter(root, filePath) {

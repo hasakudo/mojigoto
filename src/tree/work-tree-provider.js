@@ -577,15 +577,22 @@ class MojigotoWorkTreeProvider {
     const manuscriptRoot = getResolvedManuscriptRoot();
     const trashDir = getTrashDirForSingle();
     const parent = this.singleViewRootItem || null;
-
-    return [
-      this._upsertTreeItem("原稿", vscode.TreeItemCollapsibleState.Collapsed, {
+    const viewManuscriptItem = this._upsertTreeItem(
+      "原稿",
+      vscode.TreeItemCollapsibleState.Collapsed,
+      {
         kind: "manuscriptRoot",
-        contextValue: "manuscriptRoot",
+        contextValue: "currentViewManuscriptRoot",
         fsPath: manuscriptRoot,
         iconId: "files",
         parent,
-      }),
+      },
+    );
+
+    this.currentViewManuscriptItem = viewManuscriptItem;
+
+    return [
+      viewManuscriptItem,
       new MojigotoTreeItem(
         "プロット",
         vscode.TreeItemCollapsibleState.Collapsed,

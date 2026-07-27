@@ -174,21 +174,14 @@ h4{ font-size: 16px; border-bottom: 4px double #555; margin: 0.5em 0 0.9em; }
 
 async function resolveViewBundleExportDir(context) {
   const dir = await ensureNamedExportDir(context, "ノート書き出し");
-  if (!dir) {
-    throw new Error("ノート書き出し先フォルダを解決できませんでした。");
-  }
-  return dir;
+  return dir || "";
 }
 
 async function resolveTargetBundleExportDir(context, item) {
   if (isSingleMode()) {
     const dir = await ensureNamedExportDir(context, "ノート書き出し");
 
-    if (!dir) {
-      throw new Error("ノート書き出し先フォルダを解決できませんでした。");
-    }
-
-    return dir;
+    return dir || "";
   }
 
   const targetWork = resolveTargetWorkContext({
@@ -203,11 +196,7 @@ async function resolveTargetBundleExportDir(context, item) {
     "ノート書き出し",
   );
 
-  if (!dir) {
-    throw new Error("ノート書き出し先フォルダを解決できませんでした。");
-  }
-
-  return dir;
+  return dir || "";
 }
 
 function buildStableBundleFileName(title, label, ext) {
@@ -792,6 +781,7 @@ async function exportViewBundle(context, item) {
   });
 
   const dir = await resolveViewBundleExportDir(context);
+  if (!dir) return;
 
   let content = "";
   let ext = format;
@@ -868,6 +858,7 @@ async function exportTargetWorkBundle(context, item) {
   });
 
   const dir = await resolveTargetBundleExportDir(context, item);
+  if (!dir) return;
 
   let content = "";
   let ext = format;
@@ -1091,6 +1082,7 @@ async function exportNoteTypeBundle(context, item, noteType) {
   }
 
   const dir = await resolveTargetBundleExportDir(context, item);
+  if (!dir) return;
 
   let content = "";
   let ext = format;

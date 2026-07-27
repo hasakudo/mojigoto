@@ -1581,6 +1581,14 @@ function renderIndexHtml() {
 
                 $frame.removeEventListener("load", onLoad);
 
+                // 初回起動時は、カーソル通知が本文iframeの読込完了より
+                // 先に届くことがある。読込後に最後の同期位置を再送する。
+                if (lastCursor) {
+                  setTimeout(function(){ postCursorToFrame(lastCursor); }, 0);
+                } else if (lastEditorScroll) {
+                  setTimeout(function(){ postEditorScrollToFrame(lastEditorScroll); }, 0);
+                }
+
                 setTimeout(()=>{
                   if ($loading) $loading.classList.remove("is-active");
                 },1200);
@@ -2129,32 +2137,20 @@ function buildVerticalPreviewPagesFromText(rawInput) {
     };
   }
 
-  function popTrailingFileBoundaryItems(items) {
-    const moved = [];
-
-    while (items.length > 0) {
-      const last = items[items.length - 1];
-      if (last?.type !== "fileBoundary") break;
-      moved.unshift(items.pop());
+  for (const block of blocks) {
+    if (block?.type === "fileBoundary") {
+      const fileBoundaryItems = renderPreviewBlockToItems(block, layoutOptions);
+      pendingPageLinks.push(
+        ...fileBoundaryItems.map((item) =>
+          makePageLinkFromFileBoundaryItem(item),
+        ),
+      );
+      continue;
     }
 
-    return moved;
-  }
-
-  for (const block of blocks) {
     if (block?.type === "heading" && block.level === 1) {
-      // 見出し1直前のファイルリンクは、前ページに置き去りにしない。
-      const movedFileLinks = popTrailingFileBoundaryItems(currentPage);
-      if (movedFileLinks.length) {
-        pendingPageLinks.push(
-          ...movedFileLinks.map((item) =>
-            makePageLinkFromFileBoundaryItem(item),
-          ),
-        );
-      }
-
       // プレビュー途中の見出し1は改ページ。
-      // ただし、先頭や fileBoundary だけの場合は空ページを作らない。
+      // ただし、先頭や pageLink だけの場合は空ページを作らない。
       if (hasFlowItems(currentPage)) {
         pushPage();
       }
@@ -2616,7 +2612,7 @@ function buildHtmlFromRenderPages(pages) {
     }
     .page-file-links {
       position: absolute;
-      right: calc(var(--pageSidePad) * 0.35);
+      right: calc(var(--pageSidePad) * 0.1);
       bottom: calc(var(--pageTopBottomPad) * 0.45);
       z-index: 5;
       writing-mode: vertical-rl;

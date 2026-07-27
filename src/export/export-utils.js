@@ -97,31 +97,141 @@ function getWorkNameForExportFromValue(workTitle = "", workName = "") {
   return "single-unknown";
 }
 
+function isDirectChildPath(parentPath, childPath) {
+  const parent = path.resolve(String(parentPath || ""));
+  const child = path.resolve(String(childPath || ""));
+  if (!parentPath || !childPath || parent === child) return false;
+  return path.dirname(child).toLowerCase() === parent.toLowerCase();
+}
+
+function isSamePath(leftPath, rightPath) {
+  if (!leftPath || !rightPath) return false;
+
+  try {
+    return (
+      path.resolve(String(leftPath)).toLowerCase() ===
+      path.resolve(String(rightPath)).toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isForbiddenExportRoot(cfg, candidatePath) {
+  const workspaceRoot =
+    vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "";
+  const workRoot = String(cfg.get("workRoot", "") || "").trim();
+
+  return [workspaceRoot, workRoot]
+    .filter(Boolean)
+    .some((rootPath) => isSamePath(rootPath, candidatePath));
+}
+
+async function confirmRepickForbiddenExportRoot() {
+  const answer = await vscode.window.showWarningMessage(
+    "ワークスペースまたは作品ルート自体は、書き出し先の親フォルダに指定できません。ルート直下に「書き出し」などの専用フォルダを作成し、そのフォルダを選択してください。",
+    { modal: true },
+    "フォルダを選び直す",
+  );
+
+  return answer === "フォルダを選び直す";
+}
+
+async function offerToExcludeExportRoot(cfg, exportRoot) {
+  const folderName = path.basename(String(exportRoot || "").trim());
+  if (!folderName) return;
+
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "";
+  const workRoot = String(cfg.get("workRoot", "") || "").trim();
+  const isRootChild = [workRoot, workspaceRoot]
+    .filter(Boolean)
+    .some((root) => isDirectChildPath(root, exportRoot));
+
+  if (!isRootChild) return;
+
+  const current = cfg.get("workExclude", []);
+  const excludes = Array.isArray(current)
+    ? current.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (excludes.some((item) => item.toLowerCase() === folderName.toLowerCase())) {
+    return;
+  }
+
+  const answer = await vscode.window.showInformationMessage(
+    `書き出し先「${folderName}」を作品ツリーの除外フォルダに追加しますか？`,
+    { modal: true },
+    "はい",
+    "いいえ",
+  );
+
+  if (answer !== "はい") return;
+
+  await cfg.update(
+    "workExclude",
+    [...excludes, folderName],
+    vscode.ConfigurationTarget.Workspace,
+  );
+
+  try {
+    await vscode.commands.executeCommand("mojigoto.refreshWorkTree");
+  } catch {
+    // ツリー未初期化時は設定だけ保存する。
+  }
+}
+
 async function getOrPickExportRoot(context) {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
 
   let root = String(cfg.get("exportRoot", "") || "").trim();
 
-  if (root && fs.existsSync(root)) {
+  const hasExistingRoot = root && fs.existsSync(root);
+  const hasForbiddenExistingRoot =
+    hasExistingRoot && isForbiddenExportRoot(cfg, root);
+
+  if (hasExistingRoot && !hasForbiddenExistingRoot) {
     return root;
   }
 
-  const picked = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
-    canSelectFolders: true,
-    canSelectMany: false,
-    openLabel: "このフォルダを書き出し先の親フォルダに設定",
-  });
+  if (hasForbiddenExistingRoot) {
+    const shouldRepick = await confirmRepickForbiddenExportRoot();
+    if (!shouldRepick) return "";
+  } else {
+    const proceed = await vscode.window.showInformationMessage(
+      "書き出し先の親フォルダを選択します。フォルダがまだない場合は、次の画面で親フォルダを作成してから選択してください。",
+      { modal: true },
+      "フォルダを選択",
+    );
 
-  if (!picked || !picked[0]) return "";
+    if (proceed !== "フォルダを選択") return "";
+  }
 
-  root = picked[0].fsPath;
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+
+  while (true) {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      defaultUri: workspaceRoot,
+      openLabel: "このフォルダを書き出し先の親フォルダに設定",
+    });
+
+    if (!picked || !picked[0]) return "";
+
+    root = picked[0].fsPath;
+    if (!isForbiddenExportRoot(cfg, root)) break;
+
+    const shouldRepick = await confirmRepickForbiddenExportRoot();
+    if (!shouldRepick) return "";
+  }
 
   try {
     await fsp.mkdir(root, { recursive: true });
 
     await cfg.update("exportRoot", root, vscode.ConfigurationTarget.Workspace);
-    
+    await offerToExcludeExportRoot(cfg, root);
+
     vscode.window.showInformationMessage(
       "もじごと: 書き出し先の親フォルダを設定しました。",
     );
