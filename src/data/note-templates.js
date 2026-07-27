@@ -67,8 +67,8 @@ const REFERENCE_TEMPLATES = [
     type: "reference",
     groups: [
       createGroup("舞台", [createDivider("地名", "")]),
-      createGroup("世界観"),
-      createGroup("用語"),
+      createGroup("組織", [createDivider("名前", "")]),
+      createGroup("用語", [createDivider("名前", "")]),
     ],
   },
 ];
