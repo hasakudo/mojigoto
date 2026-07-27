@@ -497,10 +497,6 @@
     },
     "commands": [
       {
-        "command": "mojigoto.resetFirstRun",
-        "title": "初回リセット"
-      },
-      {
         "command": "mojigoto.ping",
         "title": "プレビューサーバー接続確認",
         "category": "もじごと"
