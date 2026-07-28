@@ -1189,6 +1189,20 @@ async function registerMojigotoTreeCommands(
       const vpDir = path.join(workDir, ".mojigoto");
 
       try {
+        let workAlreadyExists = false;
+        try {
+          await fs.access(workDir);
+          workAlreadyExists = true;
+        } catch {
+          workAlreadyExists = false;
+        }
+        if (workAlreadyExists) {
+          vscode.window.showWarningMessage(
+            `もじごと: 同名の作品フォルダ「${workName}」が既に存在するため、作成を中止しました。`,
+          );
+          return;
+        }
+
         await fs.mkdir(manuscriptDir, { recursive: true });
         await fs.mkdir(path.join(vpDir, "plots"), { recursive: true });
         await fs.mkdir(path.join(vpDir, "references"), { recursive: true });
@@ -1200,7 +1214,7 @@ async function registerMojigotoTreeCommands(
           title: workName,
           genre: "",
           genres: [],
-          status: "draft",
+          status: "planning",
           targetChars: 0,
           deadline: "",
           summary: "",
@@ -1227,6 +1241,67 @@ async function registerMojigotoTreeCommands(
         );
       }
     }),
+
+    vscode.commands.registerCommand(
+      "mojigoto.excludeWorkFromList",
+      async (item) => {
+        if (isSingleMode()) {
+          vscode.window.showWarningMessage(
+            "もじごと: この操作はMultiモードの作品一覧で使用します。",
+          );
+          return;
+        }
+
+        const workName = String(
+          item?.workName || path.basename(String(item?.fsPath || "")),
+        ).trim();
+        if (!workName) {
+          vscode.window.showWarningMessage(
+            "もじごと: 除外する作品フォルダを取得できませんでした。",
+          );
+          return;
+        }
+
+        const currentWorkName = String(getCurrentWorkName(context) || "").trim();
+        if (
+          item?.contextValue === "workCurrent" ||
+          (currentWorkName &&
+            currentWorkName.toLowerCase() === workName.toLowerCase())
+        ) {
+          vscode.window.showWarningMessage(
+            "もじごと: View連携中の作品は一覧から除外できません。",
+          );
+          return;
+        }
+
+        const answer = await vscode.window.showWarningMessage(
+          `作品フォルダ「${workName}」を作品一覧と作品切替の候補から除外します。フォルダや原稿は削除されません。`,
+          { modal: true },
+          "一覧から除外",
+        );
+        if (answer !== "一覧から除外") return;
+
+        const cfg = vscode.workspace.getConfiguration("mojigoto");
+        const currentExclude = cfg.get("workExclude", []);
+        const values = Array.isArray(currentExclude)
+          ? currentExclude.map((value) => String(value || "").trim()).filter(Boolean)
+          : [];
+        const keys = new Set(values.map((value) => value.toLowerCase()));
+        if (!keys.has(workName.toLowerCase())) {
+          values.push(workName);
+          await cfg.update(
+            "workExclude",
+            values,
+            vscode.ConfigurationTarget.Workspace,
+          );
+        }
+
+        treeProvider.refresh();
+        vscode.window.showInformationMessage(
+          `もじごと: 「${workName}」を一覧から除外しました。再表示するには、VS Code設定の「もじごと: 作品 › Work Exclude」からフォルダ名を削除してください。`,
+        );
+      },
+    ),
 
     vscode.commands.registerCommand(
       "mojigoto.createManuscriptFile",

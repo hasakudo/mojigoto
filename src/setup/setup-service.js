@@ -4,6 +4,10 @@ const path = require("path");
 const {
   writeSettingsFile,
   resolveSettingsTarget,
+  collectGenreOptions,
+  normalizeGenres,
+  normalizeWorkStatus,
+  DEFAULT_GENRE_OPTIONS,
 } = require("../data/settings-store");
 const {
   getWorkspaceRoot,
@@ -51,17 +55,26 @@ function buildWorkJsonFromSingleSettings(
   const normalizedFolderName = String(folderName || "").trim();
   const normalizedTitle =
     String(src.title || "").trim() || String(fallbackTitle || "").trim();
+  const genres = normalizeGenres(
+    Array.isArray(src.genres) && src.genres.length ? src.genres : src.genre,
+  );
 
   return {
     schemaVersion: Number(src.schemaVersion || 1) || 1,
     folderName: normalizedFolderName,
     title: normalizedTitle,
-    genre: String(src.genre || "").trim(),
+    genre: genres.join(", "),
+    genres,
+    status: normalizeWorkStatus(src.status),
     targetChars: Number(src.targetChars || 0) || 0,
     deadline: String(src.deadline || "").trim(),
     summary: String(src.summary || "").trim(),
     memo: String(src.memo || "").trim(),
     updatedAt: String(src.updatedAt || "").trim() || new Date().toISOString(),
+    exportOptions:
+      src.exportOptions && typeof src.exportOptions === "object"
+        ? { ...src.exportOptions }
+        : undefined,
   };
 }
 
@@ -227,7 +240,7 @@ async function migrateSingleToMultiWork(context, options = {}) {
   };
 }
 
-async function buildInitialSetupState(createWorkNow = true) {
+async function buildInitialSetupState(createWorkNow = true, context = null) {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
   const wsPath = getWorkspaceRoot();
   const mode = String(cfg.get("mode", "single") || "single").trim() || "single";
@@ -238,6 +251,7 @@ async function buildInitialSetupState(createWorkNow = true) {
     mode === "multi" ? multiRecommended : singleRecommended;
 
   const singleMigrationAvailable = await hasSingleMigrationSource(wsPath);
+  const genreOptions = await collectGenreOptions([], context);
 
   return {
     mode,
@@ -251,6 +265,9 @@ async function buildInitialSetupState(createWorkNow = true) {
     createWorkNow,
     workTitle: "",
     genre: "",
+    genres: [],
+    genreOptions,
+    defaultGenreOptions: DEFAULT_GENRE_OPTIONS,
     targetChars: "",
     deadline: "",
     summary: "",
@@ -347,6 +364,12 @@ async function applyInitialSetup(context, payload) {
   const defaultExtension = payload?.defaultExtension === ".md" ? ".md" : ".txt";
   const createWorkNow = !!payload?.createWorkNow;
   const migrateSingleToMulti = !!payload?.migrateSingleToMulti;
+
+  if (migrateSingleToMulti && createWorkNow) {
+    throw new Error(
+      "Single データの移行と新規作品作成は同時に実行できません。移行画面の「移行して完了」を使用してください。",
+    );
+  }
   const selectExistingWork =
     mode === "multi" &&
     !createWorkNow &&
@@ -375,7 +398,12 @@ async function applyInitialSetup(context, payload) {
 
   const work = payload?.work || {};
   const workTitle = String(work.title || "").trim();
-  const genre = String(work.genre || "").trim();
+  const genres = normalizeGenres(
+    Array.isArray(work.genres) && work.genres.length
+      ? work.genres
+      : work.genre,
+  );
+  const genre = genres.join(", ");
   const targetChars = Number(work.targetChars || 0) || 0;
   const deadline = String(work.deadline || "").trim();
   const summary = String(work.summary || "").trim();
@@ -476,7 +504,8 @@ async function applyInitialSetup(context, payload) {
         folderName: safeWorkName,
         title: workTitle || safeWorkName,
         genre,
-        status: "draft",
+        genres,
+        status: "planning",
         targetChars,
         deadline,
         summary,
@@ -540,7 +569,8 @@ async function applyInitialSetup(context, payload) {
         folderName: workTitle || "",
         title: workTitle || "",
         genre,
-        status: "draft",
+        genres,
+        status: "planning",
         targetChars,
         deadline,
         summary,

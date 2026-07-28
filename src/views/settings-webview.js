@@ -5,6 +5,9 @@ const {
   syncExportOptionsToWorkspace,
   resolveSettingsTarget,
   WORK_STATUS_OPTIONS,
+  DEFAULT_GENRE_OPTIONS,
+  hideCustomGenreOptions,
+  restoreGenreOptions,
   collectGenreOptions,
 } = require("../data/settings-store");
 const { exportTreeItem } = require("../export/export-service");
@@ -233,6 +236,65 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       gap: 8px;
     }
 
+    .genreOptionsMenu {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      background: var(--vscode-input-background);
+    }
+
+    .genreOptionsMenu > summary {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .genreOptionList {
+      display: grid;
+      max-height: 220px;
+      overflow-y: auto;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+
+    .genreOptionRow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+    }
+
+    .genreOptionRow + .genreOptionRow {
+      border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
+    }
+
+    .genreOptionMain {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 0;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    .genreOptionBadge {
+      flex: 0 0 auto;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      color: var(--vscode-badge-foreground, #ffffff);
+      background: var(--vscode-badge-background);
+    }
+
+    .genreOptionDelete {
+      padding: 3px 8px;
+      border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+      border-radius: 5px;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      cursor: pointer;
+    }
+
     .genreChips {
       display: flex;
       flex-wrap: wrap;
@@ -305,24 +367,18 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         <div class="genrePicker">
           <div id="genreChips" class="genreChips"></div>
 
+          <details class="genreOptionsMenu">
+            <summary>候補から選ぶ</summary>
+            <div id="genreOptionList" class="genreOptionList"></div>
+          </details>
+
           <div class="genreInputRow">
-            <input
-              id="genreInput"
-              type="text"
-              list="genreOptions"
-              placeholder="ジャンルを入力または選択"
-            />
+            <input id="genreInput" type="text" placeholder="自由入力でジャンルを追加" />
             <button type="button" class="secondary" id="addGenreBtn">追加</button>
           </div>
 
-          <datalist id="genreOptions">
-            ${genreOptions
-              .map((genre) => `<option value="${escapeHtml(genre)}"></option>`)
-              .join("")}
-          </datalist>
-
           <div class="hint">
-            複数指定できます。自由入力したジャンルは保存後、次回から候補に出ます。
+            チェックで複数選択できます。「自由入力」の候補だけ削除できます。作品で使用中の場合は作品設定を残して候補欄のみ非表示にします。
           </div>
         </div>
       </div>
@@ -399,7 +455,10 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     const initial = ${JSON.stringify(settings)};
     const exportDefaults = ${JSON.stringify(exportDefaults)};
 
-    const genreOptions = ${JSON.stringify(genreOptions)};
+    let availableGenreOptions = ${JSON.stringify(genreOptions)};
+    const defaultGenreOptionKeys = new Set(
+      ${JSON.stringify(DEFAULT_GENRE_OPTIONS)}.map((item) => String(item).toLowerCase()),
+    );
     let selectedGenres = Array.isArray(initial.genres)
       ? [...initial.genres]
       : String(initial.genre || "")
@@ -501,7 +560,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     function normalizeGenreText(value) {
-      return String(value || "").trim().replace(/\s+/g, " ");
+      return String(value || "").trim().replace(/\\s+/g, " ");
     }
 
     function normalizeGenres(values) {
@@ -551,6 +610,68 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           selectedGenres = selectedGenres.filter((item) => item !== genre);
           markDirty();
           renderGenreChips();
+          renderGenreOptions();
+        });
+      });
+    }
+
+    function isGenreSelected(value) {
+      const key = normalizeGenreText(value).toLowerCase();
+      return selectedGenres.some(
+        (genre) => normalizeGenreText(genre).toLowerCase() === key,
+      );
+    }
+
+    function renderGenreOptions() {
+      const wrap = document.getElementById("genreOptionList");
+      if (!wrap) return;
+
+      availableGenreOptions = normalizeGenres(availableGenreOptions);
+      wrap.innerHTML = availableGenreOptions
+        .map((genre) => {
+          const isDefault = defaultGenreOptionKeys.has(genre.toLowerCase());
+          const checked = isGenreSelected(genre) ? " checked" : "";
+          return (
+            '<div class="genreOptionRow">' +
+              '<label class="genreOptionMain">' +
+                '<input type="checkbox" data-genre-option="' + escapeHtml(genre) + '"' + checked + '>' +
+                '<span>' + escapeHtml(genre) + '</span>' +
+                '<span class="genreOptionBadge">' + (isDefault ? "標準" : "自由入力") + '</span>' +
+              '</label>' +
+              (isDefault
+                ? ""
+                : '<button type="button" class="genreOptionDelete" data-delete-genre-option="' +
+                    escapeHtml(genre) +
+                  '" title="自由入力候補を削除">削除</button>') +
+            '</div>'
+          );
+        })
+        .join("");
+
+      wrap.querySelectorAll("[data-genre-option]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          const genre = checkbox.getAttribute("data-genre-option") || "";
+          if (checkbox.checked) {
+            selectedGenres = normalizeGenres([...selectedGenres, genre]);
+          } else {
+            selectedGenres = selectedGenres.filter(
+              (item) => normalizeGenreText(item).toLowerCase() !== normalizeGenreText(genre).toLowerCase(),
+            );
+          }
+          markDirty();
+          renderGenreChips();
+        });
+      });
+
+      wrap.querySelectorAll("[data-delete-genre-option]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const genre = button.getAttribute("data-delete-genre-option") || "";
+          availableGenreOptions = availableGenreOptions.filter(
+            (item) => normalizeGenreText(item).toLowerCase() !== normalizeGenreText(genre).toLowerCase(),
+          );
+          renderGenreOptions();
+          vscode.postMessage({ type: "hideGenreOptions", values: [genre] });
+          setStatus("自由入力候補「" + genre + "」を削除しました。");
         });
       });
     }
@@ -559,13 +680,19 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       const input = document.getElementById("genreInput");
       if (!input) return;
 
-      const value = normalizeGenreText(input.value);
-      if (!value) return;
+      const values = String(input.value || "")
+        .split(/[\\s,、，\\/／]+/)
+        .map((item) => normalizeGenreText(item))
+        .filter(Boolean);
+      if (!values.length) return;
 
-      selectedGenres = normalizeGenres([...selectedGenres, value]);
+      selectedGenres = normalizeGenres([...selectedGenres, ...values]);
+      availableGenreOptions = normalizeGenres([...availableGenreOptions, ...values]);
+      vscode.postMessage({ type: "restoreGenreOptions", values });
       input.value = "";
       markDirty();
       renderGenreChips();
+      renderGenreOptions();
     }
 
     function collectPayload() {
@@ -743,6 +870,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     selectedGenres = normalizeGenres(selectedGenres);
     renderGenreChips();
+    renderGenreOptions();
 
     updateSummaryCount();
     updateDeadlineDisplay();
@@ -758,6 +886,25 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       if (msg.type === "saved") {
         clearDirty();
         setStatus("保存しました。");
+      } else if (msg.type === "genreOptionsRemoved") {
+        const hidden = normalizeGenres(msg.hidden || []);
+        const deleted = normalizeGenres(msg.deleted || []);
+        const deletedKeys = new Set(
+          deleted.map((value) => value.toLowerCase()),
+        );
+        if (deletedKeys.size) {
+          selectedGenres = selectedGenres.filter(
+            (value) => !deletedKeys.has(normalizeGenreText(value).toLowerCase()),
+          );
+          markDirty();
+          renderGenreChips();
+          renderGenreOptions();
+        }
+        if (deleted.length) {
+          setStatus("どの作品にも使われていない自由入力候補を完全に削除しました。");
+        } else if (hidden.length) {
+          setStatus("作品で使用中のため、作品設定を残して候補欄から非表示にしました。");
+        }
       } else if (msg.type === "error") {
         setStatus(msg.message || "保存に失敗しました。");
       }
@@ -777,6 +924,7 @@ async function openSettingsWebview(context, treeProvider, item) {
     existing.title = latest.title ? `作品設定: ${latest.title}` : "作品設定";
     const genreOptions = await collectGenreOptions(
       latest.genres || latest.genre,
+      context,
     );
 
     existing.webview.html = getSettingsWebviewHtml(existing.webview, latest, {
@@ -809,6 +957,7 @@ async function openSettingsWebview(context, treeProvider, item) {
 
   const genreOptions = await collectGenreOptions(
     initial.genres || initial.genre,
+    context,
   );
 
   panel.webview.html = getSettingsWebviewHtml(panel.webview, initial, {
@@ -821,6 +970,24 @@ async function openSettingsWebview(context, treeProvider, item) {
       try {
         if (message?.type === "close") {
           panel.dispose();
+          return;
+        }
+
+        if (message?.type === "hideGenreOptions") {
+          const result = await hideCustomGenreOptions(
+            context,
+            message.values || [],
+          );
+          panel.webview.postMessage({
+            type: "genreOptionsRemoved",
+            hidden: result?.hidden || [],
+            deleted: result?.deleted || [],
+          });
+          return;
+        }
+
+        if (message?.type === "restoreGenreOptions") {
+          await restoreGenreOptions(context, message.values || []);
           return;
         }
 
@@ -857,6 +1024,7 @@ async function openSettingsWebview(context, treeProvider, item) {
 
           const genreOptions = await collectGenreOptions(
             saved.genres || saved.genre,
+            context,
           );
 
           panel.title = saved.title ? `作品設定: ${saved.title}` : "作品設定";
@@ -894,6 +1062,8 @@ async function openSettingsWebview(context, treeProvider, item) {
           });
 
           initial = saved;
+
+          await collectGenreOptions(saved.genres || saved.genre, context);
 
           panel.title = saved.title ? `作品設定: ${saved.title}` : "作品設定";
 

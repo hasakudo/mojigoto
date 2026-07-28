@@ -35,7 +35,7 @@ function needsInitialSetup() {
 }
 
 async function openInitialSetup(context, createWorkNow = false) {
-  const initialState = await buildInitialSetupState(createWorkNow);
+  const initialState = await buildInitialSetupState(createWorkNow, context);
 
   await openInitialSetupWebview(context, initialState, async (payload) => {
     return await applyInitialSetup(context, payload);

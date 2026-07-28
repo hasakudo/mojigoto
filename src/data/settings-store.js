@@ -51,6 +51,8 @@ const DEFAULT_GENRE_OPTIONS = [
   "その他",
 ];
 
+const HIDDEN_GENRE_OPTIONS_KEY = "mojigoto.hiddenGenreOptions";
+
 function normalizeGenreText(value) {
   return String(value || "")
     .trim()
@@ -92,6 +94,55 @@ function getGenresFromSettingsData(data) {
 
 function getGenreDisplayText(data) {
   return getGenreTextFromGenres(getGenresFromSettingsData(data));
+}
+
+function getHiddenGenreOptions(context) {
+  const values = context?.workspaceState?.get(HIDDEN_GENRE_OPTIONS_KEY, []);
+  return normalizeGenres(values);
+}
+
+function isDefaultGenreOption(value) {
+  const key = normalizeGenreText(value).toLowerCase();
+  return DEFAULT_GENRE_OPTIONS.some(
+    (option) => normalizeGenreText(option).toLowerCase() === key,
+  );
+}
+
+async function hideCustomGenreOptions(context, values) {
+  const requested = normalizeGenres(values).filter(
+    (value) => !isDefaultGenreOption(value),
+  );
+  if (typeof context?.workspaceState?.update !== "function") {
+    return { hidden: [], deleted: requested };
+  }
+
+  const linkedKeys = new Set(
+    (await collectLinkedGenreOptions()).map((value) => value.toLowerCase()),
+  );
+  const additions = requested.filter((value) =>
+    linkedKeys.has(value.toLowerCase()),
+  );
+  const deleted = requested.filter(
+    (value) => !linkedKeys.has(value.toLowerCase()),
+  );
+  const retainedHidden = getHiddenGenreOptions(context).filter(
+    (value) => linkedKeys.has(value.toLowerCase()),
+  );
+  const next = normalizeGenres([...retainedHidden, ...additions]);
+  await context.workspaceState.update(HIDDEN_GENRE_OPTIONS_KEY, next);
+  return { hidden: additions, deleted };
+}
+
+async function restoreGenreOptions(context, values) {
+  if (typeof context?.workspaceState?.update !== "function") return;
+
+  const restoreKeys = new Set(
+    normalizeGenres(values).map((value) => value.toLowerCase()),
+  );
+  const next = getHiddenGenreOptions(context).filter(
+    (value) => !restoreKeys.has(value.toLowerCase()),
+  );
+  await context.workspaceState.update(HIDDEN_GENRE_OPTIONS_KEY, next);
 }
 
 function createDefaultSettings(item) {
@@ -237,12 +288,8 @@ async function resolveSettingsTarget(item) {
   };
 }
 
-async function collectGenreOptions(extraGenres = []) {
+async function collectLinkedGenreOptions() {
   const values = [];
-
-  values.push(...DEFAULT_GENRE_OPTIONS);
-  values.push(...normalizeGenres(extraGenres));
-
   if (isSingleMode()) {
     try {
       const data = await readSettingsFile(getSettingsPathForSingle(), null);
@@ -262,7 +309,41 @@ async function collectGenreOptions(extraGenres = []) {
     }
   }
 
-  return normalizeGenres(values).sort((a, b) => a.localeCompare(b, "ja"));
+  return normalizeGenres(values);
+}
+
+async function collectGenreOptions(extraGenres = [], context = null) {
+  const linkedGenres = await collectLinkedGenreOptions();
+  const linkedKeys = new Set(linkedGenres.map((value) => value.toLowerCase()));
+  const hiddenGenres = getHiddenGenreOptions(context);
+  const retainedHidden = hiddenGenres.filter((value) =>
+    linkedKeys.has(value.toLowerCase()),
+  );
+
+  if (
+    typeof context?.workspaceState?.update === "function" &&
+    retainedHidden.length !== hiddenGenres.length
+  ) {
+    await context.workspaceState.update(
+      HIDDEN_GENRE_OPTIONS_KEY,
+      retainedHidden,
+    );
+  }
+
+  const hiddenKeys = new Set(
+    retainedHidden.map((value) => value.toLowerCase()),
+  );
+
+  return normalizeGenres([
+    ...DEFAULT_GENRE_OPTIONS,
+    ...normalizeGenres(extraGenres),
+    ...linkedGenres,
+  ])
+    .filter(
+      (value) =>
+        isDefaultGenreOption(value) || !hiddenKeys.has(value.toLowerCase()),
+    )
+    .sort((a, b) => a.localeCompare(b, "ja"));
 }
 
 module.exports = {
@@ -276,8 +357,14 @@ module.exports = {
   normalizeWorkStatus,
   getWorkStatusLabel,
   DEFAULT_GENRE_OPTIONS,
+  HIDDEN_GENRE_OPTIONS_KEY,
   normalizeGenres,
   getGenresFromSettingsData,
   getGenreDisplayText,
+  getHiddenGenreOptions,
+  isDefaultGenreOption,
+  hideCustomGenreOptions,
+  restoreGenreOptions,
+  collectLinkedGenreOptions,
   collectGenreOptions,
 };

@@ -613,6 +613,12 @@
         "category": "もじごと"
       },
       {
+        "command": "mojigoto.excludeWorkFromList",
+        "title": "このフォルダを一覧から除外",
+        "category": "もじごと",
+        "enablement": "viewItem == work"
+      },
+      {
         "command": "mojigoto.createManuscriptFile",
         "title": "原稿ファイルを新規作成",
         "category": "もじごと",
@@ -968,6 +974,11 @@
           "command": "mojigoto.exportTargetWorkBundle",
           "when": "view == mojigoto.workTree && viewItem == work",
           "group": "navigation@7"
+        },
+        {
+          "command": "mojigoto.excludeWorkFromList",
+          "when": "view == mojigoto.workTree && (viewItem == work || viewItem == workCurrent)",
+          "group": "navigation@8"
         },
         {
           "command": "mojigoto.treeCreatePlot",
@@ -1336,6 +1347,10 @@
         },
         {
           "command": "mojigoto.treeCreateWork",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.excludeWorkFromList",
           "when": "false"
         },
         {

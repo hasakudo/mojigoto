@@ -146,7 +146,7 @@ const CFG = {
   lineAdvanceEm: 1.1,
   theme: "light",
   verticalPunctuationLayout: "hanging",
-  useTypographyAdjustments: true,
+  useTypographyAdjustments: false,
 
   fontFamily: `"Source Han Serif JP","Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif`,
 
@@ -1505,7 +1505,7 @@ function renderIndexHtml() {
               </label>
               
               <label class="pill">体裁調整を使う：
-                <input id="useTypographyAdjustments" type="checkbox" checked>
+                <input id="useTypographyAdjustments" type="checkbox">
               </label>
 
               <label class="pill">体裁：
@@ -1758,7 +1758,7 @@ function renderIndexHtml() {
                 $verticalPunctuationLayout.value = data.verticalPunctuationLayout;
               }
               if ($useTypographyAdjustments) {
-                $useTypographyAdjustments.checked = data.useTypographyAdjustments !== false;
+                $useTypographyAdjustments.checked = data.useTypographyAdjustments === true;
               }
 
               // ★いまの設定を見える化（常時）

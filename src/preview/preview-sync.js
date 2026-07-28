@@ -65,7 +65,18 @@ async function sendPreviewSettings(options = {}) {
   const verticalPunctuationLayout = String(
     cfg.get("verticalPunctuationLayout", "hanging") || "hanging",
   ).trim();
-  const useTypographyAdjustments = cfg.get("useTypographyAdjustments", true) !== false;
+  const inspected =
+    typeof cfg.inspect === "function"
+      ? cfg.inspect("useTypographyAdjustments")
+      : null;
+  const explicitTypographyValue =
+    inspected?.workspaceFolderValue ??
+    inspected?.workspaceValue ??
+    inspected?.globalValue;
+  const useTypographyAdjustments =
+    typeof explicitTypographyValue === "boolean"
+      ? explicitTypographyValue
+      : false;
 
   return post(state, "/api/settings", {
     verticalPunctuationLayout:
