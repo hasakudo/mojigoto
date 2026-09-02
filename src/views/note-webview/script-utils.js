@@ -26,6 +26,7 @@ function getUtilsScript() {
 
       return (
         normalizeSearchText(item?.heading).includes(q) ||
+        normalizeSearchText(item?.headingRuby).includes(q) ||
         normalizeSearchText(item?.body).includes(q)
       );
     }
@@ -146,6 +147,7 @@ function getUtilsScript() {
         id: makeId("item"),
         kind: "entry",
         heading: "",
+        headingRuby: "",
         body: ""
       };
     }
@@ -184,6 +186,7 @@ function getUtilsScript() {
         id: makeId("item"),
         kind: "entry",
         heading: String(item?.heading || ""),
+        headingRuby: String(item?.headingRuby || ""),
         body: String(item?.body || ""),
       };
     }
@@ -237,6 +240,7 @@ function getUtilsScript() {
         id: makeId("item"),
         kind: "entry",
         heading: String(item?.heading || ""),
+        headingRuby: String(item?.headingRuby || ""),
         body: String(item?.body || ""),
       };
     }
@@ -272,6 +276,7 @@ function getUtilsScript() {
 
     function normalizeItemMemo(memo) {
       return {
+        type: String(memo?.type || "text") === "list" ? "list" : "text",
         body: String(memo?.body || ""),
         updatedAt: String(memo?.updatedAt || ""),
         tags: Array.isArray(memo?.tags)
@@ -303,6 +308,7 @@ function getUtilsScript() {
         id: String(item.id || makeId("item")),
         kind: "entry",
         heading: String(item.heading || ""),
+        headingRuby: String(item.headingRuby || ""),
         body: String(item.body || ""),
         memo: normalizeItemMemo(item.memo),
       };

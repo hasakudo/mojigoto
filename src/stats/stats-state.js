@@ -154,7 +154,7 @@ function createBuildStatsState(deps) {
     try {
       const filePath = resolveCurrentConceptMemosPath(context);
       if (!filePath) {
-        return { normal: [], list: [], todo: [] };
+        return { normal: [], list: [], todo: [], commonTodo: [] };
       }
 
       const data = await readConceptMemos(filePath);
@@ -165,8 +165,21 @@ function createBuildStatsState(deps) {
       );
 
       const sorted = sortDashboardMemos(picked);
+      const commonTodo = (Array.isArray(data?.commonTodoItems)
+        ? data.commonTodoItems
+        : []
+      )
+        .map((item, index) => ({
+          id: String(item?.id || `common_todo_${index}`),
+          text: String(item?.text || "").trim(),
+          done: Boolean(item?.done),
+          order: index,
+        }))
+        .filter((item) => item.text)
+        .sort((a, b) => Number(a.done) - Number(b.done) || a.order - b.order);
 
       return {
+        commonTodo,
         normal: sorted
           .filter((memo) => {
             const type = String(memo?.type || "text");
@@ -183,7 +196,7 @@ function createBuildStatsState(deps) {
           .map(toDashboardNoteItem),
       };
     } catch {
-      return { normal: [], list: [], todo: [] };
+      return { normal: [], list: [], todo: [], commonTodo: [] };
     }
   }
 
@@ -680,6 +693,9 @@ function createBuildStatsState(deps) {
       isViewLinkedStats: !isSingleMode(),
 
       dashboardVisibility: {
+        commonTodo: vscode.workspace
+          .getConfiguration("mojigoto")
+          .get("dashboardShowCommonTodo", true),
         text: vscode.workspace
           .getConfiguration("mojigoto")
           .get("dashboardShowTextMemos", false),

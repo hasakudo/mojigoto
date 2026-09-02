@@ -2,7 +2,7 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
@@ -274,6 +274,13 @@
           "description": "ダッシュボードでTODOメモを表示する",
           "category": "もじごと:ダッシュボード",
           "order": 42
+        },
+        "mojigoto.dashboardShowCommonTodo": {
+          "type": "boolean",
+          "default": true,
+          "description": "ダッシュボードで作品共通TODOを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 43
         },
         "mojigoto.exportRoot": {
           "type": "string",
@@ -685,6 +692,12 @@
         "icon": "$(filter)"
       },
       {
+        "command": "mojigoto.changeWorkStatus",
+        "title": "作品の状態を変更",
+        "category": "もじごと",
+        "icon": "$(pulse)"
+      },
+      {
         "command": "mojigoto.noteEditor.closeFromShortcut",
         "title": "ノートを閉じる",
         "category": "もじごと"
@@ -965,6 +978,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "mojigoto.changeWorkStatus",
+          "when": "view == mojigoto.workTree && (viewItem == work || viewItem == workCurrent)",
+          "group": "navigation@5"
+        },
         {
           "command": "mojigoto.exportTargetWorkBundle",
           "when": "view == mojigoto.workTree && viewItem == work",

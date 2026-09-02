@@ -10,6 +10,7 @@ function createEmptyConceptMemos() {
     version: 1,
     updatedAt: getNowIsoString(),
     memos: [],
+    commonTodoItems: [],
   };
 }
 
@@ -18,6 +19,9 @@ function normalizeConceptMemos(data) {
     version: Number(data?.version || 1),
     updatedAt: data?.updatedAt || new Date().toISOString(),
     memos: Array.isArray(data?.memos) ? data.memos : [],
+    commonTodoItems: Array.isArray(data?.commonTodoItems)
+      ? data.commonTodoItems
+      : [],
   };
 }
 
@@ -98,10 +102,24 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
   if (existingIndex >= 0) {
     const current = memos[existingIndex] || {};
 
+    const memoBody = String(input?.memoBody || "");
+    const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
     const updatedMemo = {
       ...current,
+      type: memoType,
       title: String(input?.heading || "").trim() || "無題メモ",
-      body: String(input?.memoBody || ""),
+      ...(memoType === "list"
+        ? {
+            listItems: memoBody
+              .split(/\r?\n/)
+              .map((text, index) => ({
+                id: `li_${Date.now()}_${index}`,
+                text: text.trim(),
+                checked: false,
+              }))
+              .filter((item) => item.text),
+          }
+        : { body: memoBody }),
       tags: normalizeMemoTags(input?.memoTags),
       updatedAt: now,
       source: {
@@ -137,9 +155,23 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
       return Number.isFinite(value) ? Math.max(max, value) : max;
     }, 0) + 1;
 
+  const memoBody = String(input?.memoBody || "");
+  const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
   const createdMemo = createConceptMemoDraft({
+    type: memoType,
     title: String(input?.heading || "").trim() || "無題メモ",
-    body: String(input?.memoBody || ""),
+    body: memoType === "text" ? memoBody : "",
+    listItems:
+      memoType === "list"
+        ? memoBody
+            .split(/\r?\n/)
+            .map((text, index) => ({
+              id: `li_${Date.now()}_${index}`,
+              text: text.trim(),
+              checked: false,
+            }))
+            .filter((item) => item.text)
+        : [],
     tags: normalizeMemoTags(input?.memoTags),
     createdAt: now,
     updatedAt: now,

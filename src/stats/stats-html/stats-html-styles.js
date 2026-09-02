@@ -432,6 +432,13 @@ function makeStatsStyles() {
       background: var(--mg-bg);
       cursor: pointer;
     }
+    button.dashboardTodoItem {
+      width: 100%;
+      box-sizing: border-box;
+      color: var(--mg-fg);
+      font: inherit;
+      text-align: left;
+    }
     .dashboardTodoItem:hover {
       background: var(--mg-hover-bg);
       border-color: var(--mg-focus);

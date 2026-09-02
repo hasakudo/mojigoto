@@ -1014,6 +1014,10 @@ function getBoardScript() {
 
     function renderBoardEntryCard(group, item) {
       const heading = String(item?.heading || "").trim() || "無題項目";
+      const headingRuby = String(item?.headingRuby || "").trim();
+      const headingHtml = headingRuby
+        ? '<ruby>' + esc(heading) + '<rt>' + esc(headingRuby) + '</rt></ruby>'
+        : esc(heading);
       const body = String(item?.body || "").trim();
       const expanded = isBoardItemExpanded(item?.id);
 
@@ -1057,7 +1061,7 @@ function getBoardScript() {
               data-item-id="\${item.id}"
               title="カード本文を開閉"
             >
-              \${esc(heading)}
+              \${headingHtml}
             </button>
 
             <div class="noteBoardCardActions">

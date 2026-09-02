@@ -38,6 +38,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         <h1 class="title">構想メモ</h1>
         <div class="spacer"></div>
         <button class="iconButton pushButton" id="toggleSidebarButton" title="メモ一覧を折りたたむ">←</button>
+        <button class="iconButton pushButton" id="toggleCommonTodoButtonSidebar" title="作品共通TODOを表示">共</button>
         <div class="memoListMenuArea">
           <button class="iconButton pushButton" id="openSearchPanelButton" title="検索">⌕</button>
           <button class="iconButton pushButton" id="openSortPanelButton" title="並び順">⇅</button>
@@ -164,20 +165,11 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           <div class="spacer"></div>
 
           <div class="row editorHeaderActions">
-            <button class="button secondary compactActionButton" id="saveButton">
-              <span>保存</span>
-              <span class="shortcutHint">Ctrl+S</span>
-            </button>
-            <button class="button secondary compactActionButton" id="closeButton">
-              <span>閉じる</span>
-              <span class="shortcutHint">Ctrl+W</span>
-            </button>
-            <button class="button secondary compactActionButton dangerButton" id="deleteButton">削除</button>
+            <button class="button secondary compactActionButton" id="toggleCommonTodoButton">共通TODO</button>
+            <button class="button secondary compactActionButton" id="pinButton">ピン留め</button>
+            <button class="button secondary compactActionButton" id="archiveButton">保管</button>
+            <button class="button secondary compactActionButton" id="dashboardButton">ダッシュボード</button>
           </div>
-        </div>
-
-        <div class="row editorHeaderBottom">
-          <div class="row stateBadgeRow" id="editorStateBadges"></div>
         </div>
       </div>
 
@@ -307,7 +299,31 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         </div>
       </div>
     </main>
+
+    <aside class="commonTodoPane" id="commonTodoPane">
+      <section class="box commonTodoBox">
+        <div class="row commonTodoHeader">
+          <strong>作品共通TODO</strong>
+          <div class="spacer"></div>
+          <span class="muted" id="commonTodoSummary"></span>
+          <button class="iconButton pushButton" id="closeCommonTodoButton" title="共通TODOを折りたたむ">→</button>
+        </div>
+        <div class="row commonTodoAddRow">
+          <input class="input" id="commonTodoNewItem" type="text" placeholder="作品共通のTODOを追加" />
+          <button class="button secondary" id="addCommonTodoButton">追加</button>
+        </div>
+        <div id="commonTodoChecklist" class="memoList commonTodoChecklist"></div>
+      </section>
+    </aside>
   </div>
+
+  <footer class="conceptFooterBar">
+    <div class="footerPrimaryActions">
+      <button class="button footerActionButton" id="saveButton"><span>保存</span><span class="shortcutHint">Ctrl+S</span></button>
+      <button class="button secondary footerActionButton" id="closeButton"><span>閉じる</span><span class="shortcutHint">Ctrl+W</span></button>
+    </div>
+    <button class="button secondary dangerButton footerDeleteButton" id="deleteButton">削除</button>
+  </footer>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -323,6 +339,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     let currentState = normalizeState(bootState);
     let selectedMemoId = persistedUiState.selectedMemoId || currentState.data.memos[0]?.id || "";
     let isDirty = false;
+    let changeRevision = 0;
     let searchQuery = persistedUiState.searchQuery || "";
     let activeQuickFilters = {
       type:
@@ -349,6 +366,10 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       persistedUiState.sortDirection ||
       "desc";
     let isSidebarCollapsed = Boolean(persistedUiState.isSidebarCollapsed);
+    let isCommonTodoCollapsed =
+      persistedUiState.isCommonTodoCollapsed === undefined
+        ? window.innerWidth <= 1100
+        : Boolean(persistedUiState.isCommonTodoCollapsed);
     let toastTimer = null;
     let autoSaveAfterApplyToNote = Boolean(persistedUiState.autoSaveAfterApplyToNote);
 
@@ -377,6 +398,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
 
     function renderAll() {
       renderSidebarState();
+      renderCommonTodoState();
       renderSearchInput();
       renderQuickFilter();
       renderTagFilter();
@@ -386,6 +408,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       renderListPanels();
       renderMemoList();
       renderEditor();
+      renderCommonTodoChecklist();
       persistUiState();
       persistWebviewState();
     }
@@ -393,11 +416,13 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     bindButtons();
     bindShortcuts();
     bindTodoActions();
+    bindCommonTodoActions();
     bindQuickFilter();
     bindListPanelActions();
     bindTagFilterActions();
     bindSortActions();
     bindSidebarActions();
+    bindCommonTodoLayoutActions();
     bindResponsiveLayout();
     bindEditorMenuActions();
     bindBulkDeleteActions();

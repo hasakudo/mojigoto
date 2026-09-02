@@ -114,6 +114,44 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
   });
 
   let currentData = initialData;
+  let saveQueue = Promise.resolve();
+  let autoSaveTimer = null;
+
+  function buildDataFromMessage(message) {
+    return {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      memos: Array.isArray(message?.payload?.memos)
+        ? message.payload.memos
+        : [],
+      commonTodoItems: Array.isArray(message?.payload?.commonTodoItems)
+        ? message.payload.commonTodoItems
+        : [],
+    };
+  }
+
+  async function persistConceptMemos(message, notifyWebview = true) {
+    const revision = Number(message?.revision || 0);
+    saveQueue = saveQueue
+      .catch(() => undefined)
+      .then(() => writeConceptMemos(filePath, buildDataFromMessage(message)));
+    currentData = await saveQueue;
+
+    if (notifyWebview) {
+      panel.webview.postMessage({
+        type: "conceptMemosSaved",
+        payload: {
+          filePath,
+          workDir,
+          workTitle,
+          data: currentData,
+          selectedMemoId: message.payload?.selectedMemoId || "",
+          revision,
+        },
+      });
+    }
+    return currentData;
+  }
 
   panel.webview.onDidReceiveMessage(async (message) => {
     if (!message || typeof message !== "object") return;
@@ -170,26 +208,11 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
 
       case "saveConceptMemos": {
         try {
-          const nextData = {
-            version: 1,
-            updatedAt: new Date().toISOString(),
-            memos: Array.isArray(message.payload?.memos)
-              ? message.payload.memos
-              : [],
-          };
-
-          currentData = await writeConceptMemos(filePath, nextData);
-
-          panel.webview.postMessage({
-            type: "conceptMemosSaved",
-            payload: {
-              filePath,
-              workDir,
-              workTitle,
-              data: currentData,
-              selectedMemoId: message.payload?.selectedMemoId || "",
-            },
-          });
+          if (autoSaveTimer) {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = null;
+          }
+          await persistConceptMemos(message, true);
 
           await triggerStatsRefresh();
 
@@ -213,6 +236,25 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
         }
         break;
       }
+
+      case "scheduleConceptMemosSave": {
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        const pendingMessage = {
+          payload: message.payload || {},
+          revision: Number(message.revision || 0),
+        };
+        autoSaveTimer = setTimeout(() => {
+          autoSaveTimer = null;
+          persistConceptMemos(pendingMessage, true)
+            .then(() => triggerStatsRefresh())
+            .catch(() => {});
+        }, 800);
+        break;
+      }
+
+      case "dirtyStateChanged":
+        panel.title = `${message.dirty ? "● " : ""}${title}`;
+        break;
 
       case "applyConceptMemoToNoteItem": {
         try {

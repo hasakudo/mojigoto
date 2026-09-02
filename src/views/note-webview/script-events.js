@@ -207,7 +207,7 @@ function getEventsScript() {
   function registerToolbarEvents() {
     document.getElementById("addGroupBtnBottom").addEventListener("click", () => {
       state.groups.push(createGroup());
-      updateDirtyUi();
+      markDirty();
       renderGroups();
       renderPreview();
       setStatus("大分類を追加しました。", true);
@@ -392,7 +392,7 @@ function getEventsScript() {
   function registerMenuEvents() {
     document.getElementById("addGroupBtn").addEventListener("click", () => {
       state.groups.push(createGroup());
-      updateDirtyUi();
+      markDirty();
       renderGroups();
       renderPreview();
       setStatus("大分類を追加しました。", true);
@@ -476,7 +476,7 @@ function getEventsScript() {
       }
 
       if (msg.type === "noteSaved") {
-        clearDirty();
+        clearDirty(msg.revision);
 
         if (suppressNextNoteSavedMessage) {
           suppressNextNoteSavedMessage = false;
@@ -599,6 +599,7 @@ function getEventsScript() {
 
         if (!item.memo || typeof item.memo !== "object") {
           item.memo = {
+            type: "text",
             body: "",
             updatedAt: "",
             tags: [],

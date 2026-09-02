@@ -36,7 +36,7 @@ function getConceptMemoEditorScript() {
       const canOpen = canOpenSourceNote(memo);
       const canApply = canApplyToNoteItem(memo);
       const canUnlink = canUnlinkSourceNote(memo);
-      const canCopy = String(memo?.type || "text") === "text";
+      const canCopy = ["text", "list"].includes(String(memo?.type || "text"));
       const tags = Array.isArray(memo?.tags) ? memo.tags : [];
 
       panel.hidden = !isEditorMenuOpen;
@@ -188,7 +188,7 @@ function getConceptMemoEditorScript() {
         return ''
           + '<div class="todoItemRow" data-todo-id="' + escapeHtml(item.id) + '">'
           +   '<input type="checkbox" class="todoToggle" data-todo-id="' + escapeHtml(item.id) + '"' + (done ? ' checked' : '') + ' />'
-          +   '<div class="todoItemText' + (done ? ' isDone' : '') + '">' + escapeHtml(text) + '</div>'
+          +   '<input class="todoItemTextInput' + (done ? ' isDone' : '') + '" data-todo-edit-id="' + escapeHtml(item.id) + '" value="' + escapeHtml(text) + '" aria-label="TODOの文言" />'
           +   '<button class="iconButton todoDeleteButton" type="button" data-todo-delete-id="' + escapeHtml(item.id) + '">削除</button>'
           + '</div>';
       }).join("");
@@ -202,6 +202,12 @@ function getConceptMemoEditorScript() {
       listEl.querySelectorAll(".todoDeleteButton").forEach((el) => {
         el.addEventListener("click", () => {
           deleteTodoItem(el.dataset.todoDeleteId || "");
+        });
+      });
+
+      listEl.querySelectorAll("[data-todo-edit-id]").forEach((el) => {
+        el.addEventListener("change", () => {
+          updateTodoItemText(el.dataset.todoEditId || "", el.value);
         });
       });
     }
@@ -271,14 +277,122 @@ function getConceptMemoEditorScript() {
       showToast("TODOを削除しました。");
     }
 
+    function updateTodoItemText(todoId, text) {
+      const value = String(text || "").trim();
+      if (!todoId || !value) {
+        renderTodoChecklist(getSelectedMemo());
+        return;
+      }
+      const memo = getSelectedMemo();
+      if (!memo) return;
+      const items = Array.isArray(memo.todoItems) ? [...memo.todoItems] : [];
+      const index = items.findIndex((item) => item.id === todoId);
+      if (index < 0 || items[index].text === value) return;
+      items[index] = { ...items[index], text: value };
+      updateSelectedMemo({ todoItems: items });
+      showToast("TODOを修正しました。");
+    }
+
+    function renderCommonTodoChecklist() {
+      const root = document.getElementById("commonTodoChecklist");
+      const summary = document.getElementById("commonTodoSummary");
+      if (!root) return;
+      const items = Array.isArray(currentState?.data?.commonTodoItems)
+        ? currentState.data.commonTodoItems
+        : [];
+      const doneCount = items.filter((item) => item?.done).length;
+      if (summary) summary.textContent = "完了 " + doneCount + " / " + items.length;
+      root.innerHTML = items.length
+        ? items.map((item) => ''
+          + '<div class="todoItemRow">'
+          +   '<input type="checkbox" data-common-todo-toggle="' + escapeHtml(item.id) + '"' + (item.done ? ' checked' : '') + ' />'
+          +   '<input class="todoItemTextInput' + (item.done ? ' isDone' : '') + '" data-common-todo-edit="' + escapeHtml(item.id) + '" value="' + escapeHtml(item.text || '') + '" />'
+          +   '<button class="iconButton" type="button" data-common-todo-delete="' + escapeHtml(item.id) + '">削除</button>'
+          + '</div>').join("")
+        : '<div class="muted">共通TODOはまだありません。</div>';
+
+      root.querySelectorAll("[data-common-todo-toggle]").forEach((el) => {
+        el.addEventListener("change", () => patchCommonTodo(el.dataset.commonTodoToggle, { done: el.checked }));
+      });
+      root.querySelectorAll("[data-common-todo-edit]").forEach((el) => {
+        el.addEventListener("change", () => patchCommonTodo(el.dataset.commonTodoEdit, { text: el.value.trim() }));
+      });
+      root.querySelectorAll("[data-common-todo-delete]").forEach((el) => {
+        el.addEventListener("click", () => {
+          currentState.data.commonTodoItems = items.filter((item) => item.id !== el.dataset.commonTodoDelete);
+          currentState.data.updatedAt = new Date().toISOString();
+          setDirty(true);
+          renderCommonTodoChecklist();
+        });
+      });
+    }
+
+    function patchCommonTodo(id, patch) {
+      const items = Array.isArray(currentState.data.commonTodoItems)
+        ? [...currentState.data.commonTodoItems]
+        : [];
+      const index = items.findIndex((item) => item.id === id);
+      if (index < 0 || (Object.prototype.hasOwnProperty.call(patch, "text") && !patch.text)) {
+        renderCommonTodoChecklist();
+        return;
+      }
+      items[index] = { ...items[index], ...patch };
+      currentState.data.commonTodoItems = items;
+      currentState.data.updatedAt = new Date().toISOString();
+      setDirty(true);
+      renderCommonTodoChecklist();
+    }
+
+    function addCommonTodo(text) {
+      const value = String(text || "").trim();
+      if (!value) return;
+      const items = Array.isArray(currentState.data.commonTodoItems)
+        ? [...currentState.data.commonTodoItems]
+        : [];
+      items.push({
+        id: "ctd_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        text: value,
+        done: false,
+      });
+      currentState.data.commonTodoItems = items;
+      currentState.data.updatedAt = new Date().toISOString();
+      const input = document.getElementById("commonTodoNewItem");
+      if (input) input.value = "";
+      setDirty(true);
+      renderCommonTodoChecklist();
+    }
+
+    function bindCommonTodoActions() {
+      const button = document.getElementById("addCommonTodoButton");
+      const input = document.getElementById("commonTodoNewItem");
+      button?.addEventListener("click", () => addCommonTodo(input?.value || ""));
+      input?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addCommonTodo(input.value);
+        }
+      });
+    }
+
     function renderEditor() {
       const editorEmpty = document.getElementById("editorEmpty");
       const editorPanel = document.getElementById("editorPanel");
+      const pinButton = document.getElementById("pinButton");
+      const archiveButton = document.getElementById("archiveButton");
+      const dashboardButton = document.getElementById("dashboardButton");
       const memo = getSelectedMemo();
 
       if (!memo) {
         if (editorEmpty) editorEmpty.style.display = "";
         if (editorPanel) editorPanel.style.display = "none";
+        [pinButton, archiveButton, dashboardButton].forEach((button) => {
+          if (!button) return;
+          button.disabled = true;
+          button.classList.remove("isActive");
+        });
+        if (pinButton) pinButton.textContent = "ピン留め";
+        if (archiveButton) archiveButton.textContent = "保管";
+        if (dashboardButton) dashboardButton.textContent = "ダッシュボード";
         return;
       }
 
@@ -291,61 +405,29 @@ function getConceptMemoEditorScript() {
       const memoListItems = document.getElementById("memoListItems");
       const memoTags = document.getElementById("memoTags");
       const metaText = document.getElementById("metaText");
-      const pinButton = document.getElementById("pinButton");
-      const archiveButton = document.getElementById("archiveButton");
       const filePathView = document.getElementById("filePathView");
       const sourceSummary = getSourceSummaryFull(memo);
-      const editorStateBadges = document.getElementById("editorStateBadges");
 
-      if (editorStateBadges) {
-        const badges = [];
+      [pinButton, archiveButton, dashboardButton].forEach((button) => {
+        if (button) button.disabled = false;
+      });
 
-        badges.push(
-          '<button type="button" class="stateBadge isClickable ' +
-            (memo?.isPinned ? 'isPinned isOn' : 'isOff') +
-            '" data-state-action="togglePinned" title="' +
-            (memo?.isPinned ? 'ピン留めを解除' : 'ピン留めする') +
-            '">📌 ' +
-            (memo?.isPinned ? 'ピン留め中' : 'ピン留め') +
-          '</button>'
+      if (pinButton) {
+        pinButton.textContent = memo?.isPinned ? "ピン解除" : "ピン留め";
+        pinButton.classList.toggle("isActive", Boolean(memo?.isPinned));
+      }
+      if (archiveButton) {
+        archiveButton.textContent = memo?.isArchived ? "保管解除" : "保管";
+        archiveButton.classList.toggle("isActive", Boolean(memo?.isArchived));
+      }
+      if (dashboardButton) {
+        dashboardButton.textContent = memo?.showInDashboard
+          ? "表示解除"
+          : "ダッシュボード";
+        dashboardButton.classList.toggle(
+          "isActive",
+          Boolean(memo?.showInDashboard),
         );
-
-        badges.push(
-          '<button type="button" class="stateBadge isClickable ' +
-            (memo?.showInDashboard ? 'isOn' : 'isOff') +
-            '" data-state-action="toggleDashboard" title="' +
-            (memo?.showInDashboard ? 'ダッシュボード表示を解除' : 'ダッシュボードに表示') +
-            '">' +
-            (memo?.showInDashboard ? 'ダッシュボード表示中' : 'ダッシュボード表示') +
-          '</button>'
-        );
-
-        badges.push(
-          '<button type="button" class="stateBadge isClickable ' +
-            (memo?.isArchived ? 'isArchived isOn' : 'isOff') +
-            '" data-state-action="toggleArchived" title="' +
-            (memo?.isArchived ? 'アーカイブを解除' : 'アーカイブする') +
-            '">' +
-            (memo?.isArchived ? '保管中' : '保管') +
-          '</button>'
-        );
-
-        editorStateBadges.innerHTML = badges.join("");
-
-        editorStateBadges.querySelectorAll("[data-state-action]").forEach((el) => {
-          el.addEventListener("click", () => {
-            const action = el.dataset.stateAction || "";
-            if (action === "togglePinned") {
-              toggleSelectedMemoPinned();
-            }
-            if (action === "toggleDashboard") {
-              toggleSelectedMemoDashboard();
-            }
-            if (action === "toggleArchived") {
-              toggleSelectedMemoArchived();
-            }
-          });
-        });
       }
 
       if (memoTitle) memoTitle.value = memo.title || "";
@@ -731,6 +813,7 @@ function getConceptMemoEditorScript() {
 
       const pinButton = document.getElementById("pinButton");
       const archiveButton = document.getElementById("archiveButton");
+      const dashboardButton = document.getElementById("dashboardButton");
       const closeButton = document.getElementById("closeButton");
       const copyMemoButton = document.getElementById("copyMemoButton");
 
@@ -794,6 +877,12 @@ function getConceptMemoEditorScript() {
         });
       }
 
+      if (dashboardButton) {
+        dashboardButton.addEventListener("click", () => {
+          toggleSelectedMemoDashboard();
+        });
+      }
+
       if (closeButton) {
         closeButton.addEventListener("click", () => {
           requestCloseConceptMemos();
@@ -853,6 +942,13 @@ function getConceptMemoEditorScript() {
         return;
       }
 
+      const memoBody = String(memo?.type || "text") === "list"
+        ? (Array.isArray(memo.listItems) ? memo.listItems : [])
+            .map((item) => String(item?.text || "").trim())
+            .filter(Boolean)
+            .join("\\n")
+        : String(memo.body || "");
+
       vscode.postMessage({
         type: "applyConceptMemoToNoteItem",
         payload: {
@@ -861,7 +957,8 @@ function getConceptMemoEditorScript() {
           noteType,
           groupId,
           itemId,
-          memoBody: String(memo.body || ""),
+          memoBody,
+          memoType: String(memo?.type || "text") === "list" ? "list" : "text",
           memoTags: Array.isArray(memo.tags) ? memo.tags : [],
           autoSaveAfterApply: true,
         },
@@ -904,12 +1001,12 @@ function getConceptMemoEditorScript() {
       const memo = getSelectedMemo();
       if (!memo) return;
 
-      if (String(memo?.type || "text") !== "text") {
-        showToast("通常メモのみコピーできます。", { isError: true });
-        return;
-      }
-
-      const text = String(memo?.body || "");
+      const text = String(memo?.type || "text") === "list"
+        ? (Array.isArray(memo.listItems) ? memo.listItems : [])
+            .map((item) => String(item?.text || "").trim())
+            .filter(Boolean)
+            .join("\\n")
+        : String(memo?.body || "");
       if (!text.trim()) {
         showToast("本文が空のためコピーできません。", { isError: true });
         return;

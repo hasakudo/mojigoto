@@ -58,6 +58,48 @@ function getConceptMemoLayoutScript() {
       }
     }
 
+    function renderCommonTodoState() {
+      const app = document.getElementById("conceptMemoApp");
+      const toggleButton = document.getElementById("toggleCommonTodoButton");
+      const sidebarButton = document.getElementById("toggleCommonTodoButtonSidebar");
+      if (!app) return;
+
+      app.classList.toggle("isCommonTodoCollapsed", isCommonTodoCollapsed);
+
+      if (toggleButton) {
+        toggleButton.textContent = isCommonTodoCollapsed
+          ? "共通TODOを表示"
+          : "共通TODOを隠す";
+        toggleButton.classList.toggle("isActive", !isCommonTodoCollapsed);
+        toggleButton.title = isCommonTodoCollapsed
+          ? "作品共通TODOを表示"
+          : "作品共通TODOを折りたたむ";
+      }
+
+      if (sidebarButton) {
+        sidebarButton.classList.toggle("isActive", !isCommonTodoCollapsed);
+        sidebarButton.title = isCommonTodoCollapsed
+          ? "作品共通TODOを表示"
+          : "作品共通TODOを折りたたむ";
+      }
+    }
+
+    function bindCommonTodoLayoutActions() {
+      const toggleButton = document.getElementById("toggleCommonTodoButton");
+      const sidebarButton = document.getElementById("toggleCommonTodoButtonSidebar");
+      const closeButton = document.getElementById("closeCommonTodoButton");
+
+      const handleToggle = () => {
+        isCommonTodoCollapsed = !isCommonTodoCollapsed;
+        renderCommonTodoState();
+        persistUiState();
+      };
+
+      toggleButton?.addEventListener("click", handleToggle);
+      sidebarButton?.addEventListener("click", handleToggle);
+      closeButton?.addEventListener("click", handleToggle);
+    }
+
     function syncResponsiveLayout() {
       const app = document.getElementById("conceptMemoApp");
       if (!app) return;
@@ -69,6 +111,7 @@ function getConceptMemoLayoutScript() {
 
       // 狭幅に入った瞬間だけ表示モードを整える
       if (isNarrowLayout && !wasNarrow) {
+        isCommonTodoCollapsed = true;
         if (selectedMemoId) {
           isSidebarCollapsed = true;
         } else {

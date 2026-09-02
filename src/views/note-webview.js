@@ -85,14 +85,35 @@ ${getInputAssistToolbarCss()}
   <div id="noteShell" class="noteShell">
     <div class="paneHeader paneHeaderGlobal">
       <div class="paneHeaderLeft">
-        <h1 class="paneTitle">
-          ${escapeHtml(note.type === "plot" ? "プロット" : "資料")}編集
-          <span id="dirtyMark" class="dirtyMark" hidden>*</span>
-        </h1>
+        <div class="noteTitleBlock">
+          <div class="noteWorkTitle" title="作品名">
+            作品: ${escapeHtml(note.workTitle || note.workName || (note.workDir ? path.basename(note.workDir) : "未設定"))}
+          </div>
+          <h1 class="paneTitle">
+            ${escapeHtml(note.type === "plot" ? "プロット" : "資料")}編集
+            <span id="dirtyMark" class="dirtyMark" hidden>*</span>
+          </h1>
+        </div>
 
         <div class="topbarGroupActions">
           <button class="secondary" type="button" id="expandAllBtn">すべて開く <span class="kbdHint">Alt+Shift+P</span></button>
           <button class="secondary" type="button" id="collapseAllBtn">すべて畳む <span class="kbdHint">Alt+Shift+L</span></button>
+          <button
+            class="secondary"
+            type="button"
+            id="toggleAllImagesBtn"
+            title="このノート全体の画像一覧を開く"
+          >
+            画像一覧
+          </button>
+          <button
+            class="secondary"
+            type="button"
+            id="toggleEditorPaneBtn"
+            title="編集ペインの表示を切り替え"
+          >
+            編集を隠す
+          </button>
         </div>
 
         <div class="menuWrap">
@@ -158,14 +179,6 @@ ${getInputAssistToolbarCss()}
           プレビューへ
         </button>
 
-        <button
-          class="secondary"
-          type="button"
-          id="toggleEditorPaneBtn"
-          title="編集ペインの表示を切り替え"
-        >
-          編集を隠す
-        </button>
       </div>
     </div>
 
@@ -215,14 +228,6 @@ ${getInputAssistToolbarCss()}
 
         <div class="toolbar">
           <button class="secondary" type="button" id="addGroupBtn">＋大分類</button>
-          <button
-            class="secondary"
-            type="button"
-            id="toggleAllImagesBtn"
-            title="このノート全体の画像一覧を開く"
-          >
-            画像一覧
-          </button>
         </div>
 
         <div class="panelMeta" id="editorCounts"></div>
@@ -446,6 +451,7 @@ ${getInputAssistToolbarCss()}
     })();
 
     let dirty = false;
+    let changeRevision = 0;
     let collapsedGroupIds = new Set();
     let isMoreMenuOpen = false;
     
@@ -589,13 +595,22 @@ ${getInputAssistToolbarCss()}
     }
 
     function markDirty() {
+      changeRevision += 1;
       dirty = true;
       updateDirtyUi();
+      vscode.postMessage({ type: "dirtyStateChanged", dirty: true });
+      vscode.postMessage({
+        type: "scheduleAutoSave",
+        payload: collectPayload(),
+        revision: changeRevision,
+      });
     }
 
-    function clearDirty() {
+    function clearDirty(savedRevision = changeRevision) {
+      if (Number(savedRevision) < changeRevision) return;
       dirty = false;
       updateDirtyUi();
+      vscode.postMessage({ type: "dirtyStateChanged", dirty: false });
     }
 
     function refreshViewsAfterItemMemoChange(itemId, updatedAt = "") {
@@ -656,7 +671,8 @@ ${getInputAssistToolbarCss()}
 
       vscode.postMessage({
         type: "save",
-        payload: collectPayload()
+        payload: collectPayload(),
+        revision: changeRevision,
       });
     }
 
@@ -997,6 +1013,7 @@ function insertItemAtPosition(noteData, targetGroupId, insertIndex, item) {
           id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           kind: "entry",
           heading: String(item?.heading || "").trim() || "無題項目",
+          headingRuby: String(item?.headingRuby || ""),
           body: String(item?.body || ""),
         };
 
@@ -1031,6 +1048,7 @@ function insertGroupAtPosition(noteData, insertIndex, groupData) {
         id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         kind: "entry",
         heading: String(item?.heading || "").trim() || "無題項目",
+        headingRuby: String(item?.headingRuby || ""),
         body: String(item?.body || ""),
       };
     }),
@@ -1104,12 +1122,35 @@ function attachNotePanel(context, treeProvider, panel, options) {
 
   async function handleUploadGroupImage(message) {
     const payload = message?.payload || {};
-    const groupId = String(payload?.groupId || "").trim();
+    const latest = {
+      ...note,
+      ...payload.note,
+      type,
+    };
+    const groups = Array.isArray(latest.groups) ? [...latest.groups] : [];
+    let groupId = String(payload?.groupId || "").trim();
+
+    if (!groupId) {
+      const target = await vscode.window.showQuickPick(
+        groups.map((group, index) => ({
+          label: String(group?.title || "").trim() || `大分類 ${index + 1}`,
+          description: `画像 ${Array.isArray(group?.images) ? group.images.length : 0}件`,
+          groupId: String(group?.id || ""),
+        })),
+        {
+          title: "画像を追加する大分類を選択",
+          placeHolder: "画像の保存先",
+          ignoreFocusOut: true,
+        },
+      );
+      if (!target) return;
+      groupId = target.groupId;
+    }
 
     if (!groupId) {
       panel.webview.postMessage({
         type: "error",
-        message: "画像を追加する大分類を取得できませんでした。",
+        message: "画像を追加できる大分類がありません。",
       });
       return;
     }
@@ -1141,13 +1182,6 @@ function attachNotePanel(context, treeProvider, panel, options) {
       return;
     }
 
-    const latest = {
-      ...note,
-      ...payload.note,
-      type,
-    };
-
-    const groups = Array.isArray(latest.groups) ? [...latest.groups] : [];
     const groupIndex = groups.findIndex(
       (group) => String(group?.id || "") === groupId,
     );
@@ -1483,12 +1517,61 @@ function attachNotePanel(context, treeProvider, panel, options) {
   }
 
   let isCloseConfirmOpen = false;
+  let noteSaveQueue = Promise.resolve();
+  let noteAutoSaveTimer = null;
+
+  async function persistNoteMessage(message, notifyWebview = true) {
+    const revision = Number(message?.revision || 0);
+    const savePayload = message?.payload || {};
+    noteSaveQueue = noteSaveQueue
+      .catch(() => undefined)
+      .then(() =>
+        saveNoteFile(filePath, {
+          ...note,
+          ...savePayload,
+          type,
+        }),
+      );
+    const saved = await noteSaveQueue;
+    const nextNote = buildNoteBootState(saved, {
+      filePath,
+      type,
+      workDir,
+      workName,
+      workTitle,
+    });
+    panel.__mojigotoNoteData = nextNote;
+    if (notifyWebview) {
+      panel.webview.postMessage({ type: "noteSaved", revision });
+    }
+    treeProvider?.refresh();
+  }
 
   panel.webview.onDidReceiveMessage(
     async (message) => {
       try {
         if (message?.type === "close") {
           panel.dispose();
+          return;
+        }
+
+        if (message?.type === "dirtyStateChanged") {
+          panel.title = `${message.dirty ? "● " : ""}${getPanelTitle(
+            panel.__mojigotoNoteData || note,
+          )}`;
+          return;
+        }
+
+        if (message?.type === "scheduleAutoSave") {
+          if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
+          const pendingMessage = {
+            payload: message.payload || {},
+            revision: Number(message.revision || 0),
+          };
+          noteAutoSaveTimer = setTimeout(() => {
+            noteAutoSaveTimer = null;
+            persistNoteMessage(pendingMessage, true).catch(() => {});
+          }, 800);
           return;
         }
 
@@ -2362,7 +2445,7 @@ function attachNotePanel(context, treeProvider, panel, options) {
             preserveFocus: false,
             viewColumn: vscode.ViewColumn.Beside,
             initialQuickFilters: {
-              type: "text",
+              type: "",
               state: [],
               source: "",
             },
@@ -2371,7 +2454,7 @@ function attachNotePanel(context, treeProvider, panel, options) {
           panel.webview.postMessage({
             type: "info",
             message:
-              "構想メモを開きました。コピーしたい通常メモを選んでください。",
+              "構想メモを開きました。コピーしたい通常メモまたはリストメモを選んでください。",
           });
 
           return;
@@ -2419,23 +2502,11 @@ function attachNotePanel(context, treeProvider, panel, options) {
         }
 
         if (message?.type === "save") {
-          const saved = await saveNoteFile(filePath, {
-            ...note,
-            ...message.payload,
-            type,
-          });
-
-          const nextNote = buildNoteBootState(saved, {
-            filePath,
-            type,
-            workDir,
-            workName,
-          });
-
-          panel.__mojigotoNoteData = nextNote;
-          panel.title = getPanelTitle(nextNote);
-          panel.webview.postMessage({ type: "noteSaved" });
-          treeProvider?.refresh();
+          if (noteAutoSaveTimer) {
+            clearTimeout(noteAutoSaveTimer);
+            noteAutoSaveTimer = null;
+          }
+          await persistNoteMessage(message, true);
           return;
         }
       } catch (e) {
@@ -2509,12 +2580,19 @@ async function openNoteWebview(context, treeProvider, options) {
 
   const rawNote = await readNoteFile(filePath, type);
 
+  const resolvedWorkTitle =
+    String(workTitle || "").trim() ||
+    String(workName || "").trim() ||
+    (workDir ? path.basename(workDir) : "") ||
+    String(getCurrentWorkTitleFromSettings(context) || "").trim() ||
+    String(getCurrentWorkDisplayName(context) || "").trim();
+
   const note = buildNoteBootState(rawNote, {
     filePath,
     type,
     workDir,
     workName,
-    workTitle,
+    workTitle: resolvedWorkTitle,
   });
 
   const panel = vscode.window.createWebviewPanel(
@@ -2532,7 +2610,7 @@ async function openNoteWebview(context, treeProvider, options) {
     type,
     workDir,
     workName,
-    workTitle,
+    workTitle: resolvedWorkTitle,
     note,
   });
 
@@ -2552,6 +2630,12 @@ function createNoteSerializer(context, treeProvider) {
         const workDir = String(state?.workDir || "").trim();
         const workName = String(state?.workName || "").trim();
         const workTitle = String(state?.workTitle || "").trim();
+        const resolvedWorkTitle =
+          workTitle ||
+          workName ||
+          (workDir ? path.basename(workDir) : "") ||
+          String(getCurrentWorkTitleFromSettings(context) || "").trim() ||
+          String(getCurrentWorkDisplayName(context) || "").trim();
 
         if (!filePath) {
           webviewPanel.webview.options = {
@@ -2578,7 +2662,7 @@ function createNoteSerializer(context, treeProvider) {
           type,
           workDir,
           workName,
-          workTitle,
+          workTitle: resolvedWorkTitle,
         });
 
         attachNotePanel(context, treeProvider, webviewPanel, {
@@ -2586,7 +2670,7 @@ function createNoteSerializer(context, treeProvider) {
           type,
           workDir,
           workName,
-          workTitle,
+          workTitle: resolvedWorkTitle,
           note,
         });
       } catch (error) {

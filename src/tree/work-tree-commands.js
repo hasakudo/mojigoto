@@ -33,6 +33,8 @@ const {
 } = require("../export/export-bundle-service");
 const {
   readSettingsFile,
+  writeSettingsFile,
+  resolveSettingsTarget,
   WORK_STATUS_OPTIONS,
   getWorkStatusLabel,
 } = require("../data/settings-store");
@@ -986,6 +988,42 @@ async function registerMojigotoTreeCommands(
       }
     }),
 
+    vscode.commands.registerCommand("mojigoto.changeWorkStatus", async (item) => {
+      try {
+        const target = await resolveSettingsTarget(item);
+        const current = await readSettingsFile(target.readPath, item);
+        const picked = await vscode.window.showQuickPick(
+          WORK_STATUS_OPTIONS.map((option) => ({
+            label:
+              option.value === current.status
+                ? `${option.label} ✓`
+                : option.label,
+            description: option.value ? `状態を「${option.label}」に変更` : "状態を解除",
+            value: option.value,
+          })),
+          {
+            title: `作品の状態を変更: ${item?.workName || item?.label || "現在の作品"}`,
+            placeHolder: `現在: ${getWorkStatusLabel(current.status)}`,
+            ignoreFocusOut: true,
+          },
+        );
+        if (!picked) return;
+
+        await writeSettingsFile(target.path, {
+          ...current,
+          status: picked.value,
+        });
+        treeProvider.refresh();
+        vscode.window.showInformationMessage(
+          `もじごと: 作品の状態を「${getWorkStatusLabel(picked.value)}」に変更しました。`,
+        );
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `もじごと: 作品の状態変更に失敗しました: ${String(e.message || e)}`,
+        );
+      }
+    }),
+
     vscode.commands.registerCommand(
       "mojigoto.treeRenameEntry",
       async (item) => {
@@ -1023,10 +1061,19 @@ async function registerMojigotoTreeCommands(
             return;
           }
 
+          const workDir = noteItem.workDir || "";
+          const workTitle = await resolveConceptMemoWorkTitle(
+            context,
+            noteItem,
+            workDir,
+          );
+
           await openNoteWebview(context, treeProvider, {
             filePath: noteItem.fsPath,
             type: noteItem.type || noteItem.noteType || "plot",
-            workDir: noteItem.workDir || "",
+            workDir,
+            workName: noteItem.workName || "",
+            workTitle,
           });
         } catch (e) {
           vscode.window.showErrorMessage(
@@ -1132,9 +1179,19 @@ async function registerMojigotoTreeCommands(
 
         treeProvider.refresh();
 
+        const workDir = item?.fsPath || item?.workDir || "";
+        const workTitle = await resolveConceptMemoWorkTitle(
+          context,
+          item,
+          workDir,
+        );
+
         await openNoteWebview(context, treeProvider, {
           filePath: created.filePath,
           type: "plot",
+          workDir,
+          workName: item?.workName || "",
+          workTitle,
         });
       } catch (e) {
         vscode.window.showErrorMessage(
@@ -1151,9 +1208,19 @@ async function registerMojigotoTreeCommands(
 
           treeProvider.refresh();
 
+          const workDir = item?.fsPath || item?.workDir || "";
+          const workTitle = await resolveConceptMemoWorkTitle(
+            context,
+            item,
+            workDir,
+          );
+
           await openNoteWebview(context, treeProvider, {
             filePath: created.filePath,
             type: "reference",
+            workDir,
+            workName: item?.workName || "",
+            workTitle,
           });
         } catch (e) {
           vscode.window.showErrorMessage(

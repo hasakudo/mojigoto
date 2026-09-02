@@ -1078,7 +1078,13 @@ class MojigotoWorkTreeProvider {
           command: {
             command: "mojigoto.treeOpenNote",
             title: "ノートを開く",
-            arguments: [note],
+            arguments: [
+              {
+                ...note,
+                workDir: rootItem.fsPath || "",
+                workName: rootItem.workName || "",
+              },
+            ],
           },
           tooltip: note.fsPath,
         },

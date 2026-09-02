@@ -287,6 +287,9 @@ function getConceptMemoUtilsScript() {
                 showInDashboard: Boolean(memo?.showInDashboard),
               }))
             : [],
+          commonTodoItems: Array.isArray(state?.data?.commonTodoItems)
+            ? state.data.commonTodoItems
+            : [],
         },
       };
     }
@@ -320,7 +323,7 @@ function getConceptMemoUtilsScript() {
       const status = String(source.status || "active");
 
       return (
-        String(memo?.type || "text") === "text" &&
+        ["text", "list"].includes(String(memo?.type || "text")) &&
         String(source.kind || "") === "noteItem" &&
         status !== "missing"
       );
@@ -331,7 +334,7 @@ function getConceptMemoUtilsScript() {
       const status = String(source.status || "active");
 
       return (
-        String(memo?.type || "text") === "text" &&
+        ["text", "list"].includes(String(memo?.type || "text")) &&
         String(source.kind || "") === "noteItem" &&
         status !== "missing"
       );
@@ -342,7 +345,7 @@ function getConceptMemoUtilsScript() {
       const status = String(source.status || "active");
 
       return (
-        String(memo?.type || "text") === "text" &&
+        ["text", "list"].includes(String(memo?.type || "text")) &&
         String(source.kind || "") === "noteItem" &&
         status === "missing"
       );

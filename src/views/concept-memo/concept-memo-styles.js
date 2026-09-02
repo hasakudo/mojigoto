@@ -5,19 +5,173 @@ function getConceptMemoStyles() {
       font-family: var(--vscode-font-family);
       color: var(--vscode-editor-foreground);
       background: var(--vscode-editor-background);
+      padding-bottom: 58px;
     }
 
     .app {
       display: grid;
-      grid-template-columns: 350px 1fr;
-      min-height: 100vh;
-      height: 100vh;
+      grid-template-columns: 350px minmax(0, 1fr) minmax(270px, 320px);
+      min-height: calc(100vh - 58px);
+      height: calc(100vh - 58px);
+    }
+
+    .conceptFooterBar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 30;
+      min-height: 48px;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-top: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-sideBar-background);
+      box-sizing: border-box;
+    }
+
+    .conceptFooterBar .button {
+      min-width: 78px;
+    }
+
+    .footerPrimaryActions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footerActionButton {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .footerActionButton .shortcutHint {
+      display: inline;
+      margin-top: 0;
+    }
+
+    .footerDeleteButton {
+      margin-left: auto;
+    }
+
+    .editorHeaderActions .isActive {
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    .pushButton.isActive {
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+
+    .commonTodoBox {
+      width: 100%;
+      margin: 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      max-height: 100%;
+    }
+
+    .commonTodoPane {
+      min-width: 0;
+      min-height: 0;
+      padding: 10px 10px 16px 8px;
+      overflow: auto;
+      border-left: 1px solid var(--vscode-panel-border);
+      box-sizing: border-box;
+    }
+
+    .commonTodoHeader,
+    .commonTodoAddRow {
+      margin-bottom: 8px;
+    }
+
+    .commonTodoBox #commonTodoNewItem {
+      flex: 1 1 260px;
+    }
+
+    .commonTodoChecklist {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    @media (max-width: 1100px) {
+      .app {
+        grid-template-columns: 350px minmax(0, 1fr);
+      }
+
+      .app.isSidebarCollapsed,
+      .app.isSidebarCollapsed.isCommonTodoCollapsed {
+        grid-template-columns: 0 minmax(0, 1fr);
+      }
+
+      .app.isCommonTodoCollapsed {
+        grid-template-columns: 350px minmax(0, 1fr);
+      }
+
+      .commonTodoPane {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        bottom: 58px;
+        z-index: 40;
+        display: block;
+        width: min(320px, calc(100vw - 16px));
+        padding: 8px;
+        overflow: auto;
+        border: 1px solid var(--vscode-panel-border);
+        background: var(--vscode-editor-background);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+      }
+
+      .app.isCommonTodoCollapsed .commonTodoPane {
+        display: none;
+      }
+    }
+
+    .todoItemTextInput {
+      flex: 1 1 120px;
+      min-width: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      color: inherit;
+      padding: 3px 5px;
+    }
+
+    .todoItemTextInput:focus {
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-input-background);
+      outline: none;
+    }
+
+    .todoItemTextInput.isDone {
+      opacity: 0.7;
+      text-decoration: line-through;
     }
 
     .app.isSidebarCollapsed {
-      grid-template-columns: 0 1fr;
+      grid-template-columns: 0 minmax(0, 1fr) minmax(270px, 320px);
       min-height: auto;
       align-items: start;
+    }
+
+    .app.isCommonTodoCollapsed {
+      grid-template-columns: 350px minmax(0, 1fr) 0;
+    }
+
+    .app.isSidebarCollapsed.isCommonTodoCollapsed {
+      grid-template-columns: 0 minmax(0, 1fr) 0;
+    }
+
+    .app.isCommonTodoCollapsed .commonTodoPane {
+      display: none;
     }
 
     .app.isSidebarCollapsed .sidebar {
@@ -140,7 +294,19 @@ function getConceptMemoStyles() {
       }
 
       .app {
-        grid-template-columns: 300px 1fr;
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .app.isSidebarCollapsed {
+        grid-template-columns: 0 minmax(0, 1fr);
+      }
+
+      .app.isCommonTodoCollapsed {
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .app.isSidebarCollapsed.isCommonTodoCollapsed {
+        grid-template-columns: 0 minmax(0, 1fr);
       }
     }
 
@@ -158,6 +324,10 @@ function getConceptMemoStyles() {
 
       .editorHeaderBottom {
         gap: 6px;
+      }
+
+      .footerActionButton .shortcutHint {
+        display: none;
       }
     }
 
@@ -932,7 +1102,25 @@ function getConceptMemoStyles() {
       opacity: 0.85;
     }
 
+    @media (min-width: 981px) and (max-width: 1100px) {
+      .app,
+      .app.isCommonTodoCollapsed {
+        grid-template-columns: 350px minmax(0, 1fr);
+      }
+
+      .app.isSidebarCollapsed,
+      .app.isSidebarCollapsed.isCommonTodoCollapsed {
+        grid-template-columns: 0 minmax(0, 1fr);
+      }
+    }
+
     .app.isNarrowLayout {
+      grid-template-columns: 1fr;
+    }
+
+    .app.isNarrowLayout.isSidebarCollapsed,
+    .app.isNarrowLayout.isCommonTodoCollapsed,
+    .app.isNarrowLayout.isSidebarCollapsed.isCommonTodoCollapsed {
       grid-template-columns: 1fr;
     }
 
@@ -940,6 +1128,23 @@ function getConceptMemoStyles() {
     .app.isNarrowLayout .main {
       min-width: 0;
       width: 100%;
+    }
+
+    .app.isNarrowLayout .commonTodoPane {
+      position: fixed;
+      inset: 8px 8px 58px;
+      z-index: 40;
+      display: block;
+      width: auto;
+      padding: 8px;
+      overflow: auto;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+    }
+
+    .app.isNarrowLayout.isCommonTodoCollapsed .commonTodoPane {
+      display: none;
     }
 
     .app.isNarrowLayout.showListOnly .sidebar {

@@ -12,6 +12,7 @@ function getConceptMemoStateScript() {
         activeQuickFilters,
         activeTagFilter,
         isSidebarCollapsed,
+        isCommonTodoCollapsed,
         openListPanel,
       });
 
@@ -31,6 +32,7 @@ function getConceptMemoStateScript() {
         activeQuickFilters,
         activeTagFilter,
         isSidebarCollapsed,
+        isCommonTodoCollapsed,
         openListPanel,
       });
     }
@@ -40,7 +42,26 @@ function getConceptMemoStateScript() {
     }
 
     function setDirty(value) {
+      const wasDirty = isDirty;
       isDirty = Boolean(value);
+
+      if (isDirty) {
+        changeRevision += 1;
+        vscode.postMessage({
+          type: "scheduleConceptMemosSave",
+          payload: {
+            selectedMemoId,
+            memos: currentState.data.memos,
+            commonTodoItems: currentState.data.commonTodoItems,
+            silentToast: true,
+          },
+          revision: changeRevision,
+        });
+      }
+
+      if (wasDirty !== isDirty) {
+        vscode.postMessage({ type: "dirtyStateChanged", dirty: isDirty });
+      }
 
       const statusText = document.getElementById("statusText");
       if (!statusText) return;
@@ -90,8 +111,10 @@ function getConceptMemoStateScript() {
         payload: {
           selectedMemoId,
           memos: currentState.data.memos,
+          commonTodoItems: currentState.data.commonTodoItems,
           silentToast,
         },
+        revision: changeRevision,
       });
     }
 

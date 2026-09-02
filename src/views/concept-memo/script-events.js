@@ -45,13 +45,10 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemosSaved") {
-        currentState = normalizeState(message.payload);
-        selectedMemoId = message.payload?.selectedMemoId
-          || selectedMemoId
-          || currentState.data.memos[0]?.id
-          || "";
-        setDirty(false);
-        renderAll();
+        if (Number(message.payload?.revision || 0) >= changeRevision) {
+          setDirty(false);
+        }
+        return;
       }
 
       if (message.type === "conceptMemosSaveError") {

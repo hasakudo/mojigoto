@@ -427,7 +427,13 @@ function createStatsPanelController(options) {
 
       const cfg = vscode.workspace.getConfiguration("mojigoto");
 
-      if (key === "text") {
+      if (key === "commonTodo") {
+        await cfg.update(
+          "dashboardShowCommonTodo",
+          enabled,
+          vscode.ConfigurationTarget.Workspace,
+        );
+      } else if (key === "text") {
         await cfg.update(
           "dashboardShowTextMemos",
           enabled,
@@ -591,6 +597,42 @@ function createStatsPanelController(options) {
       } catch (err) {
         console.error("[mojigoto] toggleDashboardTodo error:", err);
       }
+    }
+
+    if (msg.type === "toggleDashboardCommonTodo") {
+      try {
+        const filePath = resolveConceptMemoPath();
+        if (!filePath) return;
+
+        const data = await readConceptMemos(filePath);
+        const items = Array.isArray(data?.commonTodoItems)
+          ? [...data.commonTodoItems]
+          : [];
+        const itemIndex = items.findIndex(
+          (item) => String(item?.id || "") === String(msg.itemId || ""),
+        );
+        if (itemIndex < 0) return;
+
+        items[itemIndex] = {
+          ...items[itemIndex],
+          done: !items[itemIndex]?.done,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await writeConceptMemos(filePath, {
+          ...data,
+          commonTodoItems: items,
+        });
+
+        await notifyConceptMemoUpdated(filePath);
+        await refresh();
+      } catch (error) {
+        console.error("[mojigoto] toggleDashboardCommonTodo error:", error);
+        vscode.window.showErrorMessage(
+          `もじごと: 作品共通TODOの更新に失敗しました: ${error.message || String(error)}`,
+        );
+      }
+      return;
     }
 
     if (msg.type === "toggleDashboardVisibility") {

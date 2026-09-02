@@ -575,6 +575,11 @@ function getGroupsScript() {
                 <button
                   class="secondary"
                   type="button"
+                  data-action="uploadImageFromAllGallery"
+                >＋画像</button>
+                <button
+                  class="secondary"
+                  type="button"
                   data-action="closeAllImagesGallery"
                 >
                   閉じる
@@ -716,6 +721,13 @@ function getGroupsScript() {
                   <input type="text" class="dividerValueInput" data-field="dividerValue" data-group-id="\${group.id}" data-item-id="\${item.id}" value="\${esc(item.value || "")}">
                 </div>
                 <div class="itemButtons">
+                  <button
+                    class="secondary"
+                    type="button"
+                    data-action="insertItemAfter"
+                    data-group-id="\${group.id}"
+                    data-item-id="\${item.id}"
+                  >＋項目</button>
                   <button
                     class="secondary"
                     type="button"
@@ -927,6 +939,16 @@ function getGroupsScript() {
                   data-item-id="\${item.id}"
                   value="\${esc(item.heading || "")}"
                 >
+                <input
+                  type="text"
+                  class="itemHeadingRubyInput"
+                  data-field="itemHeadingRuby"
+                  data-group-id="\${group.id}"
+                  data-item-id="\${item.id}"
+                  value="\${esc(item.headingRuby || "")}"
+                  placeholder="ふりがな"
+                  aria-label="項目タイトルのふりがな"
+                >
               </div>
               <div class="row">
                 <label class="label">詳細</label>
@@ -1030,16 +1052,16 @@ function getGroupsScript() {
                       </div>
 
                       <div class="row">
-                        <label class="label">本文</label>
+                        <label class="label">\${item?.memo?.type === "list" ? "リスト" : "本文"}</label>
                         <textarea
                           class="itemMemoBodyInput"
                           data-field="itemMemoBody"
                           data-group-id="\${group.id}"
                           data-item-id="\${item.id}"
-                          placeholder="この項目専用のメモを書けます"
+                          placeholder="\${item?.memo?.type === "list" ? "1行につき1項目を入力" : "この項目専用のメモを書けます"}"
                         >\${esc(item?.memo?.body || "")}</textarea>
                       </div>
-                      <div class="row">
+                      <div class="row itemMemoSettingsRow">
                         <label class="label">タグ</label>
                         <input
                           type="text"
@@ -1050,6 +1072,16 @@ function getGroupsScript() {
                           value="\${esc((item?.memo?.tags || []).join(", "))}"
                           placeholder="例: 伏線, 要確認, 後で修正"
                         >
+                        <select
+                          class="itemMemoTypeSelect"
+                          data-field="itemMemoType"
+                          data-group-id="\${group.id}"
+                          data-item-id="\${item.id}"
+                          aria-label="項目メモの種別"
+                        >
+                          <option value="text" \${item?.memo?.type !== "list" ? "selected" : ""}>通常</option>
+                          <option value="list" \${item?.memo?.type === "list" ? "selected" : ""}>リスト</option>
+                        </select>
                       </div>
                       <div class="itemMemoActions">
                         <span class="itemMemoActionsLabel">構想メモ：</span>
@@ -1071,7 +1103,7 @@ function getGroupsScript() {
                           data-action="openConceptMemoForCopyToItemMemo"
                           data-group-id="\${group.id}"
                           data-item-id="\${item.id}"
-                          title="通常メモを絞り込み表示して本文をコピーします"
+                          title="通常メモまたはリストメモを開きます"
                         >
                           メモからコピー
                         </button>
@@ -1384,6 +1416,8 @@ function getGroupsScript() {
 
           if (field === "itemHeading") {
             item.heading = event.target.value;
+          } else if (field === "itemHeadingRuby") {
+            item.headingRuby = event.target.value;
           } else if (field === "itemBody") {
             item.body = event.target.value;
           } else if (field === "dividerLabel") {
@@ -1397,6 +1431,7 @@ function getGroupsScript() {
 
             if (!item.memo || typeof item.memo !== "object") {
               item.memo = {
+                type: "text",
                 body: "",
                 updatedAt: "",
                 tags: [],
@@ -1416,9 +1451,28 @@ function getGroupsScript() {
             return;
           }
 
+          if (field === "itemMemoType") {
+            if (!item.memo || typeof item.memo !== "object") {
+              item.memo = {
+                type: "text",
+                body: "",
+                updatedAt: "",
+                tags: [],
+                linkedConceptMemoIds: [],
+              };
+            }
+            item.memo.type = event.target.value === "list" ? "list" : "text";
+            item.memo.updatedAt = new Date().toISOString();
+            markDirty();
+            renderGroups();
+            refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
+            return;
+          }
+
           if (field === "itemMemoTags") {
             if (!item.memo || typeof item.memo !== "object") {
               item.memo = {
+                type: "text",
                 body: "",
                 updatedAt: "",
                 tags: [],
@@ -1519,10 +1573,21 @@ function getGroupsScript() {
 
           vscode.postMessage({
             type: "uploadGroupImage",
+            revision: changeRevision,
             payload: {
               groupId,
               note: collectPayload(),
             },
+          });
+        });
+      });
+
+      groupsRoot.querySelectorAll("[data-action='uploadImageFromAllGallery']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          vscode.postMessage({
+            type: "uploadGroupImage",
+            revision: changeRevision,
+            payload: { note: collectPayload() },
           });
         });
       });
@@ -1542,6 +1607,7 @@ function getGroupsScript() {
 
           vscode.postMessage({
             type: "deleteGroupImage",
+            revision: changeRevision,
             payload: {
               groupId,
               imageId,
@@ -1567,6 +1633,7 @@ function getGroupsScript() {
 
           vscode.postMessage({
             type: "renameGroupImage",
+            revision: changeRevision,
             payload: {
               groupId,
               imageId,
@@ -1588,6 +1655,12 @@ function getGroupsScript() {
           renderGroups();
           renderPreview();
           setStatus("項目を追加しました。", true);
+        });
+      });
+
+      groupsRoot.querySelectorAll("[data-action='insertItemAfter']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          insertItemAfter(btn.dataset.groupId || "", btn.dataset.itemId || "");
         });
       });
 
@@ -1861,6 +1934,7 @@ function getGroupsScript() {
                 itemId,
                 heading: String(item?.heading || ""),
                 memoBody: String(item?.memo?.body || ""),
+                memoType: String(item?.memo?.type || "text"),
                 memoTags: Array.isArray(item?.memo?.tags) ? item.memo.tags : [],
               },
             });

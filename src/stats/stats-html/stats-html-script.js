@@ -439,6 +439,20 @@ function makeStatsScript() {
       });
     }
 
+    function bindDashboardCommonTodoActions() {
+      document.querySelectorAll("[data-dashboard-common-todo]").forEach((el) => {
+        el.addEventListener("click", () => {
+          const itemId = el.getAttribute("data-item-id") || "";
+          if (!itemId) return;
+
+          vscode.postMessage({
+            type: "toggleDashboardCommonTodo",
+            itemId,
+          });
+        });
+      });
+    }
+
     function applyDashboardSectionVisibility() {
       const defaultVisibleCount = 2;
 
@@ -804,6 +818,14 @@ function makeStatsScript() {
         vscode.postMessage({
           type: "setDashboardMemoVisibility",
           key: "text",
+          enabled: !!event.target.checked,
+        });
+      });
+
+      document.getElementById("toggleDashboardCommonTodo")?.addEventListener("change", (event) => {
+        vscode.postMessage({
+          type: "setDashboardMemoVisibility",
+          key: "commonTodo",
           enabled: !!event.target.checked,
         });
       });
@@ -1275,6 +1297,7 @@ function makeStatsScript() {
       bindTabActions();
       bindDashboardModalActions();
       bindDashboardTodoActions();
+      bindDashboardCommonTodoActions();
       bindRetentionActions();
       bindDashboardSectionActions();
 

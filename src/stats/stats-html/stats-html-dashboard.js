@@ -64,12 +64,54 @@ function renderDashboardNoteSection(title, sectionKey, notes, esc) {
   `;
 }
 
+function renderDashboardCommonTodoSection(items, esc) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const undoneCount = safeItems.filter((item) => !item?.done).length;
+
+  return `
+    <div class="card dashboardCommonTodoCard">
+      <div class="dashboardSectionTitle">
+        作品共通TODO（未完了 ${undoneCount} / 全${safeItems.length}）
+      </div>
+      ${
+        safeItems.length
+          ? `<div class="dashboardTodoList">
+              ${safeItems
+                .map((item) => {
+                  const done = Boolean(item?.done);
+                  return `
+                    <button
+                      type="button"
+                      class="dashboardTodoItem dashboardCommonTodoItem"
+                      data-dashboard-common-todo
+                      data-item-id="${esc(item?.id || "")}"
+                      title="クリックして完了状態を切り替え"
+                    >
+                      <span class="dashboardTodoCheck">${done ? "☑" : "☐"}</span>
+                      <span class="dashboardTodoItemText${done ? " is-done" : ""}">${esc(item?.text || "（空項目）")}</span>
+                    </button>
+                  `;
+                })
+                .join("")}
+            </div>`
+          : '<div class="muted">作品共通TODOはまだありません。</div>'
+      }
+    </div>
+  `;
+}
+
 function renderDashboardNotesPanel(state, esc) {
   const dashboardNotes = state.dashboardNotes || {};
   const visibility = state.dashboardVisibility || {};
 
   const topSections = [];
   const bottomSections = [];
+
+  if (visibility.commonTodo !== false) {
+    bottomSections.push(
+      renderDashboardCommonTodoSection(dashboardNotes.commonTodo, esc),
+    );
+  }
 
   if (visibility.text !== false) {
     topSections.push(
@@ -118,6 +160,10 @@ function renderDashboardVisibilityControls(state) {
 
   return `
     <div class="dashboardVisibilityChips">
+      <label class="chip">
+        <input type="checkbox" id="toggleDashboardCommonTodo" ${visibility.commonTodo !== false ? "checked" : ""}>
+        作品共通TODO
+      </label>
       <label class="chip">
         <input type="checkbox" id="toggleDashboardTextMemos" ${visibility.text ? "checked" : ""}>
         通常メモ

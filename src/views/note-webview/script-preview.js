@@ -295,6 +295,10 @@ function getPreviewScript() {
           }
 
           const heading = esc(item.heading || "");
+          const headingRuby = esc(item.headingRuby || "");
+          const headingHtml = headingRuby && heading
+            ? '<ruby>' + heading + '<rt>' + headingRuby + '</rt></ruby>'
+            : (heading || "無題項目");
           const bodyHtml =
             esc(item.body || "")
               .replace(/《《([^《]*?)》》/g, '<span class="previewSideDots">$1</span>')
@@ -312,7 +316,7 @@ function getPreviewScript() {
             <section class="previewItem">
               <div class="previewItemHead">
                 <h4 data-nav-id="item:\${item.id}">
-                  \${heading || "無題項目"}
+                  \${headingHtml}
                   \${
                     hasMemo
                       ? \`

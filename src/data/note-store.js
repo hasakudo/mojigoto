@@ -28,6 +28,7 @@ function slugify(input) {
 
 function createDefaultItemMemo() {
   return {
+    type: "text",
     body: "",
     updatedAt: "",
     tags: [],
@@ -40,6 +41,7 @@ function createDefaultEntry() {
     id: makeId("item"),
     kind: "entry",
     heading: "",
+    headingRuby: "",
     body: "",
     memo: createDefaultItemMemo(),
   };
@@ -224,6 +226,7 @@ function normalizeItem(item) {
     id: String(item?.id || makeId("item")),
     kind: "entry",
     heading: String(item?.heading || ""),
+    headingRuby: String(item?.headingRuby || ""),
     body: String(item?.body || ""),
     memo: normalizeItemMemo(item?.memo),
   };
@@ -231,6 +234,7 @@ function normalizeItem(item) {
 
 function normalizeItemMemo(memo) {
   return {
+    type: String(memo?.type || "text") === "list" ? "list" : "text",
     body: String(memo?.body || ""),
     updatedAt: String(memo?.updatedAt || ""),
     tags: Array.isArray(memo?.tags)
@@ -349,6 +353,7 @@ async function applyConceptMemoToNoteItem(input) {
 
   item.memo = {
     ...currentMemo,
+    type: String(input?.memoType || "text") === "list" ? "list" : "text",
     body: String(input?.memoBody || ""),
     updatedAt: new Date().toISOString(),
     tags: Array.isArray(input?.memoTags)

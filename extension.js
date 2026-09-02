@@ -141,6 +141,9 @@ function activate(context) {
   (async () => {
     await registerMojigotoTreeCommands(context, treeProvider, workTreeView);
     await firstRunSetup(context);
+    setTimeout(() => {
+      vscode.commands.executeCommand("mojigoto.workTree.focus").then(undefined, () => {});
+    }, 250);
     await maybeRemindEventsSend(context, "activate");
   })().catch((e) => {
     console.error("Mojigoto activate error:", e);

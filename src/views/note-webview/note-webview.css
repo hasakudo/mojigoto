@@ -219,6 +219,7 @@ body {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+  width: auto;
 }
 
 .status {
@@ -287,6 +288,13 @@ body {
 
   .previewJumpBtn {
     display: inline-flex;
+    min-width: 110px;
+  }
+}
+
+@media (max-width: 700px) {
+  .paneHeaderRight {
+      flex-direction: column;
   }
 }
 
@@ -1090,7 +1098,7 @@ button {
 }
 
 .paneTitle {
-  margin: 0 0 14px;
+  margin: 0;
   font-size: 20px;
   font-weight: 700;
 }
@@ -1102,6 +1110,8 @@ button {
 }
 
 .paneTitleSub {
+  display: block;
+  margin-top: 2px;
   font-size: 11px;
   font-weight: 600;
   opacity: 0.5;
@@ -2518,5 +2528,72 @@ button {
 
   100% {
     background: transparent;
+  }
+}
+
+.noteWorkTitle {
+  max-width: 100%;
+  margin-bottom: 3px;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noteTitleBlock {
+  flex: 0 0 auto;
+  min-width: 120px;
+}
+
+.rowItemHeading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 180px);
+  gap: 0 10px;
+}
+
+.rowItemHeading .label {
+  grid-column: 1 / -1;
+}
+
+.rowItemHeading input[type="text"] {
+  width: 100%;
+}
+
+.itemHeadingRubyInput {
+  min-width: 110px;
+  font-size: 11px;
+}
+
+.itemMemoSettingsRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 120px);
+  gap: 0 10px;
+}
+
+.itemMemoSettingsRow .label {
+  grid-column: 1 / -1;
+}
+
+.itemMemoTagsInput {
+  width: 100%;
+}
+
+.itemMemoTypeSelect {
+  width: 100%;
+  min-width: 92px;
+}
+
+@media (max-width: 520px) {
+  .rowItemHeading,
+  .itemMemoSettingsRow {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .rowItemHeading .label,
+  .itemMemoSettingsRow .label {
+    grid-column: 1;
   }
 }

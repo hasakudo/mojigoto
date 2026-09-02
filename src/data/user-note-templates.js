@@ -92,6 +92,9 @@ function buildTemplatePayload(note, templateName, saveMode) {
             return {
               kind: "entry",
               heading: keepEntryHeading ? String(item?.heading || "") : "",
+              headingRuby: keepEntryHeading
+                ? String(item?.headingRuby || "")
+                : "",
               body: keepEntryBody ? String(item?.body || "") : "",
             };
           })
