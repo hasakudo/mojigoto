@@ -22,8 +22,13 @@ const {
   writeConceptMemos,
 } = require("../data/concept-memo-store");
 const {
+  readCommonTodoItems,
+  writeCommonTodoItems,
+} = require("../data/common-todo-store");
+const {
   openConceptMemoWebview,
   notifyConceptMemoUpdated,
+  notifyCommonTodoUpdated,
 } = require("../views/concept-memo-webview");
 const {
   readWritingMemos,
@@ -601,13 +606,7 @@ function createStatsPanelController(options) {
 
     if (msg.type === "toggleDashboardCommonTodo") {
       try {
-        const filePath = resolveConceptMemoPath();
-        if (!filePath) return;
-
-        const data = await readConceptMemos(filePath);
-        const items = Array.isArray(data?.commonTodoItems)
-          ? [...data.commonTodoItems]
-          : [];
+        const items = await readCommonTodoItems();
         const itemIndex = items.findIndex(
           (item) => String(item?.id || "") === String(msg.itemId || ""),
         );
@@ -619,12 +618,8 @@ function createStatsPanelController(options) {
           updatedAt: new Date().toISOString(),
         };
 
-        await writeConceptMemos(filePath, {
-          ...data,
-          commonTodoItems: items,
-        });
-
-        await notifyConceptMemoUpdated(filePath);
+        await writeCommonTodoItems(items);
+        await notifyCommonTodoUpdated();
         await refresh();
       } catch (error) {
         console.error("[mojigoto] toggleDashboardCommonTodo error:", error);

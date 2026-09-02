@@ -17,6 +17,10 @@ const {
 } = require("../data/settings-store");
 const { escapeHtml } = require("../core/path-utils");
 const { resolveTargetWorkContext } = require("../core/mojigoto-paths");
+const {
+  convertNoteInlineMarkupToHtml,
+  renderNoteEntryHeadingHtml,
+} = require("./note-html-utils");
 
 function formatDateTimeJst(value) {
   if (!value) return "";
@@ -149,6 +153,20 @@ h2{ border-bottom: 4px double #555; margin: 0.5em 0 0.9em; }
 
 .noteEntryBody{
   white-space: pre-wrap;
+}
+
+ruby{
+  ruby-position: over;
+}
+
+rt{
+  font-size: 0.55em;
+  font-weight: normal;
+}
+
+.noteBouten{
+  text-emphasis: filled dot;
+  -webkit-text-emphasis: filled dot;
 }
 
 @media print {
@@ -541,12 +559,14 @@ function formatNoteHtml(note) {
       blocks.push(`<section class="noteEntry">`);
 
       if (heading) {
-        blocks.push(`<div class="noteEntryTitle">${escapeHtml(heading)}</div>`);
+        blocks.push(
+          `<div class="noteEntryTitle">${renderNoteEntryHeadingHtml(item)}</div>`,
+        );
       }
 
       if (body) {
         blocks.push(
-          `<div class="block noteEntryBody">${escapeHtml(body)}</div>`,
+          `<div class="block noteEntryBody">${convertNoteInlineMarkupToHtml(body)}</div>`,
         );
       }
 

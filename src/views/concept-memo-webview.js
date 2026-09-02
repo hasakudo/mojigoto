@@ -10,6 +10,10 @@ const {
 } = require("../data/concept-memo-store");
 const { applyConceptMemoToNoteItem } = require("../data/note-store");
 const {
+  readCommonTodoItems,
+  writeCommonTodoItems,
+} = require("../data/common-todo-store");
+const {
   getMojigotoDirForSingle,
   getMojigotoDirForWork,
 } = require("../core/mojigoto-paths");
@@ -19,6 +23,27 @@ const {
 const { resolveActualNotePath } = require("../core/mojigoto-paths");
 
 const openConceptMemoPanels = new Map();
+
+async function readConceptMemosWithSharedTodo(filePath) {
+  const data = await readConceptMemos(filePath);
+  let commonTodoItems;
+
+  try {
+    commonTodoItems = await readCommonTodoItems({
+      legacyConceptMemoPaths: [filePath],
+    });
+  } catch (error) {
+    console.error("[mojigoto] shared common TODO read failed:", error);
+    commonTodoItems = Array.isArray(data?.commonTodoItems)
+      ? data.commonTodoItems
+      : [];
+  }
+
+  return {
+    ...data,
+    commonTodoItems,
+  };
+}
 
 function resolveConceptMemoFilePath(workDir = "") {
   const mojigotoDir = isSingleMode()
@@ -94,6 +119,9 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
   };
 
   panel.title = title;
+  panel.__mojigotoConceptMemoFilePath = filePath;
+  panel.__mojigotoConceptMemoWorkDir = workDir;
+  panel.__mojigotoConceptMemoWorkTitle = workTitle;
   panel.webview.html = getConceptMemoWebviewHtml(
     panel.webview,
     buildConceptMemoBootState({
@@ -124,18 +152,32 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
       memos: Array.isArray(message?.payload?.memos)
         ? message.payload.memos
         : [],
-      commonTodoItems: Array.isArray(message?.payload?.commonTodoItems)
-        ? message.payload.commonTodoItems
-        : [],
+      commonTodoItems: [],
     };
   }
 
   async function persistConceptMemos(message, notifyWebview = true) {
     const revision = Number(message?.revision || 0);
+    const nextCommonTodoItems = Array.isArray(
+      message?.payload?.commonTodoItems,
+    )
+      ? message.payload.commonTodoItems
+      : [];
     saveQueue = saveQueue
       .catch(() => undefined)
-      .then(() => writeConceptMemos(filePath, buildDataFromMessage(message)));
+      .then(async () => {
+        const [savedConceptMemos, savedCommonTodoItems] = await Promise.all([
+          writeConceptMemos(filePath, buildDataFromMessage(message)),
+          writeCommonTodoItems(nextCommonTodoItems),
+        ]);
+
+        return {
+          ...savedConceptMemos,
+          commonTodoItems: savedCommonTodoItems,
+        };
+      });
     currentData = await saveQueue;
+    await notifyCommonTodoUpdated(panel);
 
     if (notifyWebview) {
       panel.webview.postMessage({
@@ -458,7 +500,7 @@ async function openConceptMemoWebview(context, treeProvider, options = {}) {
     existingPanel.reveal(viewColumn, preserveFocus);
 
     try {
-      const nextData = await readConceptMemos(filePath);
+      const nextData = await readConceptMemosWithSharedTodo(filePath);
       existingPanel.webview.postMessage({
         type: "loadConceptMemos",
         payload: {
@@ -477,7 +519,7 @@ async function openConceptMemoWebview(context, treeProvider, options = {}) {
 
   let initialData;
   try {
-    initialData = await readConceptMemos(filePath);
+    initialData = await readConceptMemosWithSharedTodo(filePath);
   } catch (error) {
     vscode.window.showErrorMessage(
       `もじごと: 構想メモの読み込みに失敗しました: ${error.message || String(error)}`,
@@ -523,7 +565,7 @@ function createConceptMemoSerializer(context, treeProvider) {
 
       let initialData;
       try {
-        initialData = await readConceptMemos(filePath);
+        initialData = await readConceptMemosWithSharedTodo(filePath);
       } catch (error) {
         initialData = createEmptyConceptMemos();
       }
@@ -550,7 +592,7 @@ async function notifyConceptMemoUpdated(conceptMemoFilePath) {
 
   if (!panel) return false;
 
-  const nextData = await readConceptMemos(conceptMemoFilePath);
+  const nextData = await readConceptMemosWithSharedTodo(conceptMemoFilePath);
 
   panel.webview.postMessage({
     type: "conceptMemosReloaded",
@@ -565,10 +607,39 @@ async function notifyConceptMemoUpdated(conceptMemoFilePath) {
   return true;
 }
 
+async function notifyCommonTodoUpdated(excludedPanel = null) {
+  const panels = new Set(openConceptMemoPanels.values());
+
+  await Promise.all(
+    [...panels].map(async (panel) => {
+      if (!panel || panel === excludedPanel) return;
+
+      const filePath = String(
+        panel.__mojigotoConceptMemoFilePath || "",
+      ).trim();
+      if (!filePath) return;
+
+      try {
+        const data = await readConceptMemosWithSharedTodo(filePath);
+        panel.webview.postMessage({
+          type: "conceptMemosReloaded",
+          payload: {
+            filePath,
+            workDir: String(panel.__mojigotoConceptMemoWorkDir || ""),
+            workTitle: String(panel.__mojigotoConceptMemoWorkTitle || ""),
+            data,
+          },
+        });
+      } catch {}
+    }),
+  );
+}
+
 module.exports = {
   getConceptMemoPanelTitle,
   resolveConceptMemoFilePath,
   openConceptMemoWebview,
   notifyConceptMemoUpdated,
+  notifyCommonTodoUpdated,
   createConceptMemoSerializer,
 };

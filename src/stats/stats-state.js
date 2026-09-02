@@ -24,6 +24,7 @@ const {
   getWorkManuscriptRoot,
 } = require("../core/mojigoto-paths");
 const { readConceptMemos } = require("../data/concept-memo-store");
+const { readCommonTodoItems } = require("../data/common-todo-store");
 const { readWritingMemos } = require("../writing-memo/writing-memo-store");
 const {
   resolveWritingMemoTargetForActiveEditor,
@@ -153,8 +154,21 @@ function createBuildStatsState(deps) {
   async function buildDashboardNotes(context) {
     try {
       const filePath = resolveCurrentConceptMemosPath(context);
+      const sharedCommonTodoItems = await readCommonTodoItems({
+        legacyConceptMemoPaths: filePath ? [filePath] : [],
+      });
+      const commonTodo = sharedCommonTodoItems
+        .map((item, index) => ({
+          id: String(item?.id || `common_todo_${index}`),
+          text: String(item?.text || "").trim(),
+          done: Boolean(item?.done),
+          order: index,
+        }))
+        .filter((item) => item.text)
+        .sort((a, b) => Number(a.done) - Number(b.done) || a.order - b.order);
+
       if (!filePath) {
-        return { normal: [], list: [], todo: [], commonTodo: [] };
+        return { normal: [], list: [], todo: [], commonTodo };
       }
 
       const data = await readConceptMemos(filePath);
@@ -165,19 +179,6 @@ function createBuildStatsState(deps) {
       );
 
       const sorted = sortDashboardMemos(picked);
-      const commonTodo = (Array.isArray(data?.commonTodoItems)
-        ? data.commonTodoItems
-        : []
-      )
-        .map((item, index) => ({
-          id: String(item?.id || `common_todo_${index}`),
-          text: String(item?.text || "").trim(),
-          done: Boolean(item?.done),
-          order: index,
-        }))
-        .filter((item) => item.text)
-        .sort((a, b) => Number(a.done) - Number(b.done) || a.order - b.order);
-
       return {
         commonTodo,
         normal: sorted
