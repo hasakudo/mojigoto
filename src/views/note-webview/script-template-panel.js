@@ -292,7 +292,7 @@ function getTemplatePanelScript() {
 
 
         return \`
-          <div class="templateRow">
+          <div class="templateRow\${isOpen ? " isPreviewOpen" : ""}">
             <div class="templateRowHead">
               <div class="templateMeta">
                 <div class="templateName">\${esc(tpl.label || "")}</div>

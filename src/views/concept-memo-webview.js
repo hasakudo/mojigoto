@@ -24,6 +24,24 @@ const { resolveActualNotePath } = require("../core/mojigoto-paths");
 
 const openConceptMemoPanels = new Map();
 
+function getWebviewUiSettings() {
+  const config = vscode.workspace.getConfiguration("mojigoto");
+  const fontScalePercent = Math.min(
+    160,
+    Math.max(80, Number(config.get("webviewFontScalePercent", 100)) || 100),
+  );
+  const autoSaveDelaySeconds = Math.min(
+    30,
+    Math.max(0.3, Number(config.get("webviewAutoSaveDelaySeconds", 0.8)) || 0.8),
+  );
+
+  return {
+    fontScale: fontScalePercent / 100,
+    autoSaveEnabled: config.get("webviewAutoSaveEnabled", true) !== false,
+    autoSaveDelayMs: Math.round(autoSaveDelaySeconds * 1000),
+  };
+}
+
 async function readConceptMemosWithSharedTodo(filePath) {
   const data = await readConceptMemos(filePath);
   let commonTodoItems;
@@ -73,6 +91,7 @@ function buildConceptMemoBootState(options = {}) {
           : "",
     },
     data: options?.data || createEmptyConceptMemos(),
+    uiSettings: getWebviewUiSettings(),
   };
 }
 
@@ -134,7 +153,25 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
     }),
   );
 
+  let autoSaveTimer = null;
+  const settingsDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("mojigoto.webviewFontScalePercent")) {
+      panel.webview.postMessage({
+        type: "webviewUiSettingsChanged",
+        payload: getWebviewUiSettings(),
+      });
+    }
+    if (
+      event.affectsConfiguration("mojigoto.webviewAutoSaveEnabled") &&
+      !getWebviewUiSettings().autoSaveEnabled
+    ) {
+      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+  });
+
   panel.onDidDispose(() => {
+    settingsDisposable.dispose();
     openConceptMemoPanels.delete(filePath);
     if (openConceptMemoPanels.get(conceptMemoFilePathKey) === panel) {
       openConceptMemoPanels.delete(conceptMemoFilePathKey);
@@ -143,7 +180,6 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
 
   let currentData = initialData;
   let saveQueue = Promise.resolve();
-  let autoSaveTimer = null;
 
   function buildDataFromMessage(message) {
     return {
@@ -189,6 +225,8 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
           data: currentData,
           selectedMemoId: message.payload?.selectedMemoId || "",
           revision,
+          autoSave: Boolean(message.autoSave),
+          successMessage: String(message.payload?.successMessage || ""),
         },
       });
     }
@@ -241,10 +279,6 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
           },
         });
 
-        panel.webview.postMessage({
-          type: "showToast",
-          message: "新規メモを追加しました。",
-        });
         break;
       }
 
@@ -258,12 +292,6 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
 
           await triggerStatsRefresh();
 
-          if (!message.payload?.silentToast) {
-            panel.webview.postMessage({
-              type: "showToast",
-              message: "保存しました。",
-            });
-          }
         } catch (error) {
           panel.webview.postMessage({
             type: "conceptMemosSaveError",
@@ -281,16 +309,22 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
 
       case "scheduleConceptMemosSave": {
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        const uiSettings = getWebviewUiSettings();
+        if (!uiSettings.autoSaveEnabled) {
+          autoSaveTimer = null;
+          break;
+        }
         const pendingMessage = {
           payload: message.payload || {},
           revision: Number(message.revision || 0),
+          autoSave: true,
         };
         autoSaveTimer = setTimeout(() => {
           autoSaveTimer = null;
           persistConceptMemos(pendingMessage, true)
             .then(() => triggerStatsRefresh())
             .catch(() => {});
-        }, 800);
+        }, uiSettings.autoSaveDelayMs);
         break;
       }
 

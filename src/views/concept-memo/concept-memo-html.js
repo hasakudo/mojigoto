@@ -14,6 +14,10 @@ const { getConceptMemoEventsScript } = require("./script-events");
 function getConceptMemoWebviewHtml(webview, bootState) {
   const nonce = String(Date.now());
   const bootJson = JSON.stringify(bootState).replace(/</g, "\\u003c");
+  const fontScale = Math.min(
+    1.6,
+    Math.max(0.8, Number(bootState?.uiSettings?.fontScale || 1)),
+  );
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -30,7 +34,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
   ${getInputAssistToolbarCss()}
   </style>
 </head>
-<body>
+<body style="--mojigoto-content-font-scale: ${fontScale};">
   <div id="toastMessage" class="toastMessage" aria-live="polite"></div>
   <div class="app" id="conceptMemoApp">
     <aside class="sidebar" id="memoSidebar">

@@ -2,6 +2,7 @@
   color-scheme: light dark;
   --note-footer-height: 45px;
   --note-footer-gap: 8px;
+  --mojigoto-content-font-scale: 1;
 }
 
 html,
@@ -178,11 +179,13 @@ body {
 .toastStatus {
   position: absolute;
   top: 70px;
-  left: 20%;
+  left: 48%;
+  right: auto;
   z-index: 80;
 
   min-width: 220px;
   max-width: min(520px, calc(100% - 32px));
+  box-sizing: border-box;
   padding: 5px 12px;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
@@ -193,6 +196,16 @@ body {
   opacity: 0;
   transform: translateY(-6px);
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .toastStatus {
+    left: auto;
+    right: 8px;
+    min-width: min(220px, calc(100% - 16px));
+    max-width: calc(100% - 16px);
+    white-space: normal;
+  }
 }
 
 .toastStatus.isVisible {
@@ -1428,6 +1441,37 @@ button {
   position: relative;
 }
 
+.templateRow.isPreviewOpen {
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 18%, var(--vscode-editor-background));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder) 45%, transparent);
+}
+
+/* 本文と入力欄だけを拡大し、操作ボタンは標準サイズを保つ。 */
+.editorPane input:not([type="checkbox"]):not([type="radio"]),
+.editorPane textarea,
+.editorPane select,
+.itemMemoPanel textarea {
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+}
+
+.editorPane .label,
+.editorPane .muted,
+.editorPane .groupCollapsedNote,
+.editorPane .groupContextLabel,
+.editorPane .itemMemoHint,
+.editorPane .itemMemoMeta {
+  font-size: calc(12px * var(--mojigoto-content-font-scale));
+}
+
+.editorPane .groupTitle {
+  font-size: calc(15px * var(--mojigoto-content-font-scale));
+}
+
+.previewPane {
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+}
+
 .templateRowHead {
   display: flex;
   align-items: flex-start;
@@ -2519,6 +2563,45 @@ button {
 .previewPane.isBoardMode .noteBoardColumnBody {
   min-height: 0;
   overflow: auto;
+}
+
+/* プレビューボードと全画面ボードの内容文字を設定倍率へ合わせる。 */
+.noteBoardTitle {
+  font-size: calc(15px * var(--mojigoto-content-font-scale));
+}
+
+.noteBoardHint,
+.noteBoardSearchNotice,
+.noteBoardDividerLabel,
+.noteBoardDividerValue,
+.noteBoardBlockEmpty,
+.noteBoardMoveTitle,
+.noteBoardEmpty,
+.noteBoardNoResult,
+.noteBoardCardBody {
+  font-size: calc(12px * var(--mojigoto-content-font-scale));
+}
+
+.noteBoardColumnTitle,
+.noteBoardCardTitle {
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+}
+
+.noteBoardColumnMeta,
+.noteBoardMoveHelp,
+.noteBoardMoveLabel {
+  font-size: calc(11px * var(--mojigoto-content-font-scale));
+}
+
+.noteBoardSearch input[type="text"],
+.noteBoardMoveLabel select {
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+}
+
+.noteBoardJumpEditBtn {
+  min-width: 26px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 @keyframes jumpFlash {

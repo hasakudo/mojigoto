@@ -100,6 +100,7 @@ function getConceptMemoStateScript() {
       const {
         silentToast = false,
         skipDirtyFlash = false,
+        successMessage = "",
       } = options;
 
       if (!skipDirtyFlash) {
@@ -113,6 +114,7 @@ function getConceptMemoStateScript() {
           memos: currentState.data.memos,
           commonTodoItems: currentState.data.commonTodoItems,
           silentToast,
+          successMessage,
         },
         revision: changeRevision,
       });

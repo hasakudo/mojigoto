@@ -413,8 +413,6 @@ function getConceptMemoListScript() {
       currentState.data.updatedAt = new Date().toISOString();
 
       renderAll();
-      showToast(currentState.data.memos[index].isPinned ? "ピン留めしました。" : "ピン留めを解除しました。");
-
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 
@@ -450,7 +448,6 @@ function getConceptMemoListScript() {
       }
 
       renderAll();
-      showToast(nextArchived ? "アーカイブしました。" : "アーカイブを解除しました。");
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 
@@ -473,8 +470,6 @@ function getConceptMemoListScript() {
       currentState.data.updatedAt = new Date().toISOString();
 
       renderAll();
-      showToast(nextValue ? "ダッシュボードに表示します。" : "ダッシュボード表示を解除しました。");
-
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 

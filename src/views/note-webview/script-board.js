@@ -1094,14 +1094,15 @@ function getBoardScript() {
               }
 
               <button
-                class="secondary noteBoardMiniBtn"
+                class="secondary noteBoardMiniBtn noteBoardJumpEditBtn"
                 type="button"
                 data-action="jumpBoardItem"
                 data-group-id="\${group.id}"
                 data-item-id="\${item.id}"
                 title="編集側の項目へ移動"
+                aria-label="編集側の項目へ移動"
               >
-                編集へ
+                ✎
               </button>
 
               <button

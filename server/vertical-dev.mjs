@@ -2100,7 +2100,7 @@ function buildVerticalPreviewPagesFromText(rawInput) {
 
   const pages = [];
   let currentPage = [];
-  let pendingPageLinks = [];
+  let pendingFileBoundaries = [];
 
   function isFlowItem(item) {
     return item && item.type !== "pageLink";
@@ -2140,11 +2140,7 @@ function buildVerticalPreviewPagesFromText(rawInput) {
   for (const block of blocks) {
     if (block?.type === "fileBoundary") {
       const fileBoundaryItems = renderPreviewBlockToItems(block, layoutOptions);
-      pendingPageLinks.push(
-        ...fileBoundaryItems.map((item) =>
-          makePageLinkFromFileBoundaryItem(item),
-        ),
-      );
+      pendingFileBoundaries.push(...fileBoundaryItems);
       continue;
     }
 
@@ -2156,11 +2152,43 @@ function buildVerticalPreviewPagesFromText(rawInput) {
       }
     }
 
-    const items = renderPreviewBlockToItems(block, layoutOptions);
+    let items = renderPreviewBlockToItems(block, layoutOptions);
 
-    if (pendingPageLinks.length && items.length) {
-      currentPage.push(...pendingPageLinks);
-      pendingPageLinks = [];
+    if (pendingFileBoundaries.length && items.length) {
+      const isSubheadingAtFileStart =
+        block?.type === "heading" &&
+        (block.level === 2 || block.level === 3) &&
+        block.isFileStart;
+      const headingItemCount = items.filter(
+        (item) => item?.type === "heading",
+      ).length;
+      const canPlaceBoundaryBesideHeading =
+        isSubheadingAtFileStart &&
+        hasFlowItems(currentPage) &&
+        countFlowItems(currentPage) +
+          pendingFileBoundaries.length +
+          headingItemCount <=
+          pageSize;
+
+      if (canPlaceBoundaryBesideHeading) {
+        // ファイル先頭の h3 用余白より境界を優先し、見出しの右隣へ置く。
+        while (items[0]?.type === "blank") {
+          items.shift();
+        }
+        currentPage.push(...pendingFileBoundaries);
+      } else {
+        // 見出しが次ページになる場合、リンクも次ページの右端へ送る。
+        if (isSubheadingAtFileStart && hasFlowItems(currentPage)) {
+          pushPage();
+        }
+        currentPage.push(
+          ...pendingFileBoundaries.map((item) =>
+            makePageLinkFromFileBoundaryItem(item),
+          ),
+        );
+      }
+
+      pendingFileBoundaries = [];
     }
 
     for (const item of items) {
@@ -2777,10 +2805,10 @@ function buildHtmlFromRenderPages(pages) {
       left: 100%;
       transform: translate(-0.3em, -50%);
       transform-origin: left center;
-      font-size: .45em;
+      font-size: .48em;
       line-height: 1;
       white-space: nowrap;
-      letter-spacing: -0.01em;
+      letter-spacing: 0em;
       pointer-events: none;
     }
     .mjm-bouten {

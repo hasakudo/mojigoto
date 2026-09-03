@@ -2,7 +2,7 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
@@ -281,6 +281,31 @@
           "description": "ダッシュボードで作品共通TODOを表示する",
           "category": "もじごと:ダッシュボード",
           "order": 43
+        },
+        "mojigoto.webviewFontScalePercent": {
+          "type": "number",
+          "default": 100,
+          "minimum": 80,
+          "maximum": 160,
+          "description": "ノート・ノートプレビュー・プレビューボード・全画面ボード・構想メモの入力欄と本文表示の文字倍率（%）。操作ボタンの文字サイズには適用しません。作品ツリーはVS Code標準UIのため対象外です。",
+          "category": "もじごと:表示",
+          "order": 44
+        },
+        "mojigoto.webviewAutoSaveEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "ノートと構想メモの自動保存を有効にします。無効時は手動保存するまで未保存状態になります。",
+          "category": "もじごと:保存",
+          "order": 45
+        },
+        "mojigoto.webviewAutoSaveDelaySeconds": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0.3,
+          "maximum": 30,
+          "description": "ノートと構想メモで、最後の変更から自動保存するまでの秒数。",
+          "category": "もじごと:保存",
+          "order": 46
         },
         "mojigoto.exportRoot": {
           "type": "string",

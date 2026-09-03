@@ -6,11 +6,12 @@ function getConceptMemoStyles() {
       color: var(--vscode-editor-foreground);
       background: var(--vscode-editor-background);
       padding-bottom: 58px;
+      --mojigoto-content-font-scale: 1;
     }
 
     .app {
       display: grid;
-      grid-template-columns: 350px minmax(0, 1fr) minmax(270px, 320px);
+      grid-template-columns: 350px minmax(0, 1fr) minmax(350px, 400px);
       min-height: calc(100vh - 58px);
       height: calc(100vh - 58px);
     }
@@ -83,6 +84,7 @@ function getConceptMemoStyles() {
       min-height: 0;
       padding: 10px 10px 16px 8px;
       overflow: auto;
+      overflow-x: hidden;
       border-left: 1px solid var(--vscode-panel-border);
       box-sizing: border-box;
     }
@@ -100,6 +102,25 @@ function getConceptMemoStyles() {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .commonTodoChecklist .todoItemRow {
+      width: 100%;
+      box-sizing: border-box;
+      gap: 4px;
+      padding: 6px 5px;
+    }
+
+    .commonTodoChecklist .iconButton {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .commonTodoChecklist .todoMoveButton {
+      min-width: 24px;
+      padding-left: 3px;
+      padding-right: 3px;
     }
 
     @media (max-width: 1100px) {
@@ -123,7 +144,7 @@ function getConceptMemoStyles() {
         bottom: 58px;
         z-index: 40;
         display: block;
-        width: min(320px, calc(100vw - 16px));
+        width: min(380px, calc(100vw - 16px));
         padding: 8px;
         overflow: auto;
         border: 1px solid var(--vscode-panel-border);
@@ -157,7 +178,7 @@ function getConceptMemoStyles() {
     }
 
     .app.isSidebarCollapsed {
-      grid-template-columns: 0 minmax(0, 1fr) minmax(270px, 320px);
+      grid-template-columns: 0 minmax(0, 1fr) minmax(350px, 400px);
       min-height: auto;
       align-items: start;
     }
@@ -1063,10 +1084,14 @@ function getConceptMemoStyles() {
 
     .toastMessage {
       position: fixed;
-      top: 60px;
-      right: 10%;
-      z-index: 1000;
+      top: 56px;
+      right: 18%;
+      left: auto;
+      z-index: 2147483647;
+      width: max-content;
+      min-width: min(220px, calc(100vw - 24px));
       max-width: 360px;
+      box-sizing: border-box;
       padding: 10px 12px;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 8px;
@@ -1074,14 +1099,17 @@ function getConceptMemoStyles() {
       color: var(--vscode-notifications-foreground, var(--vscode-editorWidget-foreground));
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
       opacity: 0;
+      visibility: hidden;
       pointer-events: none;
       transform: translateY(-6px);
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s linear 0.18s;
     }
 
     .toastMessage.isVisible {
       opacity: 1;
+      visibility: visible;
       transform: translateY(0);
+      transition-delay: 0s;
     }
 
     .toastMessage.isError {
@@ -1112,6 +1140,49 @@ function getConceptMemoStyles() {
       .app.isSidebarCollapsed.isCommonTodoCollapsed {
         grid-template-columns: 0 minmax(0, 1fr);
       }
+    }
+
+    @media (max-width: 900px) {
+      .toastMessage {
+        right: 8px;
+        max-width: calc(100vw - 16px);
+      }
+    }
+
+    /* 入力欄と本文表示だけを拡大し、操作ボタンは標準サイズを保つ。 */
+    .app input:not([type="checkbox"]):not([type="radio"]),
+    .app textarea,
+    .app select {
+      font-size: calc(13px * var(--mojigoto-content-font-scale));
+    }
+
+    .memoCardTitle,
+    .todoItemText,
+    .memoItem,
+    .empty {
+      font-size: calc(13px * var(--mojigoto-content-font-scale));
+    }
+
+    .muted,
+    .workTitleLabel,
+    .compactHelpText,
+    .submenuTitle,
+    .filterGroupLabel,
+    .memoUpdatedAt,
+    .tagSuggestionLabel {
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
+    }
+
+    .todoMoveButton {
+      flex: 0 0 auto;
+      min-width: 28px;
+      padding-left: 5px;
+      padding-right: 5px;
+    }
+
+    .todoMoveButton:disabled {
+      opacity: 0.35;
+      cursor: default;
     }
 
     .app.isNarrowLayout {

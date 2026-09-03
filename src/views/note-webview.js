@@ -65,9 +65,28 @@ function getPanelTitle(note) {
   return note.title ? `${kind}: ${note.title}` : kind;
 }
 
+function getWebviewUiSettings() {
+  const config = vscode.workspace.getConfiguration("mojigoto");
+  const fontScalePercent = Math.min(
+    160,
+    Math.max(80, Number(config.get("webviewFontScalePercent", 100)) || 100),
+  );
+  const autoSaveDelaySeconds = Math.min(
+    30,
+    Math.max(0.3, Number(config.get("webviewAutoSaveDelaySeconds", 0.8)) || 0.8),
+  );
+
+  return {
+    fontScale: fontScalePercent / 100,
+    autoSaveEnabled: config.get("webviewAutoSaveEnabled", true) !== false,
+    autoSaveDelayMs: Math.round(autoSaveDelaySeconds * 1000),
+  };
+}
+
 function getNoteWebviewHtml(note, webview) {
   const nonce = getNonce();
   const noteJson = escapeScriptJson(note);
+  const { fontScale } = getWebviewUiSettings();
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -81,7 +100,7 @@ ${css}
 ${getInputAssistToolbarCss()}
 </style>
 </head>
-<body>
+<body style="--mojigoto-content-font-scale: ${fontScale};">
   <div id="noteShell" class="noteShell">
     <div class="paneHeader paneHeaderGlobal">
       <div class="paneHeaderLeft">
@@ -1112,6 +1131,23 @@ function attachNotePanel(context, treeProvider, panel, options) {
 
   panel.__mojigotoNoteData = noteForWebview;
   panel.webview.html = getNoteWebviewHtml(noteForWebview, panel.webview);
+  let noteAutoSaveTimer = null;
+
+  const settingsDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("mojigoto.webviewFontScalePercent")) {
+      panel.webview.postMessage({
+        type: "webviewUiSettingsChanged",
+        payload: getWebviewUiSettings(),
+      });
+    }
+    if (
+      event.affectsConfiguration("mojigoto.webviewAutoSaveEnabled") &&
+      !getWebviewUiSettings().autoSaveEnabled
+    ) {
+      if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
+      noteAutoSaveTimer = null;
+    }
+  });
 
   function resolveWorkDirForCurrentNote() {
     if (workDir) return workDir;
@@ -1518,7 +1554,6 @@ function attachNotePanel(context, treeProvider, panel, options) {
 
   let isCloseConfirmOpen = false;
   let noteSaveQueue = Promise.resolve();
-  let noteAutoSaveTimer = null;
 
   async function persistNoteMessage(message, notifyWebview = true) {
     const revision = Number(message?.revision || 0);
@@ -1564,6 +1599,11 @@ function attachNotePanel(context, treeProvider, panel, options) {
 
         if (message?.type === "scheduleAutoSave") {
           if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
+          const uiSettings = getWebviewUiSettings();
+          if (!uiSettings.autoSaveEnabled) {
+            noteAutoSaveTimer = null;
+            return;
+          }
           const pendingMessage = {
             payload: message.payload || {},
             revision: Number(message.revision || 0),
@@ -1571,7 +1611,7 @@ function attachNotePanel(context, treeProvider, panel, options) {
           noteAutoSaveTimer = setTimeout(() => {
             noteAutoSaveTimer = null;
             persistNoteMessage(pendingMessage, true).catch(() => {});
-          }, 800);
+          }, uiSettings.autoSaveDelayMs);
           return;
         }
 
@@ -2522,6 +2562,7 @@ function attachNotePanel(context, treeProvider, panel, options) {
 
   panel.onDidDispose(
     () => {
+      settingsDisposable.dispose();
       if (activeNotePanel === panel) {
         activeNotePanel = null;
       }

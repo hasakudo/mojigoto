@@ -24,6 +24,15 @@ function getConceptMemoEventsScript() {
       const message = event.data;
       if (!message || typeof message !== "object") return;
 
+      if (message.type === "webviewUiSettingsChanged") {
+        const scale = Number(message.payload?.fontScale || 1);
+        document.body.style.setProperty(
+          "--mojigoto-content-font-scale",
+          String(Math.min(1.6, Math.max(0.8, scale))),
+        );
+        return;
+      }
+
       if (message.type === "loadConceptMemos") {
         currentState = normalizeState(message.payload);
 
@@ -45,8 +54,16 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemosSaved") {
-        if (Number(message.payload?.revision || 0) >= changeRevision) {
+        const savedCurrentRevision =
+          Number(message.payload?.revision || 0) >= changeRevision;
+        if (savedCurrentRevision) {
           setDirty(false);
+          showToast(
+            String(message.payload?.successMessage || "") ||
+              (message.payload?.autoSave
+                ? "自動保存しました。"
+                : "保存しました。"),
+          );
         }
         return;
       }
@@ -67,7 +84,6 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemoAppliedToNoteItem") {
-        showToast("項目メモへ反映しました。");
         saveCurrentMemos({ silentToast: true });
         return;
       }
@@ -98,8 +114,11 @@ function getConceptMemoEventsScript() {
         isBulkDeleteMode = false;
 
         renderAll();
-        showToast("選択したメモを削除しました。");
-        saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
+        saveCurrentMemos({
+          silentToast: true,
+          skipDirtyFlash: true,
+          successMessage: "選択したメモを削除しました。",
+        });
         return;
       }
 

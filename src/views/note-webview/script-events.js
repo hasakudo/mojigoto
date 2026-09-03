@@ -470,6 +470,15 @@ function getEventsScript() {
       const msg = event.data;
       if (!msg) return;
 
+      if (msg.type === "webviewUiSettingsChanged") {
+        const scale = Number(msg.payload?.fontScale || 1);
+        document.body.style.setProperty(
+          "--mojigoto-content-font-scale",
+          String(Math.min(1.6, Math.max(0.8, scale))),
+        );
+        return;
+      }
+
       if (msg.type === "shortcutCloseNote") {
         requestCloseNote();
         return;

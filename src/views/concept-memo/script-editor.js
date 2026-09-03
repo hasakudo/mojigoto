@@ -182,13 +182,15 @@ function getConceptMemoEditorScript() {
         return;
       }
 
-      listEl.innerHTML = items.map((item) => {
+      listEl.innerHTML = items.map((item, itemIndex) => {
         const text = item?.text || "";
         const done = Boolean(item?.done);
         return ''
           + '<div class="todoItemRow" data-todo-id="' + escapeHtml(item.id) + '">'
           +   '<input type="checkbox" class="todoToggle" data-todo-id="' + escapeHtml(item.id) + '"' + (done ? ' checked' : '') + ' />'
           +   '<input class="todoItemTextInput' + (done ? ' isDone' : '') + '" data-todo-edit-id="' + escapeHtml(item.id) + '" value="' + escapeHtml(text) + '" aria-label="TODOの文言" />'
+          +   '<button class="iconButton todoMoveButton" type="button" data-todo-move-id="' + escapeHtml(item.id) + '" data-todo-move-direction="up" title="上へ移動" aria-label="上へ移動"' + (itemIndex === 0 ? ' disabled' : '') + '>↑</button>'
+          +   '<button class="iconButton todoMoveButton" type="button" data-todo-move-id="' + escapeHtml(item.id) + '" data-todo-move-direction="down" title="下へ移動" aria-label="下へ移動"' + (itemIndex === items.length - 1 ? ' disabled' : '') + '>↓</button>'
           +   '<button class="iconButton todoDeleteButton" type="button" data-todo-delete-id="' + escapeHtml(item.id) + '">削除</button>'
           + '</div>';
       }).join("");
@@ -202,6 +204,15 @@ function getConceptMemoEditorScript() {
       listEl.querySelectorAll(".todoDeleteButton").forEach((el) => {
         el.addEventListener("click", () => {
           deleteTodoItem(el.dataset.todoDeleteId || "");
+        });
+      });
+
+      listEl.querySelectorAll("[data-todo-move-id]").forEach((el) => {
+        el.addEventListener("click", () => {
+          moveTodoItem(
+            el.dataset.todoMoveId || "",
+            el.dataset.todoMoveDirection || "",
+          );
         });
       });
 
@@ -257,7 +268,6 @@ function getConceptMemoEditorScript() {
       }
 
       renderAll();
-      showToast("TODOを追加しました。");
     }
 
     function deleteTodoItem(todoId) {
@@ -274,7 +284,19 @@ function getConceptMemoEditorScript() {
         todoItems: nextItems,
       });
       renderAll();
-      showToast("TODOを削除しました。");
+    }
+
+    function moveTodoItem(todoId, direction) {
+      const memo = getSelectedMemo();
+      if (!memo || !todoId) return;
+      const items = Array.isArray(memo.todoItems) ? [...memo.todoItems] : [];
+      const index = items.findIndex((item) => item.id === todoId);
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+      const [movedItem] = items.splice(index, 1);
+      items.splice(targetIndex, 0, movedItem);
+      updateSelectedMemo({ todoItems: items });
+      renderAll();
     }
 
     function updateTodoItemText(todoId, text) {
@@ -290,7 +312,6 @@ function getConceptMemoEditorScript() {
       if (index < 0 || items[index].text === value) return;
       items[index] = { ...items[index], text: value };
       updateSelectedMemo({ todoItems: items });
-      showToast("TODOを修正しました。");
     }
 
     function renderCommonTodoChecklist() {
@@ -303,10 +324,12 @@ function getConceptMemoEditorScript() {
       const doneCount = items.filter((item) => item?.done).length;
       if (summary) summary.textContent = "完了 " + doneCount + " / " + items.length;
       root.innerHTML = items.length
-        ? items.map((item) => ''
+        ? items.map((item, itemIndex) => ''
           + '<div class="todoItemRow">'
           +   '<input type="checkbox" data-common-todo-toggle="' + escapeHtml(item.id) + '"' + (item.done ? ' checked' : '') + ' />'
           +   '<input class="todoItemTextInput' + (item.done ? ' isDone' : '') + '" data-common-todo-edit="' + escapeHtml(item.id) + '" value="' + escapeHtml(item.text || '') + '" />'
+          +   '<button class="iconButton todoMoveButton" type="button" data-common-todo-move="' + escapeHtml(item.id) + '" data-common-todo-direction="up" title="上へ移動" aria-label="上へ移動"' + (itemIndex === 0 ? ' disabled' : '') + '>↑</button>'
+          +   '<button class="iconButton todoMoveButton" type="button" data-common-todo-move="' + escapeHtml(item.id) + '" data-common-todo-direction="down" title="下へ移動" aria-label="下へ移動"' + (itemIndex === items.length - 1 ? ' disabled' : '') + '>↓</button>'
           +   '<button class="iconButton" type="button" data-common-todo-delete="' + escapeHtml(item.id) + '">削除</button>'
           + '</div>').join("")
         : '<div class="muted">共通TODOはまだありません。</div>';
@@ -325,6 +348,14 @@ function getConceptMemoEditorScript() {
           renderCommonTodoChecklist();
         });
       });
+      root.querySelectorAll("[data-common-todo-move]").forEach((el) => {
+        el.addEventListener("click", () => {
+          moveCommonTodo(
+            el.dataset.commonTodoMove || "",
+            el.dataset.commonTodoDirection || "",
+          );
+        });
+      });
     }
 
     function patchCommonTodo(id, patch) {
@@ -337,6 +368,21 @@ function getConceptMemoEditorScript() {
         return;
       }
       items[index] = { ...items[index], ...patch };
+      currentState.data.commonTodoItems = items;
+      currentState.data.updatedAt = new Date().toISOString();
+      setDirty(true);
+      renderCommonTodoChecklist();
+    }
+
+    function moveCommonTodo(id, direction) {
+      const items = Array.isArray(currentState.data.commonTodoItems)
+        ? [...currentState.data.commonTodoItems]
+        : [];
+      const index = items.findIndex((item) => item.id === id);
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+      const [movedItem] = items.splice(index, 1);
+      items.splice(targetIndex, 0, movedItem);
       currentState.data.commonTodoItems = items;
       currentState.data.updatedAt = new Date().toISOString();
       setDirty(true);
@@ -490,7 +536,6 @@ function getConceptMemoEditorScript() {
       currentState.data.updatedAt = new Date().toISOString();
 
       renderAll();
-      showToast(nextPinned ? "ピン留めしました。" : "ピン留めを解除しました。");
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 
@@ -524,7 +569,6 @@ function getConceptMemoEditorScript() {
       }
 
       renderAll();
-      showToast(nextArchived ? "アーカイブしました。" : "アーカイブを解除しました。");
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 
@@ -545,7 +589,6 @@ function getConceptMemoEditorScript() {
       currentState.data.updatedAt = new Date().toISOString();
 
       renderAll();
-      showToast(nextValue ? "ダッシュボードに表示します。" : "ダッシュボード表示を解除しました。");
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
 
@@ -558,6 +601,7 @@ function getConceptMemoEditorScript() {
           title: memoTitle.value,
         });
       });
+
     }
 
     function handleTypeInput() {
@@ -749,6 +793,7 @@ function getConceptMemoEditorScript() {
           body: memoBody.value,
         });
       });
+
     }
 
     function handleListInput() {
@@ -770,6 +815,7 @@ function getConceptMemoEditorScript() {
           listItems: items,
         });
       });
+
     }
 
     function handleTagsInput() {
@@ -782,6 +828,7 @@ function getConceptMemoEditorScript() {
         });
         renderTagSuggestions(getSelectedMemo());
       });
+
     }
 
     function bindTodoActions() {
@@ -1051,9 +1098,12 @@ function getConceptMemoEditorScript() {
       selectedMemoId = nextMemo ? nextMemo.id : "";
 
       renderAll();
-      showToast("メモを削除しました。");
 
-      saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
+      saveCurrentMemos({
+        silentToast: true,
+        skipDirtyFlash: true,
+        successMessage: "メモを削除しました。",
+      });
     }
 
     function unlinkSelectedMemoSource() {
@@ -1076,7 +1126,6 @@ function getConceptMemoEditorScript() {
       currentState.data.updatedAt = new Date().toISOString();
 
       renderAll();
-      showToast("リンクを解除しました。");
 
       saveCurrentMemos({ silentToast: true, skipDirtyFlash: true });
     }
