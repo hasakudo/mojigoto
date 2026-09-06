@@ -2,7 +2,7 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
