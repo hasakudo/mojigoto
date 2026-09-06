@@ -16,6 +16,10 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
   const jsUri = `${jsBaseUri}?v=${version}`;
 
   const boot = JSON.stringify(initialState).replace(/</g, "\\u003c");
+  const fontScale = Math.min(
+    1.6,
+    Math.max(0.8, Number(initialState?.uiSettings?.fontScale || 1)),
+  );
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -23,17 +27,30 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>並び順エディタ</title>
+  <title>原稿構成エディタ</title>
   <link rel="stylesheet" href="${cssUri}">
 </head>
-<body>
+<body style="--mojigoto-content-font-scale: ${fontScale};">
   <div class="app">
     <header class="app-header">
-      <h1>並び順エディタ</h1>
-      <p class="muted">左でフォルダを選択し、右でファイルの順番を編集します。</p>
-      <p class="muted">保存時に既存の先頭番号は付け直されます。</p>
+      <div class="app-header-title-row">
+        <h1>原稿構成エディタ</h1>
+        <button id="closeBtn" type="button" title="原稿構成エディタを閉じる">閉じる</button>
+      </div>
+      <p class="header-summary muted">フォルダとファイルの並び順・作品ツリー上の表示名をまとめて編集します。</p>
+      <details class="header-help">
+        <summary>使い方と注意を表示</summary>
+        <div class="header-help-content">
+          <p class="muted">表示名は複数項目を編集して各欄の下にある保存ボタンでまとめて保存できます。</p>
+          <p class="muted">実名は各項目の「実名変更」から1ファイル／1フォルダずつ変更します。</p>
+          <p class="muted">表示名だけの変更では実名を変更しません。</p>
+          <p class="muted">並び替えを保存したときだけ先頭番号を付け直します。サブフォルダは左側に階層表示されます。</p>
+          <p class="muted">「見出し挿入」は操作したファイル1件だけが対象です。</P>
+          <p class="muted">フォルダ名を選んだ場合も、フォルダ内の複数ファイルへ一括挿入はしません。</p>
+        </div>
+      </details>
       <div id="currentTarget" class="current-target"></div>
-      <div id="dirtyBadge" class="dirty-badge" hidden>ファイルに未保存の変更があります</div>
+      <div id="dirtyBadge" class="dirty-badge" hidden>未保存の変更があります</div>
     </header>
     <main class="app-main">
       <aside class="left-pane">
@@ -49,7 +66,7 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
         <div id="folderList" class="folder-list"></div>
 
         <div class="left-footer">
-          <button id="saveFolderOrderBtn" class="primary">フォルダ順を保存</button>
+          <button id="saveFolderOrderBtn" class="primary">フォルダを保存</button>
           <div class="sub-actions">
             <button id="discardFolderOrderBtn">変更を破棄</button>
             <button id="reloadFolderListBtn">再読み込み</button>
@@ -75,7 +92,7 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
         <div id="emptyState" class="empty-state" hidden>このフォルダには対象ファイルがありません。</div>
 
         <div class="right-footer">
-          <button id="saveBtn" class="primary">保存してファイル名に反映</button>
+          <button id="saveBtn" class="primary">ファイルを保存</button>
           <div class="sub-actions">
             <button id="discardBtn">変更を破棄</button>
             <button id="reloadBtn">フォルダを再読み込み</button>
@@ -84,9 +101,6 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
       </section>
     </main>
 
-    <footer class="app-footer app-footer-global">
-      <button id="closeBtn">閉じる</button>
-    </footer>
   </div>
   <script nonce="${nonce}">window.__Mojigoto_REORDER_BOOT__ = ${boot};</script>
   <script nonce="${nonce}" src="${jsUri}"></script>

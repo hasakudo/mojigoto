@@ -12,6 +12,9 @@ const { readWritingMemos } = require("../writing-memo/writing-memo-store");
 const {
   isSameWritingMemoFilePath,
 } = require("../writing-memo/writing-memo-resolver");
+const {
+  reconcileWritingMemoPathsForTarget,
+} = require("../writing-memo/writing-memo-tracker");
 
 let _refreshWritingMemoDecorations = null;
 
@@ -291,6 +294,7 @@ function createWritingMemoDecorationController(context) {
     }
 
     try {
+      await reconcileWritingMemoPathsForTarget(context, target);
       const data = await readWritingMemos(target.writingMemoFilePath);
       const memos = Array.isArray(data?.memos) ? data.memos : [];
 

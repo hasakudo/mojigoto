@@ -196,6 +196,7 @@ class HighlightManager {
       enabled: highlightsEnabled && this.enabled,
       decorationsEnabled,
       currentFile: this.lastFileName || "",
+      currentFilePath: this.lastFilePath || "",
       totalCount,
       groups,
       details: this.lastDetails || [],

@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const fs = require("fs");
+const path = require("path");
 const { makeStatsHtml } = require("./stats-html");
 const {
   getWorkName,
@@ -16,6 +17,7 @@ const {
   getConceptMemosPathForSingle,
   getWritingMemosPathForWork,
   getWritingMemosPathForSingle,
+  getWorkManuscriptRoot,
 } = require("../core/mojigoto-paths");
 const {
   readConceptMemos,
@@ -36,6 +38,9 @@ const {
 } = require("../writing-memo/writing-memo-store");
 const {
   resolveWritingMemoAbsolutePathFlexible,
+  isSameOrChildPath,
+  toMemoRelativePath,
+  getConfiguredManuscriptRoot,
 } = require("../writing-memo/writing-memo-resolver");
 
 function createStatsPanelController(options) {
@@ -269,6 +274,124 @@ function createStatsPanelController(options) {
     }
   }
 
+  function normalizeComparablePath(value) {
+    const normalized = path.normalize(String(value || "").trim());
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  }
+
+  function resolveHeadingBatchEditor(filePath) {
+    const targetPath = normalizeComparablePath(filePath);
+    if (!targetPath) return null;
+
+    const candidates = [
+      vscode.window.activeTextEditor,
+      ...(vscode.window.visibleTextEditors || []),
+      typeof getPreferredHighlightEditor === "function"
+        ? getPreferredHighlightEditor()
+        : null,
+    ].filter(Boolean);
+
+    return candidates.find((editor) =>
+      normalizeComparablePath(editor?.document?.uri?.fsPath) === targetPath,
+    ) || null;
+  }
+
+  async function handleApplyHeadingBatch(msg) {
+    try {
+      const highlightManager = getHighlightManagerSafe();
+      const editor = resolveHeadingBatchEditor(msg.filePath);
+      if (!editor) {
+        vscode.window.showWarningMessage(
+          "もじごと: 分析対象の原稿が現在のエディタに表示されていません。原稿を開いてから再度実行してください。",
+        );
+        return;
+      }
+
+      const document = editor.document;
+      const level = Math.max(1, Math.min(3, Number(msg.level || 1)));
+      const marker = `${"#".repeat(level)} `;
+      const targets = Array.isArray(msg.targets) ? msg.targets : [];
+      const seenLines = new Set();
+      const eligible = [];
+
+      for (const target of targets) {
+        const lineNumber = Number(target?.startLine);
+        if (!Number.isInteger(lineNumber) || lineNumber < 0) continue;
+        if (lineNumber >= document.lineCount || seenLines.has(lineNumber)) continue;
+        seenLines.add(lineNumber);
+
+        const line = document.lineAt(lineNumber);
+        const currentText = String(line.text || "");
+        const analyzedText = String(target?.preview || "");
+        if (!currentText.trim()) continue;
+        if (/^\s*#{1,6}(?:\s|$)/.test(currentText)) continue;
+        if (currentText !== analyzedText) continue;
+
+        eligible.push({
+          lineNumber,
+          position: new vscode.Position(lineNumber, 0),
+        });
+      }
+
+      if (!eligible.length) {
+        vscode.window.showWarningMessage(
+          "もじごと: 変更できる行がありません。分析後に本文が変わった行や既存の見出しは除外されます。",
+        );
+        return;
+      }
+
+      const skippedCount = Math.max(0, targets.length - eligible.length);
+      const skippedText = skippedCount
+        ? `\n${skippedCount}件は本文変更・重複・既存見出しのため除外されます。`
+        : "";
+      const confirmed = await vscode.window.showWarningMessage(
+        `${path.basename(document.fileName)} の${eligible.length}行に「${marker}」を付与します。${skippedText}`,
+        { modal: true },
+        "付与する",
+      );
+      if (confirmed !== "付与する") return;
+
+      const applied = await editor.edit(
+        (editBuilder) => {
+          for (const target of eligible) {
+            editBuilder.insert(target.position, marker);
+          }
+        },
+        {
+          undoStopBefore: true,
+          undoStopAfter: true,
+        },
+      );
+
+      if (!applied) {
+        vscode.window.showErrorMessage(
+          "もじごと: 見出し記号を付与できませんでした。",
+        );
+        return;
+      }
+
+      await vscode.window.showTextDocument(document, {
+        preview: false,
+        viewColumn: editor.viewColumn || vscode.ViewColumn.One,
+        preserveFocus: false,
+      });
+
+      if (highlightManager) {
+        highlightManager.refreshEditor(editor);
+      }
+      await refresh();
+
+      vscode.window.showInformationMessage(
+        `もじごと: ${eligible.length}行に見出し記号を付与しました。`,
+      );
+    } catch (error) {
+      console.error("[mojigoto] applyHeadingBatch error:", error);
+      vscode.window.showErrorMessage(
+        `もじごと: 見出し記号の一括付与に失敗しました: ${error.message || String(error)}`,
+      );
+    }
+  }
+
   function findWritingMemoRangeByExcerpt(doc, excerpt = "", fallback = {}) {
     const needle = String(excerpt || "").trim();
     if (!doc || !needle) return null;
@@ -310,6 +433,217 @@ function createStatsPanelController(options) {
     return new vscode.Range(start, end);
   }
 
+  function resolveManualWritingMemoTarget(targetFilePath) {
+    const filePath = String(targetFilePath || "").trim();
+    if (!filePath) return null;
+
+    const configuredRoot = getConfiguredManuscriptRoot();
+
+    if (configuredRoot && isSameOrChildPath(filePath, configuredRoot)) {
+      if (isSingleMode()) {
+        return {
+          filePath,
+          relativeFilePath: toMemoRelativePath(configuredRoot, filePath),
+          writingMemoFilePath: getWritingMemosPathForSingle(),
+          targetLocation: "",
+        };
+      }
+
+      const currentWorkName = String(getWorkName(context) || "").trim();
+      const currentWork = listWorkDirectories().find(
+        (item) => String(item?.name || "").trim() === currentWorkName,
+      );
+
+      if (currentWork?.fsPath) {
+        return {
+          filePath,
+          relativeFilePath: toMemoRelativePath(configuredRoot, filePath),
+          writingMemoFilePath: getWritingMemosPathForWork(currentWork.fsPath),
+          targetLocation: "view",
+        };
+      }
+    }
+
+    if (!isSingleMode()) {
+      for (const work of listWorkDirectories()) {
+        if (!work?.fsPath) continue;
+        const manuscriptRoot = getWorkManuscriptRoot(work.fsPath);
+        if (!manuscriptRoot || !isSameOrChildPath(filePath, manuscriptRoot)) {
+          continue;
+        }
+
+        return {
+          filePath,
+          relativeFilePath: toMemoRelativePath(manuscriptRoot, filePath),
+          writingMemoFilePath: getWritingMemosPathForWork(work.fsPath),
+          targetLocation: "work",
+        };
+      }
+    }
+
+    return null;
+  }
+
+  async function handleWritingMemoRelink(msg) {
+    const sourceMemoFilePath = String(
+      msg?.writingMemoFilePath || "",
+    ).trim();
+    const memoId = String(msg?.memoId || "").trim();
+
+    if (!sourceMemoFilePath || !memoId) {
+      vscode.window.showWarningMessage(
+        "もじごと: 修復する執筆メモを取得できませんでした。",
+      );
+      return;
+    }
+
+    const sourceData = await readWritingMemos(sourceMemoFilePath);
+    const sourceMemos = Array.isArray(sourceData?.memos)
+      ? [...sourceData.memos]
+      : [];
+    const sourceIndex = sourceMemos.findIndex(
+      (memo) => String(memo?.id || "") === memoId,
+    );
+
+    if (sourceIndex < 0) {
+      vscode.window.showWarningMessage(
+        "もじごと: 修復する執筆メモが見つかりませんでした。",
+      );
+      return;
+    }
+
+    const sourceMemo = sourceMemos[sourceIndex];
+    const suggestedPath = String(msg?.absoluteFilePath || "").trim();
+    const configuredRoot = getConfiguredManuscriptRoot();
+    const currentWorkName = String(getWorkName(context) || "").trim();
+    const currentWork = !isSingleMode()
+      ? listWorkDirectories().find(
+          (item) => String(item?.name || "").trim() === currentWorkName,
+        )
+      : null;
+    const currentWorkMemoPath = currentWork?.fsPath
+      ? getWritingMemosPathForWork(currentWork.fsPath)
+      : "";
+    const isCurrentViewMemo = Boolean(
+      configuredRoot &&
+        currentWorkMemoPath &&
+        normalizeComparablePath(currentWorkMemoPath) ===
+          normalizeComparablePath(sourceMemoFilePath),
+    );
+    const defaultPath = isCurrentViewMemo
+      ? configuredRoot
+      : suggestedPath && fs.existsSync(suggestedPath)
+        ? path.dirname(suggestedPath)
+        : configuredRoot;
+
+    const selected = await vscode.window.showOpenDialog({
+      title: "執筆メモの連携先を選択",
+      openLabel: "この原稿へ付け替える",
+      defaultUri: defaultPath ? vscode.Uri.file(defaultPath) : undefined,
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: {
+        "原稿ファイル": ["txt", "md"],
+      },
+    });
+
+    const selectedPath = selected?.[0]?.fsPath || "";
+    if (!selectedPath) return;
+
+    const target = resolveManualWritingMemoTarget(selectedPath);
+    if (
+      !target?.relativeFilePath ||
+      !target?.writingMemoFilePath
+    ) {
+      vscode.window.showWarningMessage(
+        "もじごと: 設定されている原稿フォルダ内の .txt / .md ファイルを選択してください。",
+      );
+      return;
+    }
+
+    const locationLabel = target.targetLocation === "view"
+      ? "View側"
+      : target.targetLocation === "work"
+        ? "作品元側"
+        : "原稿";
+    const confirmed = await vscode.window.showWarningMessage(
+      `この執筆メモを「${target.relativeFilePath}」（${locationLabel}）へ付け替えますか？`,
+      { modal: true },
+      "付け替える",
+    );
+    if (confirmed !== "付け替える") return;
+
+    let excerptRange = null;
+    try {
+      const targetDocument = await vscode.workspace.openTextDocument(
+        target.filePath,
+      );
+      excerptRange = findWritingMemoRangeByExcerpt(
+        targetDocument,
+        sourceMemo?.excerpt || "",
+        sourceMemo,
+      );
+    } catch {}
+
+    const updatedMemo = {
+      ...sourceMemo,
+      filePath: target.relativeFilePath,
+      fileName: path.basename(target.relativeFilePath),
+      targetLocation: target.targetLocation,
+      ...(excerptRange
+        ? {
+            startLine: excerptRange.start.line,
+            startCharacter: excerptRange.start.character,
+            endLine: excerptRange.end.line,
+            endCharacter: excerptRange.end.character,
+          }
+        : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (
+      normalizeComparablePath(sourceMemoFilePath) ===
+      normalizeComparablePath(target.writingMemoFilePath)
+    ) {
+      sourceMemos[sourceIndex] = updatedMemo;
+      await writeWritingMemos(sourceMemoFilePath, {
+        ...sourceData,
+        memos: sourceMemos,
+      });
+    } else {
+      const targetData = await readWritingMemos(target.writingMemoFilePath);
+      const targetMemos = Array.isArray(targetData?.memos)
+        ? targetData.memos.filter(
+            (memo) => String(memo?.id || "") !== memoId,
+          )
+        : [];
+
+      // 保存先を先に書き、途中で失敗してもメモが失われない順序にする。
+      await writeWritingMemos(target.writingMemoFilePath, {
+        ...targetData,
+        memos: [updatedMemo, ...targetMemos],
+      });
+      await writeWritingMemos(sourceMemoFilePath, {
+        ...sourceData,
+        memos: sourceMemos.filter(
+          (memo) => String(memo?.id || "") !== memoId,
+        ),
+      });
+    }
+
+    lastWritingMemoTargetFsPath = target.filePath;
+    editingWritingMemoId = "";
+    await refresh();
+    await triggerWritingMemoDecorationRefresh();
+
+    vscode.window.showInformationMessage(
+      excerptRange
+        ? "もじごと: 執筆メモの連携先を修復しました。"
+        : "もじごと: 連携先を修復しました。元の抜粋が見つからないため、位置は以前の情報を保持しています。",
+    );
+  }
+
   async function handleWritingMemoJump(msg) {
     try {
       const absPath = resolveWritingMemoAbsolutePathFlexible(
@@ -319,6 +653,7 @@ function createStatsPanelController(options) {
           absoluteFilePath: msg.absoluteFilePath,
           writingMemoFilePath: msg.writingMemoFilePath,
           excerpt: msg.excerpt,
+          targetLocation: msg.targetLocation,
         },
       );
 
@@ -432,7 +767,22 @@ function createStatsPanelController(options) {
 
       const cfg = vscode.workspace.getConfiguration("mojigoto");
 
-      if (key === "commonTodo") {
+      if (key === "progressGraph") {
+        await cfg.update(
+          "dashboardShowProgressGraph",
+          enabled,
+          vscode.ConfigurationTarget.Workspace,
+        );
+      } else if (key === "progressGraphMode") {
+        const mode = String(msg.value || "daily") === "total"
+          ? "total"
+          : "daily";
+        await cfg.update(
+          "dashboardProgressGraphMode",
+          mode,
+          vscode.ConfigurationTarget.Workspace,
+        );
+      } else if (key === "commonTodo") {
         await cfg.update(
           "dashboardShowCommonTodo",
           enabled,
@@ -560,6 +910,11 @@ function createStatsPanelController(options) {
 
     if (msg.type === "highlightJump") {
       await handleHighlightJump(msg);
+    }
+
+    if (msg.type === "applyHeadingBatch") {
+      await handleApplyHeadingBatch(msg);
+      return;
     }
 
     if (msg.type === "openHighlightSettings") {
@@ -694,10 +1049,15 @@ function createStatsPanelController(options) {
         const title = excerpt || "執筆メモからコピー";
         const data = await readConceptMemos(target.filePath);
         const memos = Array.isArray(data?.memos) ? [...data.memos] : [];
+        const writingFolderId = Array.isArray(data?.folders) &&
+          data.folders.some((folder) => folder?.id === "writing")
+          ? "writing"
+          : "";
 
         const nextMemo = {
           id: `cm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
           type: "text",
+          folderId: writingFolderId,
           title,
           body,
           tags: [],
@@ -769,6 +1129,18 @@ function createStatsPanelController(options) {
 
     if (msg.type === "writingMemoJump") {
       await handleWritingMemoJump(msg);
+      return;
+    }
+
+    if (msg.type === "relinkWritingMemo") {
+      try {
+        await handleWritingMemoRelink(msg);
+      } catch (error) {
+        console.error("[mojigoto] relinkWritingMemo error:", error);
+        vscode.window.showErrorMessage(
+          `もじごと: 執筆メモの連携先を修復できませんでした: ${error.message || String(error)}`,
+        );
+      }
       return;
     }
 
@@ -1235,6 +1607,8 @@ function createStatsPanelController(options) {
         e.affectsConfiguration("mojigoto.eventsMaxCount") ||
         e.affectsConfiguration("mojigoto.eventsRetentionDays") ||
         e.affectsConfiguration("mojigoto.dailyRetentionDays") ||
+        e.affectsConfiguration("mojigoto.dashboardShowProgressGraph") ||
+        e.affectsConfiguration("mojigoto.dashboardProgressGraphMode") ||
         e.affectsConfiguration("mojigoto.countMode")
       ) {
         refresh();

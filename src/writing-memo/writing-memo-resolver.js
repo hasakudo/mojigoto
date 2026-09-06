@@ -13,12 +13,30 @@ function normalizeFsPath(fsPath) {
   return path.normalize(String(fsPath || ""));
 }
 
+function isSameFsPath(left, right) {
+  let normalizedLeft = normalizeFsPath(left);
+  let normalizedRight = normalizeFsPath(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+
+  if (process.platform === "win32") {
+    normalizedLeft = normalizedLeft.toLowerCase();
+    normalizedRight = normalizedRight.toLowerCase();
+  }
+
+  return normalizedLeft === normalizedRight;
+}
+
 function isSameOrChildPath(targetPath, basePath) {
-  const normalizedTarget = normalizeFsPath(targetPath);
-  const normalizedBase = normalizeFsPath(basePath);
+  let normalizedTarget = normalizeFsPath(targetPath);
+  let normalizedBase = normalizeFsPath(basePath);
 
   if (!normalizedTarget || !normalizedBase) {
     return false;
+  }
+
+  if (process.platform === "win32") {
+    normalizedTarget = normalizedTarget.toLowerCase();
+    normalizedBase = normalizedBase.toLowerCase();
   }
 
   return (
@@ -202,12 +220,28 @@ function getWritingMemoResolverRoots(context, options = {}) {
   const roots = [];
   const configuredManuscriptRoot = getConfiguredManuscriptRoot();
   const writingMemoFilePath = String(options?.writingMemoFilePath || "").trim();
+  const targetLocation = String(options?.targetLocation || "").trim();
 
   if (isSingleMode()) {
     if (configuredManuscriptRoot) {
       roots.push(configuredManuscriptRoot);
     }
     return roots;
+  }
+
+  const currentWork = resolveCurrentWork(context);
+  const currentWorkMemoPath = currentWork?.fsPath
+    ? getWritingMemosPathForWork(currentWork.fsPath)
+    : "";
+  const configuredRootMatchesMemoStore = Boolean(
+    configuredManuscriptRoot &&
+      writingMemoFilePath &&
+      currentWorkMemoPath &&
+      isSameFsPath(currentWorkMemoPath, writingMemoFilePath),
+  );
+
+  if (targetLocation === "view" && configuredRootMatchesMemoStore) {
+    roots.push(configuredManuscriptRoot);
   }
 
   if (writingMemoFilePath) {
@@ -226,11 +260,10 @@ function getWritingMemoResolverRoots(context, options = {}) {
     }
   }
 
-  if (configuredManuscriptRoot) {
+  if (configuredManuscriptRoot && targetLocation !== "work") {
     roots.push(configuredManuscriptRoot);
   }
 
-  const currentWork = resolveCurrentWork(context);
   if (currentWork?.fsPath) {
     const currentRoot = getWorkManuscriptRoot(currentWork.fsPath);
     if (currentRoot) {
@@ -256,17 +289,27 @@ function findWritingMemoFileByLoosePath(rootDir, storedFilePath, excerpt = "") {
 
   const files = collectWritingMemoTextFiles(rootDir);
 
-  const candidates = files.filter((file) => {
+  let candidates = files.filter((file) => {
     const rel = normalizeSlashes(path.relative(rootDir, file));
     return normalizeWritingMemoFileKey(rel) === targetKey;
   });
+
+  // フォルダをまたいで移動した場合、保存済みの相対パスでは一致しない。
+  // その場合だけファイル名まで条件を緩め、本文の抜粋で移動先を特定する。
+  if (!candidates.length) {
+    const targetFileKey = path.posix.basename(targetKey);
+    candidates = files.filter((file) => {
+      const rel = normalizeSlashes(path.relative(rootDir, file));
+      return path.posix.basename(normalizeWritingMemoFileKey(rel)) === targetFileKey;
+    });
+  }
 
   if (!candidates.length) return "";
   if (candidates.length === 1) return candidates[0];
 
   const needle = String(excerpt || "").trim();
   if (needle) {
-    const matched = candidates.find((file) => {
+    const matched = candidates.filter((file) => {
       try {
         return fs.readFileSync(file, "utf8").includes(needle);
       } catch {
@@ -274,10 +317,11 @@ function findWritingMemoFileByLoosePath(rootDir, storedFilePath, excerpt = "") {
       }
     });
 
-    if (matched) return matched;
+    if (matched.length === 1) return matched[0];
   }
 
-  return candidates[0];
+  // 同名候補を一意に特定できない場合は、誤った原稿へ結び付けない。
+  return "";
 }
 
 function resolveWritingMemoAbsolutePath(context, relativeFilePath) {
@@ -329,13 +373,15 @@ function resolveWritingMemoAbsolutePathFlexible(
     return preferredAbsoluteFilePath;
   }
 
-  const exact = resolveWritingMemoAbsolutePath(context, relativeFilePath);
-  if (exact && fs.existsSync(exact)) {
-    return exact;
-  }
-
   const roots = getWritingMemoResolverRoots(context, options);
   const excerpt = String(options?.excerpt || "");
+
+  for (const root of roots) {
+    const exact = path.join(root, String(relativeFilePath || ""));
+    if (exact && fs.existsSync(exact)) {
+      return exact;
+    }
+  }
 
   for (const root of roots) {
     const found = findWritingMemoFileByLoosePath(

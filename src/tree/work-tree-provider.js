@@ -27,6 +27,10 @@ const {
 } = require("../data/settings-store");
 const { getCurrentWorkDisplayName } = require("../work/work-settings");
 const { getDisplayChapterLabel } = require("../core/chapter-labels");
+const {
+  readDisplayNamesSync,
+  getDisplayNameFromData,
+} = require("../reorder/reorder-display-names");
 
 const GENRE_EMPTY_FILTER = "__empty__";
 const WORK_STATUS_NOT_HOLD_COMPLETE_FILTER = "__not_hold_complete__";
@@ -1015,9 +1019,26 @@ class MojigotoWorkTreeProvider {
       ];
     }
 
+    let displayNamesRoot = manuscriptRoot;
+    let cursor = parentItem;
+    while (cursor) {
+      if (cursor.kind === "manuscriptRoot" && cursor.fsPath) {
+        displayNamesRoot = cursor.fsPath;
+        break;
+      }
+      cursor = cursor.parent || null;
+    }
+    const displayNamesData = readDisplayNamesSync(displayNamesRoot);
+
     return listManuscriptChildren(manuscriptRoot).map((entry) => {
+      const customDisplayName = getDisplayNameFromData(
+        displayNamesData,
+        displayNamesRoot,
+        entry.fsPath,
+      );
+
       if (entry.type === "dir") {
-        const displayLabel = getDisplayChapterLabel(entry.name);
+        const displayLabel = customDisplayName || getDisplayChapterLabel(entry.name);
         const tooltip =
           displayLabel !== entry.name
             ? `${displayLabel}\n実フォルダ名: ${entry.name}`
@@ -1039,8 +1060,13 @@ class MojigotoWorkTreeProvider {
         );
       }
 
+      const displayLabel = customDisplayName || entry.name;
+      const tooltip = customDisplayName
+        ? `${displayLabel}\n実ファイル名: ${entry.name}`
+        : entry.name;
+
       return this._upsertTreeItem(
-        "☰ " + entry.name,
+        "☰ " + displayLabel,
         vscode.TreeItemCollapsibleState.None,
         {
           kind: "manuscriptFile",
@@ -1049,6 +1075,7 @@ class MojigotoWorkTreeProvider {
           workName,
           workDir,
           parent: parentItem,
+          tooltip,
           command: {
             command: "vscode.open",
             title: "ファイルを開く",

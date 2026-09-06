@@ -321,6 +321,12 @@ function getEventsScript() {
       return;
     }
 
+    if (action === "openTocSettings") {
+      setMoreMenuOpen(false);
+      setNoteTocOpen(true, { expand: true, focusSettings: true });
+      return;
+    }
+
     if (action === "toggleTemplateList") {
       setMoreMenuOpen(false);
       setTemplatePanelOpen(true);

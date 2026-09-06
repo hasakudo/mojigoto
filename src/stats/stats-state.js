@@ -14,6 +14,11 @@ const {
 } = require("./stats-config");
 const { getEventsRemindMode } = require("./stats-reminder");
 const { getDisplayChapterLabel } = require("../core/chapter-labels");
+const {
+  readDisplayNamesSync,
+  getDisplayNameFromData,
+  getDisplayPathLabelFromData,
+} = require("../reorder/reorder-display-names");
 const { isSingleMode } = require("../core/mojigoto-context");
 const {
   listWorkDirectories,
@@ -32,6 +37,61 @@ const {
   resolveWritingMemoAbsolutePathFlexible,
   resolveWritingMemoExcerptDisplayFromFile,
 } = require("../writing-memo/writing-memo-resolver");
+const {
+  reconcileWritingMemoPathsForTarget,
+} = require("../writing-memo/writing-memo-tracker");
+
+function buildRecentDateKeys(endDateKey, count = 7) {
+  const match = String(endDateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return [];
+  const endMs = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  );
+  const length = Math.max(1, Number(count) || 7);
+  return Array.from({ length }, (_, index) =>
+    new Date(endMs - (length - 1 - index) * 86400000)
+      .toISOString()
+      .slice(0, 10),
+  );
+}
+
+function buildRecentDailyRows(daily, endDateKey, count = 7) {
+  const dateKeys = buildRecentDateKeys(endDateKey, count);
+  if (!dateKeys.length) return [];
+
+  const recordedDates = Object.keys(daily || {}).sort();
+  const derivedRows = new Map();
+  let previousRecordedTotal = null;
+
+  for (const date of recordedDates) {
+    const row = daily?.[date];
+    const totalSaved = Number(row?.totalSaved || 0);
+    const deltaTotal = previousRecordedTotal == null
+      ? Number(row?.deltaTotal || 0)
+      : totalSaved - previousRecordedTotal;
+    derivedRows.set(date, { totalSaved, deltaTotal });
+    previousRecordedTotal = totalSaved;
+  }
+
+  let lastTotalSaved = 0;
+  const firstDate = dateKeys[0];
+  for (const date of recordedDates) {
+    if (date >= firstDate) break;
+    lastTotalSaved = Number(derivedRows.get(date)?.totalSaved || 0);
+  }
+
+  return dateKeys.map((date) => {
+    const row = derivedRows.get(date);
+    if (row) lastTotalSaved = row.totalSaved;
+    return {
+      date,
+      deltaTotal: Number(row?.deltaTotal || 0),
+      totalSaved: lastTotalSaved,
+    };
+  });
+}
 
 function createBuildStatsState(deps) {
   const {
@@ -236,6 +296,8 @@ function createBuildStatsState(deps) {
     memo,
     absoluteFilePath = "",
     writingMemoFilePath = "",
+    manuscriptRoot = "",
+    displayData = null,
   ) {
     const status = String(memo?.status || "active");
 
@@ -244,10 +306,19 @@ function createBuildStatsState(deps) {
       memo,
     );
 
+    const displayFileName = absoluteFilePath && manuscriptRoot
+      ? getDisplayNameFromData(
+          displayData || readDisplayNamesSync(manuscriptRoot),
+          manuscriptRoot,
+          absoluteFilePath,
+        )
+      : "";
+
     return {
       id: String(memo?.id || ""),
       filePath: String(memo?.filePath || ""),
-      fileName: String(memo?.fileName || ""),
+      fileName: displayFileName || String(memo?.fileName || ""),
+      targetLocation: String(memo?.targetLocation || ""),
       excerpt: String(excerptDisplay.excerpt || ""),
       originalExcerpt: String(excerptDisplay.originalExcerpt || ""),
       currentExcerpt: String(excerptDisplay.currentExcerpt || ""),
@@ -279,6 +350,7 @@ function createBuildStatsState(deps) {
         };
       }
 
+      await reconcileWritingMemoPathsForTarget(context, target);
       const data = await readWritingMemos(target.writingMemoFilePath);
       const memos = Array.isArray(data?.memos) ? data.memos : [];
 
@@ -291,6 +363,14 @@ function createBuildStatsState(deps) {
 
       const currentWorkId = String(target?.workId || "").trim();
       const currentWorkTitle = String(target?.workTitle || "").trim();
+      const manuscriptRoot = String(
+        vscode.workspace
+          .getConfiguration("mojigoto")
+          .get("manuscriptRoot", "") || "",
+      ).trim();
+      const displayData = manuscriptRoot
+        ? readDisplayNamesSync(manuscriptRoot)
+        : null;
 
       return {
         items: sortWritingMemos(filtered).map((memo) =>
@@ -298,6 +378,8 @@ function createBuildStatsState(deps) {
             memo,
             target.absoluteFilePath,
             target.writingMemoFilePath,
+            manuscriptRoot,
+            displayData,
           ),
         ),
         targetPath: target.targetPath,
@@ -409,6 +491,14 @@ function createBuildStatsState(deps) {
         const filePath = getWritingMemosPathForSingle();
         const data = await readWritingMemos(filePath);
         const memos = Array.isArray(data?.memos) ? data.memos : [];
+        const manuscriptRoot = String(
+          vscode.workspace
+            .getConfiguration("mojigoto")
+            .get("manuscriptRoot", "") || "",
+        ).trim();
+        const displayData = manuscriptRoot
+          ? readDisplayNamesSync(manuscriptRoot)
+          : null;
 
         return {
           workTitle: "現在の作品",
@@ -417,10 +507,17 @@ function createBuildStatsState(deps) {
               ? resolveWritingMemoAbsolutePathFlexible(context, memo.filePath, {
                   writingMemoFilePath: filePath,
                   excerpt: memo?.excerpt || "",
+                  targetLocation: memo?.targetLocation || "",
                 })
               : "";
 
-            return toWritingMemoItem(memo, absoluteFilePath, filePath);
+            return toWritingMemoItem(
+              memo,
+              absoluteFilePath,
+              filePath,
+              manuscriptRoot,
+              displayData,
+            );
           }),
         };
       }
@@ -455,6 +552,9 @@ function createBuildStatsState(deps) {
       const preferredManuscriptRoot = isViewLinkedWork
         ? configuredManuscriptRoot
         : manuscriptRoot;
+      const displayData = preferredManuscriptRoot
+        ? readDisplayNamesSync(preferredManuscriptRoot)
+        : null;
 
       return {
         workTitle: String(work?.title || work?.name || "").trim() || "無題作品",
@@ -464,10 +564,17 @@ function createBuildStatsState(deps) {
             ? resolveWritingMemoAbsolutePathFlexible(context, memo.filePath, {
                 writingMemoFilePath: filePath,
                 excerpt: memo?.excerpt || "",
+                targetLocation: memo?.targetLocation || "",
               })
             : "";
 
-          return toWritingMemoItem(memo, absoluteFilePath, filePath);
+          return toWritingMemoItem(
+            memo,
+            absoluteFilePath,
+            filePath,
+            preferredManuscriptRoot,
+            displayData,
+          );
         }),
       };
     } catch {
@@ -487,18 +594,42 @@ function createBuildStatsState(deps) {
 
     const daily = gsGet(context, keyDaily(context), {});
     const files = gsGet(context, keyFiles(context), {});
+    const manuscriptRoot = String(
+      vscode.workspace
+        .getConfiguration("mojigoto")
+        .get("manuscriptRoot", "") || "",
+    ).trim();
+    const displayData = manuscriptRoot
+      ? readDisplayNamesSync(manuscriptRoot)
+      : null;
 
     const today = daily[dateJst] || null;
     const todayFilesObj = files[dateJst] || {};
-    const todayFiles = Object.keys(todayFilesObj).sort((a, b) =>
-      a.localeCompare(b, "ja"),
-    );
+    const todayFiles = Object.keys(todayFilesObj)
+      .map((relativePath) => {
+        if (!manuscriptRoot || !displayData) return relativePath;
+        const absolutePath = path.resolve(manuscriptRoot, relativePath);
+        return getDisplayPathLabelFromData(
+          displayData,
+          manuscriptRoot,
+          absolutePath,
+          { separator: " / " },
+        ) || relativePath;
+      })
+      .sort((a, b) => a.localeCompare(b, "ja"));
 
     const todayChapters = [];
     if (today?.chapters) {
       for (const [chapter, v] of Object.entries(today.chapters)) {
+        const customChapterName = manuscriptRoot && displayData
+          ? getDisplayNameFromData(
+              displayData,
+              manuscriptRoot,
+              path.join(manuscriptRoot, chapter),
+            )
+          : "";
         todayChapters.push({
-          chapter: getDisplayChapterLabel(chapter),
+          chapter: customChapterName || getDisplayChapterLabel(chapter),
           delta: v?.delta ?? 0,
           total: v?.total ?? 0,
         });
@@ -509,11 +640,9 @@ function createBuildStatsState(deps) {
     }
 
     const dates = Object.keys(daily).sort();
-    const last7 = dates.slice(-7).map((d) => ({
-      date: d,
-      deltaTotal: daily[d]?.deltaTotal ?? 0,
-      totalSaved: daily[d]?.totalSaved ?? 0,
-    }));
+    const last7 = buildRecentDailyRows(daily, dateJst, 7);
+    const todayDerivedDelta = last7.find((row) => row.date === dateJst)
+      ?.deltaTotal ?? 0;
 
     const latestDailyDate = dates.length ? dates[dates.length - 1] : "";
     const latestDaily = latestDailyDate ? daily[latestDailyDate] || null : null;
@@ -674,7 +803,7 @@ function createBuildStatsState(deps) {
     return {
       exportedAtJst: `更新: ${dateTimeJst}`,
       today: {
-        deltaTotal: today?.deltaTotal ?? 0,
+        deltaTotal: today ? todayDerivedDelta : 0,
         totalSaved: latestSavedTotal,
       },
       todayFiles,
@@ -694,6 +823,15 @@ function createBuildStatsState(deps) {
       isViewLinkedStats: !isSingleMode(),
 
       dashboardVisibility: {
+        progressGraph: vscode.workspace
+          .getConfiguration("mojigoto")
+          .get("dashboardShowProgressGraph", true),
+        progressGraphMode:
+          vscode.workspace
+            .getConfiguration("mojigoto")
+            .get("dashboardProgressGraphMode", "daily") === "total"
+            ? "total"
+            : "daily",
         commonTodo: vscode.workspace
           .getConfiguration("mojigoto")
           .get("dashboardShowCommonTodo", true),
@@ -761,6 +899,7 @@ function createBuildStatsState(deps) {
         : {
             enabled: false,
             currentFile: "",
+            currentFilePath: "",
             totalCount: 0,
             groups: [],
             details: [],
@@ -771,4 +910,6 @@ function createBuildStatsState(deps) {
 
 module.exports = {
   createBuildStatsState,
+  buildRecentDateKeys,
+  buildRecentDailyRows,
 };

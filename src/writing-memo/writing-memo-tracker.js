@@ -13,7 +13,34 @@ const {
   getConfiguredManuscriptRoot,
   resolveWritingMemoStorePathForManuscriptRoot,
   resolveWritingMemoStorePathFromTreeItem,
+  resolveWritingMemoAbsolutePathFlexible,
 } = require("./writing-memo-resolver");
+
+const reconciliationTasks = new Map();
+
+function normalizeComparablePath(value) {
+  const normalized = normalizeFsPath(value);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isSameAbsolutePath(left, right) {
+  const a = normalizeComparablePath(left);
+  const b = normalizeComparablePath(right);
+  return Boolean(a && b && a === b);
+}
+
+function normalizeMemoPath(value) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/\\/g, "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isSameMemoPath(left, right) {
+  const a = normalizeMemoPath(left);
+  const b = normalizeMemoPath(right);
+  return Boolean(a && b && a === b);
+}
 
 function findManuscriptRootFromPath(filePath) {
   let current = path.dirname(String(filePath || ""));
@@ -29,6 +56,47 @@ function findManuscriptRootFromPath(filePath) {
   return "";
 }
 
+function resolveManuscriptRootForTreeItem(item, ...targetPaths) {
+  const candidates = [];
+  let cursor = item || null;
+
+  while (cursor) {
+    if (cursor.kind === "manuscriptRoot" && cursor.fsPath) {
+      candidates.push(cursor.fsPath);
+    }
+    cursor = cursor.parent || null;
+  }
+
+  const configuredRoot = getConfiguredManuscriptRoot();
+  if (configuredRoot) {
+    candidates.push(configuredRoot);
+  }
+
+  if (item?.workDir) {
+    const workRoot = getWorkManuscriptRoot(item.workDir);
+    if (workRoot) {
+      candidates.push(workRoot);
+    }
+  }
+
+  for (const targetPath of targetPaths) {
+    const inferredRoot = findManuscriptRootFromPath(targetPath);
+    if (inferredRoot) {
+      candidates.push(inferredRoot);
+    }
+  }
+
+  const uniqueCandidates = [
+    ...new Set(candidates.map((root) => normalizeFsPath(root)).filter(Boolean)),
+  ];
+
+  return (
+    uniqueCandidates.find((root) =>
+      targetPaths.some((targetPath) => isSameOrChildPath(targetPath, root)),
+    ) || ""
+  );
+}
+
 async function updateWritingMemoFilePathForRenameOrMove(
   item,
   oldPath,
@@ -37,7 +105,11 @@ async function updateWritingMemoFilePathForRenameOrMove(
   const writingMemoFilePath = resolveWritingMemoStorePathFromTreeItem(item);
   if (!writingMemoFilePath) return false;
 
-  const manuscriptRoot = findManuscriptRootFromPath(oldPath);
+  const manuscriptRoot = resolveManuscriptRootForTreeItem(
+    item,
+    oldPath,
+    newPath,
+  );
   if (!manuscriptRoot) return false;
 
   const oldRel = toMemoRelativePath(manuscriptRoot, oldPath);
@@ -51,7 +123,7 @@ async function updateWritingMemoFilePathForRenameOrMove(
   let changed = false;
 
   const nextMemos = memos.map((memo) => {
-    if (String(memo?.filePath || "") !== oldRel) {
+    if (!isSameMemoPath(memo?.filePath, oldRel)) {
       return memo;
     }
 
@@ -82,7 +154,11 @@ async function updateWritingMemoPathsForFolderRename(
   const writingMemoFilePath = resolveWritingMemoStorePathFromTreeItem(item);
   if (!writingMemoFilePath) return false;
 
-  const manuscriptRoot = findManuscriptRootFromPath(oldFolderPath);
+  const manuscriptRoot = resolveManuscriptRootForTreeItem(
+    item,
+    oldFolderPath,
+    newFolderPath,
+  );
   if (!manuscriptRoot) return false;
 
   const oldRelPrefix = toMemoRelativePath(manuscriptRoot, oldFolderPath);
@@ -92,7 +168,7 @@ async function updateWritingMemoPathsForFolderRename(
     return false;
   }
 
-  const oldPrefix = `${oldRelPrefix}/`;
+  const oldPrefix = `${normalizeMemoPath(oldRelPrefix)}/`;
 
   const data = await readWritingMemos(writingMemoFilePath);
   const memos = Array.isArray(data?.memos) ? [...data.memos] : [];
@@ -100,8 +176,8 @@ async function updateWritingMemoPathsForFolderRename(
   let changed = false;
 
   const nextMemos = memos.map((memo) => {
-    const currentPath = String(memo?.filePath || "");
-    if (!currentPath || !currentPath.startsWith(oldPrefix)) {
+    const currentPath = String(memo?.filePath || "").replace(/\\/g, "/");
+    if (!currentPath || !normalizeMemoPath(currentPath).startsWith(oldPrefix)) {
       return memo;
     }
 
@@ -199,7 +275,7 @@ async function updateWritingMemoPathsForRenameEvent(context, event) {
         const currentPath = String(memo?.filePath || "");
         if (!currentPath) return memo;
 
-        if (currentPath === oldRel) {
+        if (isSameMemoPath(currentPath, oldRel)) {
           changed = true;
           return {
             ...memo,
@@ -209,7 +285,9 @@ async function updateWritingMemoPathsForRenameEvent(context, event) {
           };
         }
 
-        if (currentPath.startsWith(`${oldRel}/`)) {
+        const normalizedCurrentPath = normalizeMemoPath(currentPath);
+        const normalizedOldPrefix = `${normalizeMemoPath(oldRel)}/`;
+        if (normalizedCurrentPath.startsWith(normalizedOldPrefix)) {
           const nextPath = `${newRel}/${currentPath.slice(oldRel.length + 1)}`;
           changed = true;
           return {
@@ -239,9 +317,77 @@ async function updateWritingMemoPathsForRenameEvent(context, event) {
   return changedAny;
 }
 
+async function reconcileWritingMemoPathsForTarget(context, target = {}) {
+  const writingMemoFilePath = String(target?.writingMemoFilePath || "").trim();
+  const relativeFilePath = String(target?.relativeFilePath || "").trim();
+  const absoluteFilePath = String(target?.absoluteFilePath || "").trim();
+
+  if (!writingMemoFilePath || !relativeFilePath || !absoluteFilePath) {
+    return false;
+  }
+
+  const taskKey = normalizeComparablePath(writingMemoFilePath);
+  const previous = reconciliationTasks.get(taskKey) || Promise.resolve();
+  const task = previous
+    .catch(() => {})
+    .then(async () => {
+      const data = await readWritingMemos(writingMemoFilePath);
+      const memos = Array.isArray(data?.memos) ? data.memos : [];
+      let changed = false;
+
+      const nextMemos = memos.map((memo) => {
+        const currentPath = String(memo?.filePath || "").trim();
+        if (!currentPath || isSameMemoPath(currentPath, relativeFilePath)) {
+          return memo;
+        }
+
+        const resolvedPath = resolveWritingMemoAbsolutePathFlexible(
+          context,
+          currentPath,
+          {
+            writingMemoFilePath,
+            excerpt: memo?.excerpt || "",
+            targetLocation: memo?.targetLocation || "",
+          },
+        );
+
+        if (!isSameAbsolutePath(resolvedPath, absoluteFilePath)) {
+          return memo;
+        }
+
+        changed = true;
+        return {
+          ...memo,
+          filePath: relativeFilePath.replace(/\\/g, "/"),
+          fileName: path.basename(relativeFilePath),
+          updatedAt: new Date().toISOString(),
+        };
+      });
+
+      if (!changed) return false;
+
+      await writeWritingMemos(writingMemoFilePath, {
+        ...data,
+        memos: nextMemos,
+      });
+      return true;
+    });
+
+  reconciliationTasks.set(taskKey, task);
+
+  try {
+    return await task;
+  } finally {
+    if (reconciliationTasks.get(taskKey) === task) {
+      reconciliationTasks.delete(taskKey);
+    }
+  }
+}
+
 module.exports = {
   findManuscriptRootFromPath,
   updateWritingMemoFilePathForRenameOrMove,
   updateWritingMemoPathsForFolderRename,
   updateWritingMemoPathsForRenameEvent,
+  reconcileWritingMemoPathsForTarget,
 };

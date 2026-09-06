@@ -60,6 +60,25 @@ const {
   keyEventsLastLoggedAtByWorkName,
 } = require("../stats/stats-keys");
 const { launchExport } = require("../export/export-launcher");
+const {
+  saveDisplayNameChanges,
+} = require("../reorder/reorder-display-names");
+
+async function migrateManuscriptDisplayNamePath(oldPath, newPath) {
+  const manuscriptRoot = findManuscriptRootFromPath(oldPath);
+  if (!manuscriptRoot) return;
+
+  try {
+    await saveDisplayNameChanges(manuscriptRoot, [], {
+      moves: [{ from: oldPath, to: newPath }],
+    });
+  } catch (error) {
+    console.warn("[mojigoto] display-name path migration failed:", error);
+    vscode.window.showWarningMessage(
+      "もじごと: 実名は変更しましたが、作品ツリーの表示名を引き継げませんでした。原稿構成エディタで再設定してください。",
+    );
+  }
+}
 
 function applyDefaultExtension(fileName) {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
@@ -539,6 +558,7 @@ async function handleTreeRename(item, context, treeProvider, workTreeView) {
     }
 
     await renameFsEntry(oldPath, newPath);
+    await migrateManuscriptDisplayNamePath(oldPath, newPath);
     await updateWritingMemoFilePathForRenameOrMove(item, oldPath, newPath);
     await closeEditorsByPaths([oldPath]);
 
@@ -605,6 +625,7 @@ async function handleTreeRename(item, context, treeProvider, workTreeView) {
     }
 
     await renameFsEntry(oldPath, newPath);
+    await migrateManuscriptDisplayNamePath(oldPath, newPath);
     await updateWritingMemoPathsForFolderRename(item, oldPath, newPath);
     await closeEditorsUnderFolder(oldPath);
 
@@ -827,6 +848,7 @@ async function moveManuscriptFileToTarget(item, treeProvider, workTreeView) {
   }
 
   await renameFsEntry(oldPath, newPath);
+  await migrateManuscriptDisplayNamePath(oldPath, newPath);
   await updateWritingMemoFilePathForRenameOrMove(item, oldPath, newPath);
   await closeEditorsByPaths([oldPath]);
 

@@ -241,7 +241,11 @@ function renderHighlightTab(state, esc) {
           </tbody>
         </table>
 
-        <div id="highlightDetailsWrap" style="margin-top:14px;">
+        <div
+          id="highlightDetailsWrap"
+          data-current-file-path="${esc(state.highlight?.currentFilePath || "")}"
+          style="margin-top:14px;"
+        >
           <div class="muted">検出結果</div>
           <div id="highlightDetailsEmpty" class="muted" style="margin-top:8px;">
             グループをクリックすると該当箇所を表示します。
@@ -589,6 +593,11 @@ function renderWritingMemoItem(
   const isEditing =
     String(editingWritingMemoId || "") === String(item?.id || "");
   const showFileName = !!options?.showFileName;
+  const targetLocationLabel = item?.targetLocation === "view"
+    ? "View側"
+    : item?.targetLocation === "work"
+      ? "作品元側"
+      : "";
 
   return `
     <li
@@ -601,7 +610,14 @@ function renderWritingMemoItem(
         <div class="writingMemoExcerptWrap">
           ${
             showFileName && item?.fileName
-              ? `<div class="writingMemoFileName">${esc(item.fileName)}</div>`
+              ? `<div class="writingMemoFileName">
+                  ${esc(item.fileName)}
+                  ${
+                    targetLocationLabel
+                      ? `<span class="writingMemoLinkedBadge">${esc(targetLocationLabel)}</span>`
+                      : ""
+                  }
+                </div>`
               : ""
           }
           <div class="writingMemoExcerpt">
@@ -626,6 +642,17 @@ function renderWritingMemoItem(
             title="ステータスを変更"
           >
             ${esc(item?.statusLabel || "未処理")}
+          </button>
+
+          <button
+            type="button"
+            class="writingMemoMiniAction"
+            data-writing-memo-relink="${esc(item?.id || "")}"
+            data-writing-memo-file="${esc(item?.writingMemoFilePath || "")}"
+            onclick="event.stopPropagation()"
+            title="連携先の原稿ファイル（View側／作品元側）を手動で修復"
+          >
+            修復
           </button>
 
           <button
@@ -709,6 +736,15 @@ function renderWritingMemoArchivedItem(item, esc) {
         </div>
 
         <div class="writingMemoArchivedActions">
+          <button
+            type="button"
+            class="writingMemoMiniAction"
+            data-writing-memo-relink="${esc(item?.id || "")}"
+            data-writing-memo-file="${esc(item?.writingMemoFilePath || "")}"
+            title="連携先の原稿ファイル（View側／作品元側）を手動で修復"
+          >
+            修復
+          </button>
           <button
             type="button"
             class="writingMemoMiniAction"

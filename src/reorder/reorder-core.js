@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const fsp = require('fs/promises');
 const path = require('path');
+const displayNames = require('./reorder-display-names');
 
 const TEXT_EXTS = new Set(['.txt', '.md']);
 
@@ -66,7 +67,12 @@ function isTextFile(name) {
 }
 
 function sortEntriesByDisplayName(items) {
-  return [...items].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  return [...items].sort((a, b) =>
+    a.name.localeCompare(b.name, 'ja', {
+      numeric: true,
+      sensitivity: 'base',
+    }),
+  );
 }
 
 async function listRootEntries(rootDir) {
@@ -105,18 +111,50 @@ async function listFilesInFolder(folderPath) {
 }
 
 async function buildFolderViewModel(rootDir) {
-  const { folders, files } = await listRootEntries(rootDir);
-  const folderModels = await Promise.all(folders.map(async (it) => {
-    const children = await listFilesInFolder(it.path).catch(() => []);
-    return {
-      id: it.id,
-      name: it.name,
-      cleanName: stripOrderPrefix(it.name),
-      path: it.path,
-      kind: 'folder',
-      count: children.length,
-    };
-  }));
+  const { files } = await listRootEntries(rootDir);
+  const displayData = await displayNames.readDisplayNames(rootDir);
+  const folderModels = [];
+
+  async function appendFolders(parentPath, depth) {
+    let entries = [];
+    try {
+      entries = await fsp.readdir(parentPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const folders = sortEntriesByDisplayName(
+      entries
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map((entry) => ({
+          id: path.join(parentPath, entry.name),
+          name: entry.name,
+          path: path.join(parentPath, entry.name),
+        })),
+    );
+
+    for (const folder of folders) {
+      const children = await listFilesInFolder(folder.path).catch(() => []);
+      folderModels.push({
+        id: folder.id,
+        name: folder.name,
+        cleanName: stripOrderPrefix(folder.name),
+        displayName: displayNames.getDisplayNameFromData(
+          displayData,
+          rootDir,
+          folder.path,
+        ),
+        path: folder.path,
+        parentPath,
+        depth,
+        kind: 'folder',
+        count: children.length,
+      });
+      await appendFolders(folder.path, depth + 1);
+    }
+  }
+
+  await appendFolders(rootDir, 1);
 
   const rootFilesCount = files.length;
   return [
@@ -124,7 +162,10 @@ async function buildFolderViewModel(rootDir) {
       id: rootDir,
       name: 'manuscript',
       cleanName: 'manuscript',
+      displayName: '',
       path: rootDir,
+      parentPath: '',
+      depth: 0,
       kind: 'root',
       count: rootFilesCount,
     },
@@ -132,8 +173,14 @@ async function buildFolderViewModel(rootDir) {
   ];
 }
 
-async function buildFileViewModel(folderPath, startIndex = 1) {
+async function buildFileViewModel(
+  folderPath,
+  startIndex = 1,
+  manuscriptRoot = '',
+) {
+  const rootDir = manuscriptRoot || resolveReorderRoot();
   const files = await listFilesInFolder(folderPath);
+  const displayData = await displayNames.readDisplayNames(rootDir);
   const digits = calcDigits(files.length, startIndex);
   return files.map((file, index) => {
     const { ext } = splitNameExt(file.name);
@@ -143,6 +190,11 @@ async function buildFileViewModel(folderPath, startIndex = 1) {
       id: file.id,
       originalName: file.name,
       cleanName: cleanBase,
+      displayName: displayNames.getDisplayNameFromData(
+        displayData,
+        rootDir,
+        file.path,
+      ),
       ext,
       path: file.path,
       previewLabel: `${padOrder(order, digits)}. ${cleanBase}${ext}`,
@@ -195,17 +247,52 @@ async function applyRenamePlan(plan) {
   }
 }
 
-async function saveFolderOrder(folderPath, orderedItems, startIndex = 1) {
+async function saveFolderOrder(
+  folderPath,
+  orderedItems,
+  startIndex = 1,
+  manuscriptRoot = '',
+) {
+  const rootDir = manuscriptRoot || resolveReorderRoot();
   const plan = makeRenamePlan(folderPath, orderedItems, startIndex);
   await applyRenamePlan(plan);
-  return buildFileViewModel(folderPath, startIndex);
+  const files = await buildFileViewModel(folderPath, startIndex, rootDir);
+  const moves = plan.finalMoves.map((move, index) => ({
+    from: orderedItems[index]?.path,
+    to: move.to,
+  }));
+  const entries = files.map((file, index) => ({
+    path: file.path,
+    kind: 'file',
+    displayName: orderedItems[index]?.displayName || '',
+  }));
+
+  await displayNames.saveDisplayNameChanges(rootDir, entries, { moves });
+  return buildFileViewModel(folderPath, startIndex, rootDir);
+}
+
+async function saveFileDisplayNames(manuscriptRoot, files) {
+  const entries = (Array.isArray(files) ? files : []).map((file) => ({
+    path: file?.path,
+    kind: 'file',
+    displayName: file?.displayName || '',
+  }));
+  await displayNames.saveDisplayNameChanges(manuscriptRoot, entries);
+  const folderPath = entries[0]?.path ? path.dirname(entries[0].path) : manuscriptRoot;
+  return buildFileViewModel(folderPath, 1, manuscriptRoot);
 }
 
 async function saveFolderListOrder(rootDir, orderedFolders, startIndex = 1) {
   const entries = Array.isArray(orderedFolders) ? orderedFolders : [];
 
   const targets = entries.filter((item) => {
-    return item && item.kind === "folder" && item.path && item.name;
+    return (
+      item &&
+      item.kind === "folder" &&
+      item.path &&
+      item.name &&
+      (Number(item.depth) === 1 || path.dirname(item.path) === rootDir)
+    );
   });
 
   if (!targets.length) {
@@ -246,7 +333,48 @@ async function saveFolderListOrder(rootDir, orderedFolders, startIndex = 1) {
     await fsp.rename(item.tmpPath, item.newPath);
   }
 
-  return await buildFolderViewModel(rootDir);
+  const moves = phase1.map((item) => ({
+    from: item.oldPath,
+    to: item.newPath,
+  }));
+
+  function resolveMovedFolderPath(folderPath) {
+    for (const move of moves) {
+      const relative = path.relative(move.from, folderPath);
+      if (
+        relative === '' ||
+        (relative !== '..' &&
+          !relative.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relative))
+      ) {
+        return path.join(move.to, relative);
+      }
+    }
+    return folderPath;
+  }
+
+  const displayEntries = entries
+    .filter((folder) => folder?.kind === 'folder' && folder.path)
+    .map((folder) => ({
+      path: resolveMovedFolderPath(folder.path),
+      kind: 'folder',
+      displayName: folder.displayName || '',
+    }));
+
+  await displayNames.saveDisplayNameChanges(rootDir, displayEntries, { moves });
+  return buildFolderViewModel(rootDir);
+}
+
+async function saveFolderDisplayNames(rootDir, folders) {
+  const entries = (Array.isArray(folders) ? folders : [])
+    .filter((folder) => folder?.kind === 'folder')
+    .map((folder) => ({
+      path: folder.path,
+      kind: 'folder',
+      displayName: folder.displayName || '',
+    }));
+  await displayNames.saveDisplayNameChanges(rootDir, entries);
+  return buildFolderViewModel(rootDir);
 }
 
 module.exports = {
@@ -265,5 +393,7 @@ module.exports = {
   makeRenamePlan,
   applyRenamePlan,
   saveFolderOrder,
+  saveFileDisplayNames,
   saveFolderListOrder,
+  saveFolderDisplayNames,
 };

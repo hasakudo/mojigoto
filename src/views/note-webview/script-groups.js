@@ -679,6 +679,7 @@ function getGroupsScript() {
       if (!visibleGroups.length) {
         groupsRoot.innerHTML = '<div class="muted">該当する項目はありません。</div>';
         updateAllImagesButtonLabel();
+        renderNoteToc();
         return;
       }
 
@@ -1394,6 +1395,7 @@ function getGroupsScript() {
       }
 
       updateAllImagesButtonLabel();
+      renderNoteToc();
 
       groupsRoot.querySelectorAll("[data-field]").forEach((el) => {
         el.addEventListener("input", (event) => {
@@ -1408,6 +1410,7 @@ function getGroupsScript() {
             group.title = event.target.value;
             markDirty();
             renderPreview();
+            renderNoteToc();
             return;
           }
 
@@ -1495,6 +1498,9 @@ function getGroupsScript() {
 
           markDirty();
           renderPreview();
+          if (["itemHeading", "dividerLabel"].includes(field)) {
+            renderNoteToc();
+          }
         });
       });
 

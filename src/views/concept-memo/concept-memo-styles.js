@@ -218,6 +218,130 @@ function getConceptMemoStyles() {
       overflow: visible;
     }
 
+    .memoFolderBox {
+      padding: 8px;
+    }
+
+    .memoFolderHead {
+      margin-bottom: 6px;
+    }
+
+    .button.folderManageButton {
+      min-width: 48px;
+      padding: 3px 7px;
+    }
+
+    .folderQuickList {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .folderChip {
+      max-width: 125px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 3px 8px;
+      border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+      border-radius: 999px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-button-secondaryBackground);
+      cursor: pointer;
+    }
+
+    .folderChip.isActive {
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+
+    .folderOverflowSelect {
+      width: 100%;
+      margin-top: 6px;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+
+    .folderManager {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+
+    .folderManager[hidden] {
+      display: none;
+    }
+
+    .folderAddRow {
+      flex-wrap: nowrap;
+    }
+
+    .folderAddRow .input {
+      min-width: 0;
+    }
+
+    .folderManagerList {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 7px;
+      max-height: 170px;
+      overflow-y: auto;
+    }
+
+    .folderManagerRow {
+      display: flex;
+      gap: 5px;
+    }
+
+    .folderNameInput {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+
+    .button.folderMoveButton,
+    .button.folderDeleteButton {
+      flex: 0 0 auto;
+      min-width: 28px;
+      padding: 3px 7px;
+    }
+
+    .folderProtectedMark {
+      display: inline-flex;
+      flex: 0 0 34px;
+      align-items: center;
+      justify-content: center;
+      color: var(--vscode-descriptionForeground);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .folderManagerEmpty {
+      padding: 4px;
+    }
+
+    .memoFolderBadge {
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 1px 6px;
+      font-size: 11px;
+      border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+      border-radius: 999px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-button-secondaryBackground);
+    }
+
+    .isSelected .memoFolderBadge{
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+
     .main {
       padding: 10px 8px 16px 16px;
       display: flex;
@@ -835,12 +959,10 @@ function getConceptMemoStyles() {
       line-height: 1.4;
       white-space: nowrap;
       background: transparent;
-      color: var(--vscode-descriptionForeground);
     }
 
     .todoMetaText.isActive {
       background: transparent;
-      color: var(--vscode-foreground);
       font-weight: 600;
     }
 
@@ -864,6 +986,7 @@ function getConceptMemoStyles() {
       font-size: 11px;
       opacity: 0.88;
       background: var(--vscode-editor-background);
+      color: var(--vscode-descriptionForeground);
     }
 
     .tagChip.isClickable {
@@ -1095,6 +1218,7 @@ function getConceptMemoStyles() {
       padding: 10px 12px;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 8px;
+      border-left: 3px solid var(--vscode-editorInfo-foreground);
       background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
       color: var(--vscode-notifications-foreground, var(--vscode-editorWidget-foreground));
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);

@@ -5,20 +5,46 @@ function getNowIsoString() {
   return new Date().toISOString();
 }
 
+function createDefaultConceptMemoFolders() {
+  return [
+    { id: "writing", name: "執筆メモ", order: 0 },
+    { id: "note-item", name: "項目メモ", order: 1 },
+    { id: "dialogue", name: "台詞", order: 2 },
+    { id: "review", name: "要確認", order: 3 },
+  ];
+}
+
 function createEmptyConceptMemos() {
   return {
     version: 1,
     updatedAt: getNowIsoString(),
     memos: [],
+    folders: createDefaultConceptMemoFolders(),
     commonTodoItems: [],
   };
 }
 
 function normalizeConceptMemos(data) {
+  const folders = Array.isArray(data?.folders)
+    ? data.folders
+        .map((folder, index) => ({
+          id: String(folder?.id || "").trim(),
+          name: String(folder?.name || "").trim(),
+          order: Number.isFinite(Number(folder?.order)) ? Number(folder.order) : index,
+        }))
+        .filter((folder) => folder.id && folder.name)
+    : createDefaultConceptMemoFolders();
+
   return {
     version: Number(data?.version || 1),
     updatedAt: data?.updatedAt || new Date().toISOString(),
-    memos: Array.isArray(data?.memos) ? data.memos : [],
+    memos: Array.isArray(data?.memos)
+      ? data.memos.map((memo) => ({
+          ...memo,
+          folderId: String(memo?.folderId || "").trim(),
+        }))
+      : [],
+    folders,
     commonTodoItems: Array.isArray(data?.commonTodoItems)
       ? data.commonTodoItems
       : [],
@@ -63,6 +89,7 @@ function createConceptMemoDraft(overrides = {}) {
     listItems: [],
     todoItems: [],
     tags: [],
+    folderId: "",
     isPinned: false,
     isArchived: false,
     showInDashboard: false,
@@ -94,6 +121,10 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
   const data = await readConceptMemos(filePath);
   const now = getNowIsoString();
   const memos = Array.isArray(data.memos) ? [...data.memos] : [];
+  const noteItemFolderId = Array.isArray(data.folders) &&
+    data.folders.some((folder) => folder?.id === "note-item")
+    ? "note-item"
+    : "";
 
   const existingIndex = memos.findIndex((memo) =>
     isSameNoteItemSource(memo, input),
@@ -106,6 +137,7 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
     const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
     const updatedMemo = {
       ...current,
+      folderId: String(current?.folderId || "").trim() || noteItemFolderId,
       type: memoType,
       title: String(input?.heading || "").trim() || "無題メモ",
       ...(memoType === "list"
@@ -158,6 +190,7 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
   const memoBody = String(input?.memoBody || "");
   const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
   const createdMemo = createConceptMemoDraft({
+    folderId: noteItemFolderId,
     type: memoType,
     title: String(input?.heading || "").trim() || "無題メモ",
     body: memoType === "text" ? memoBody : "",

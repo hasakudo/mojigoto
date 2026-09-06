@@ -22,6 +22,7 @@ function getConceptMemoEditorScript() {
       const panel = document.getElementById("memoEditorMenuPanel");
       const typeSubmenu = document.getElementById("memoTypeSubmenu");
       const tagsSubmenu = document.getElementById("memoTagsSubmenu");
+      const folderSubmenu = document.getElementById("memoFolderSubmenu");
 
       const openSourceNoteButton = document.getElementById("openSourceNoteButton");
       const applyToNoteButton = document.getElementById("applyToNoteButton");
@@ -30,6 +31,7 @@ function getConceptMemoEditorScript() {
 
       const typeValue = document.getElementById("memoTypeMenuValue");
       const tagsValue = document.getElementById("memoTagsMenuValue");
+      const folderValue = document.getElementById("memoFolderMenuValue");
 
       if (!panel) return;
 
@@ -47,6 +49,10 @@ function getConceptMemoEditorScript() {
 
       if (tagsSubmenu) {
         tagsSubmenu.hidden = !(isEditorMenuOpen && openEditorSubmenu === "tags");
+      }
+
+      if (folderSubmenu) {
+        folderSubmenu.hidden = !(isEditorMenuOpen && openEditorSubmenu === "folder");
       }
 
       if (openSourceNoteButton) {
@@ -71,6 +77,10 @@ function getConceptMemoEditorScript() {
 
       if (tagsValue) {
         tagsValue.textContent = tags.length ? tags.join(", ") : "未設定";
+      }
+
+      if (folderValue) {
+        folderValue.textContent = getMemoFolderName(memo?.folderId || "") || "未分類";
       }
     }
 
@@ -112,8 +122,10 @@ function getConceptMemoEditorScript() {
       const panel = document.getElementById("memoEditorMenuPanel");
       const typeSubmenu = document.getElementById("memoTypeSubmenu");
       const tagsSubmenu = document.getElementById("memoTagsSubmenu");
+      const folderSubmenu = document.getElementById("memoFolderSubmenu");
       const openTypeButton = document.getElementById("openMemoTypeMenuButton");
       const openTagsButton = document.getElementById("openMemoTagsMenuButton");
+      const openFolderButton = document.getElementById("openMemoFolderMenuButton");
 
       if (button) {
         button.addEventListener("click", (event) => {
@@ -139,6 +151,14 @@ function getConceptMemoEditorScript() {
         });
       }
 
+      if (openFolderButton) {
+        openFolderButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleEditorSubmenu("folder");
+        });
+      }
+
       document.addEventListener("click", (event) => {
         if (!isEditorMenuOpen) return;
 
@@ -146,8 +166,9 @@ function getConceptMemoEditorScript() {
         const inPanel = panel && panel.contains(event.target);
         const inTypeSubmenu = typeSubmenu && typeSubmenu.contains(event.target);
         const inTagsSubmenu = tagsSubmenu && tagsSubmenu.contains(event.target);
+        const inFolderSubmenu = folderSubmenu && folderSubmenu.contains(event.target);
 
-        if (inButton || inPanel || inTypeSubmenu || inTagsSubmenu) {
+        if (inButton || inPanel || inTypeSubmenu || inTagsSubmenu || inFolderSubmenu) {
           return;
         }
 
@@ -866,7 +887,12 @@ function getConceptMemoEditorScript() {
 
       if (createMemoButton) {
         createMemoButton.addEventListener("click", () => {
-          vscode.postMessage({ type: "createMemo" });
+          vscode.postMessage({
+            type: "createMemo",
+            payload: {
+              folderId: activeFolderId === "__all__" ? "" : activeFolderId,
+            },
+          });
         });
       }
 

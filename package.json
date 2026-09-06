@@ -2,7 +2,7 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
@@ -261,6 +261,28 @@
           "category": "もじごと:ダッシュボード",
           "order": 40
         },
+        "mojigoto.dashboardShowProgressGraph": {
+          "type": "boolean",
+          "default": true,
+          "description": "ダッシュボードの作品概要に進捗グラフを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 39
+        },
+        "mojigoto.dashboardProgressGraphMode": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "total"
+          ],
+          "enumDescriptions": [
+            "日ごとの原稿総文字数の純増減を表示する",
+            "原稿の現在文字数の推移を表示する"
+          ],
+          "default": "daily",
+          "description": "ダッシュボードの進捗グラフに表示する内容",
+          "category": "もじごと:ダッシュボード",
+          "order": 39
+        },
         "mojigoto.dashboardShowListMemos": {
           "type": "boolean",
           "default": false,
@@ -287,7 +309,7 @@
           "default": 100,
           "minimum": 80,
           "maximum": 160,
-          "description": "ノート・ノートプレビュー・プレビューボード・全画面ボード・構想メモの入力欄と本文表示の文字倍率（%）。操作ボタンの文字サイズには適用しません。作品ツリーはVS Code標準UIのため対象外です。",
+          "description": "ノート・ノートプレビュー・プレビューボード・全画面ボード・構想メモ・原稿構成エディタの入力欄と本文表示の文字倍率（%）。操作ボタンの文字サイズには適用しません。作品ツリーはVS Code標準UIのため対象外です。",
           "category": "もじごと:表示",
           "order": 44
         },
@@ -682,7 +704,7 @@
       },
       {
         "command": "mojigoto.treeOpenReorder",
-        "title": "原稿/章の並び順エディタを開く",
+        "title": "原稿構成エディタを開く",
         "category": "もじごと",
         "icon": "$(list-ordered)"
       },

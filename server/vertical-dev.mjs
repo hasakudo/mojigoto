@@ -1,7 +1,8 @@
 // server/vertical-dev.mjs
 // Vertical manuscript DEV server (chapter selector)
 // - Root folder fixed (default: C:\your-folder\manuscript\)
-// - Browser dropdown selects chapter folder (direct child)
+// - Browser dropdown selects a top-level chapter folder
+// - Text files in subfolders under the selected chapter are included recursively
 // - Auto rebuild on save (watch)
 // Node 18+ recommended (Node 20/22/24 OK)
 
@@ -15,12 +16,19 @@ import http from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import verticalLayoutCore from "../src/preview/vertical-layout-core.js";
+import displayNamesModule from "../src/reorder/reorder-display-names.js";
 
 const {
   splitTextIntoDisplayLines,
   getEffectiveCharsPerLine,
   renderDisplayLineHtml,
 } = verticalLayoutCore;
+const {
+  DISPLAY_NAMES_FILE,
+  readDisplayNamesSync,
+  getDisplayNameFromData,
+  getDisplayPathLabelFromData,
+} = displayNamesModule;
 
 const DEFAULT_ROOT = process.env.Mojigoto_ROOT ?? process.cwd();
 const ROOT = normalizePath(process.argv[2] ?? DEFAULT_ROOT);
@@ -587,6 +595,28 @@ function refreshChapters() {
   state.chapters = chaps;
 }
 
+function getPreviewDisplayNamesData() {
+  return readDisplayNamesSync(state.root);
+}
+
+function getChapterDisplayLabel(chapter, displayData = null) {
+  if (chapter === CHAP_ROOT) return CHAP_ROOT;
+  const data = displayData || getPreviewDisplayNamesData();
+  return getDisplayNameFromData(
+    data,
+    state.root,
+    path.join(state.root, chapter),
+  ) || chapter;
+}
+
+function getPreviewFileLabel(chapterDir, filePath, displayData = null) {
+  const data = displayData || getPreviewDisplayNamesData();
+  return getDisplayPathLabelFromData(data, state.root, filePath, {
+    relativeTo: chapterDir,
+    separator: " / ",
+  }) || path.basename(filePath);
+}
+
 function chapterFromFile(filePath) {
   try {
     const abs = normalizePath(filePath);
@@ -617,12 +647,44 @@ function getSelectedChapterPath() {
   return p;
 }
 
-function listTextFiles(dir) {
+function listTextFiles(dir, options = {}) {
   const exts = new Set([".txt", ".md"]);
-  return fs.readdirSync(dir, { withFileTypes: true })
-    .filter(d => d.isFile() && exts.has(path.extname(d.name).toLowerCase()))
-    .map(d => path.join(dir, d.name))
-    .sort((a, b) => a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" }));
+  const recursive = options.recursive === true;
+  const files = [];
+  const stack = [dir];
+
+  while (stack.length) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    const directories = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      const fullPath = path.join(current, entry.name);
+      if (entry.isFile() && exts.has(path.extname(entry.name).toLowerCase())) {
+        files.push(fullPath);
+      } else if (recursive && entry.isDirectory()) {
+        directories.push(fullPath);
+      }
+    }
+
+    directories.sort((a, b) =>
+      b.localeCompare(a, "ja", { numeric: true, sensitivity: "base" }),
+    );
+    stack.push(...directories);
+  }
+
+  return files.sort((a, b) =>
+    path.relative(dir, a).localeCompare(path.relative(dir, b), "ja", {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
 }
 
 function readText(p) {
@@ -631,12 +693,14 @@ function readText(p) {
     .replace(/\r/g, "\n");
 }
 
-function readChapterInput(chapterDir) {
-  const files = listTextFiles(chapterDir);
+function readChapterInput(chapterDir, options = {}) {
+  const recursive = options.recursive === true;
+  const files = listTextFiles(chapterDir, { recursive });
   if (!files.length) return "";
+  const displayData = getPreviewDisplayNamesData();
 
   const chunks = files.map((f) => {
-    const name = path.basename(f);
+    const name = getPreviewFileLabel(chapterDir, f, displayData);
     const body = readText(f).trimEnd(); // ファイル末尾の余計な改行だけ落とす
 
     // ★ marker は必ず「単独1行」 + 本文はその次行から
@@ -645,6 +709,12 @@ function readChapterInput(chapterDir) {
 
   // ★ファイル間は「改行1つ」で連結（空行は増やさない）
   return chunks.join("\n");
+}
+
+function readSelectedChapterInput(chapterDir) {
+  return readChapterInput(chapterDir, {
+    recursive: state.selectedChapter !== CHAP_ROOT,
+  });
 }
 
 // ===============================
@@ -713,7 +783,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const combined = readChapterInput(chapPath);
+      const combined = readSelectedChapterInput(chapPath);
       const html = buildVerticalPreviewHtml(combined);
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -722,11 +792,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === "/api/chapters") {
+      const displayData = getPreviewDisplayNamesData();
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(
         JSON.stringify({
           root: state.root,
           chapters: state.chapters,
+          chapterItems: state.chapters.map((chapter) => ({
+            value: chapter,
+            label: getChapterDisplayLabel(chapter, displayData),
+          })),
           selected: state.selectedChapter,
           lastBuildAt: state.lastBuildAt,
           buildSeq: state.buildSeq,
@@ -1729,11 +1804,17 @@ function renderIndexHtml() {
           function refresh(){
             return api("/api/chapters").then(function(data){
               $chapter.innerHTML = "";
-              for(var i=0;i<data.chapters.length;i++){
-                var name = data.chapters[i];
+              var chapterItems = Array.isArray(data.chapterItems)
+                ? data.chapterItems
+                : (data.chapters || []).map(function(name){
+                    return { value: name, label: name };
+                  });
+              for(var i=0;i<chapterItems.length;i++){
+                var item = chapterItems[i] || {};
+                var name = String(item.value || "");
                 var opt = document.createElement("option");
                 opt.value = name;
-                opt.textContent = name;
+                opt.textContent = String(item.label || name);
                 if(name === data.selected) opt.selected = true;
                 $chapter.appendChild(opt);
               }
@@ -1965,9 +2046,37 @@ function safeJson(s) { try { return JSON.parse(s); } catch { return null; } }
 
 let rootWatcher = null;
 let chapterWatcher = null;
+let displayNamesWatcher = null;
 
 setupRootWatcher();
 setupChapterWatcher();
+setupDisplayNamesWatcher();
+
+function setupDisplayNamesWatcher() {
+  try { displayNamesWatcher?.close?.(); } catch {}
+
+  const displayNamesDir = path.join(path.dirname(state.root), ".mojigoto");
+  if (!fs.existsSync(displayNamesDir)) return;
+
+  try {
+    displayNamesWatcher = fs.watch(
+      displayNamesDir,
+      { persistent: true },
+      debounce((event, file) => {
+        if (path.basename(String(file || "")) !== DISPLAY_NAMES_FILE) return;
+        state.lastHash = "";
+        buildSelectedChapter().catch((error) =>
+          console.error("[build after display names]", error),
+        );
+      }, 250),
+    );
+  } catch (error) {
+    console.warn(
+      "[watch display names] failed:",
+      error?.message ?? String(error),
+    );
+  }
+}
 
 function setupRootWatcher() {
   try { rootWatcher?.close?.(); } catch {}
@@ -2002,15 +2111,20 @@ function setupChapterWatcher() {
   if (!chapPath) return;
 
   try {
-    chapterWatcher = fs.watch(chapPath, { persistent: true }, debounce((event, file) => {
+    chapterWatcher = fs.watch(chapPath, {
+      persistent: true,
+      recursive: state.selectedChapter !== CHAP_ROOT,
+    }, debounce((event, file) => {
 
       if (!file) return;
 
+      const changedName = path.basename(String(file));
+
       // ★ preview 自体の更新は無視
-      if (file === "vertical-preview.html") return;
+      if (changedName === "vertical-preview.html") return;
 
       // ★ config 更新も無視
-      if (file === ".mojigoto.json") return;
+      if (changedName === ".mojigoto.json") return;
 
       buildSelectedChapter().catch((e) => console.error("[build on save]", e));
 
@@ -2047,7 +2161,7 @@ async function buildSelectedChapter() {
     const chapPath = getSelectedChapterPath();
     if (!chapPath) return;
 
-    const combined = readChapterInput(chapPath);
+    const combined = readSelectedChapterInput(chapPath);
 
     const buildKey = [
       combined,
@@ -2084,7 +2198,7 @@ function buildSelectedChapterHtml() {
   refreshChapters();
   const chapPath = getSelectedChapterPath();
   if (!chapPath) return "";
-  const combined = readChapterInput(chapPath);
+  const combined = readSelectedChapterInput(chapPath);
   return buildVerticalPreviewHtml(combined);
 }
 

@@ -162,6 +162,17 @@ function detectChapterFromRoot(root, filePath) {
   return chap || "（章なし）";
 }
 
+function getPreviousRecordedTotal(daily, currentDate) {
+  const previousDate = Object.keys(daily || {})
+    .filter((date) => date < currentDate)
+    .sort()
+    .pop();
+  if (!previousDate) return null;
+
+  const value = daily?.[previousDate]?.totalSaved;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 // ===============================
 // Log on Save
 // ===============================
@@ -231,7 +242,23 @@ async function logOnSave(context, doc) {
     const daily = pruneDateMapByRetentionDays(dailyRaw, dailyRetentionDays);
 
     const row = ensureDailyObj(daily, dateJst);
-    row.deltaTotal += deltaTotal;
+    const previousRecordedTotal = getPreviousRecordedTotal(daily, dateJst);
+    const storedBaseline = row.baselineTotal;
+    const inferredExistingBaseline = row.updatedAtJst
+      ? Number(row.totalSaved || 0) - Number(row.deltaTotal || 0)
+      : null;
+    const baselineTotal =
+      typeof storedBaseline === "number" && Number.isFinite(storedBaseline)
+        ? storedBaseline
+        : previousRecordedTotal != null
+          ? previousRecordedTotal
+          : inferredExistingBaseline != null &&
+              Number.isFinite(inferredExistingBaseline)
+            ? inferredExistingBaseline
+            : Number(prevTotal || 0);
+
+    row.baselineTotal = baselineTotal;
+    row.deltaTotal = totalCount - baselineTotal;
     row.totalSaved = totalCount;
     row.goal = goal;
     row.pct =

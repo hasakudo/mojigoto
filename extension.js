@@ -447,6 +447,7 @@ function activate(context) {
   registerReorderCommands(context, {
     scheduleRecalc: (reason) => scheduleRecalc(reason),
     refreshExplorer,
+    refreshStatsPanel,
   });
 
   registerHighlightCommands(context, {

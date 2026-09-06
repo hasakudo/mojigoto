@@ -4,6 +4,97 @@ const path = require("path");
 
 const { getReorderEditorHtml } = require("./reorder-webview");
 const reorderCore = require("./reorder-core");
+const {
+  saveDisplayNameChanges,
+  readDisplayNames,
+  getDisplayNameFromData,
+} = require("./reorder-display-names");
+const {
+  updateWritingMemoFilePathForRenameOrMove,
+  updateWritingMemoPathsForFolderRename,
+} = require("../writing-memo/writing-memo-tracker");
+
+function normalizeComparablePath(value) {
+  const normalized = path.normalize(String(value || "").trim());
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function isSameOrChildPath(candidate, parent) {
+  const childPath = normalizeComparablePath(candidate);
+  const parentPath = normalizeComparablePath(parent);
+  if (!childPath || !parentPath) return false;
+  return childPath === parentPath || childPath.startsWith(`${parentPath}${path.sep}`);
+}
+
+function isPathInsideRoot(candidate, rootDir) {
+  const relative = path.relative(
+    path.resolve(String(rootDir || "")),
+    path.resolve(String(candidate || "")),
+  );
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function splitEditableEntryName(entryPath, kind) {
+  const actualName = path.basename(entryPath);
+  const ext = kind === "file" ? path.extname(actualName) : "";
+  const stem = ext ? actualName.slice(0, -ext.length) : actualName;
+  const prefixMatch = stem.match(/^(\s*\d+[._\- ]+)(.*)$/);
+  return {
+    actualName,
+    prefix: prefixMatch ? prefixMatch[1] : "",
+    editableName: prefixMatch
+      ? String(prefixMatch[2] || "").trim()
+      : stem.trim(),
+    ext,
+  };
+}
+
+function validateEditableEntryName(value) {
+  const name = String(value || "").trim();
+  if (!name) return "名前を入力してください。";
+  if (name === "." || name === "..") return "この名前は使用できません。";
+  if (/[<>:\"/\\|?*`\u0000-\u001f]/.test(name)) {
+    return "使用できない記号が含まれています: / ? < > \\ : * | \" `";
+  }
+  if (/[. ]$/.test(name)) return "末尾にピリオドや空白は使用できません。";
+
+  const reserved = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+  if (reserved.test(name)) return "Windowsで予約されている名前は使用できません。";
+  return null;
+}
+
+function hasDirtyDocumentAtPath(targetPath, kind) {
+  return (vscode.workspace.textDocuments || []).some((document) => {
+    if (!document?.isDirty || document.uri?.scheme !== "file") return false;
+    const documentPath = document.uri.fsPath;
+    return kind === "folder"
+      ? isSameOrChildPath(documentPath, targetPath)
+      : normalizeComparablePath(documentPath) === normalizeComparablePath(targetPath);
+  });
+}
+
+function getHeadingCandidateName(displayData, rootDir, targetPath, kind) {
+  const displayName = getDisplayNameFromData(
+    displayData,
+    rootDir,
+    targetPath,
+  );
+  if (displayName) return displayName;
+
+  const actualName = path.basename(targetPath);
+  const ext = kind === "file" ? path.extname(actualName) : "";
+  const stem = ext ? actualName.slice(0, -ext.length) : actualName;
+  return reorderCore.stripOrderPrefix(stem) || stem;
+}
+
+function getReorderEditorUiSettings() {
+  const config = vscode.workspace.getConfiguration("mojigoto");
+  const fontScalePercent = Math.min(
+    160,
+    Math.max(80, Number(config.get("webviewFontScalePercent", 100)) || 100),
+  );
+  return { fontScale: fontScalePercent / 100 };
+}
 
 function splitLeadingNumberBase(name) {
   const ext = path.extname(name);
@@ -336,7 +427,11 @@ async function refreshMojigotoTreeAfterReorder() {
 }
 
 async function openReorderEditor(context, deps = {}) {
-  const { scheduleRecalc = () => {}, refreshExplorer = async () => {} } = deps;
+  const {
+    scheduleRecalc = () => {},
+    refreshExplorer = async () => {},
+    refreshStatsPanel = async () => {},
+  } = deps;
 
   const rootDir = reorderCore.resolveReorderRoot();
 
@@ -346,18 +441,22 @@ async function openReorderEditor(context, deps = {}) {
     !fs.statSync(rootDir).isDirectory()
   ) {
     vscode.window.showWarningMessage(
-      "もじごと: 並び順エディタを開くための原稿フォルダが見つかりません。manuscriptRoot を設定してから実行してください。",
+      "もじごと: 原稿構成エディタを開くための原稿フォルダが見つかりません。manuscriptRoot を設定してから実行してください。",
     );
     return;
   }
 
   const folders = await reorderCore.buildFolderViewModel(rootDir);
   const selectedFolderPath = (folders[0] && folders[0].path) || rootDir;
-  const files = await reorderCore.buildFileViewModel(selectedFolderPath, 1);
+  const files = await reorderCore.buildFileViewModel(
+    selectedFolderPath,
+    1,
+    rootDir,
+  );
 
   const webviewPanel = vscode.window.createWebviewPanel(
     "mojigoto.reorderEditor",
-    "並び順エディタ",
+    "原稿構成エディタ",
     vscode.ViewColumn.Active,
     {
       enableScripts: true,
@@ -375,8 +474,315 @@ async function openReorderEditor(context, deps = {}) {
       selectedFolderPath,
       files,
       startIndex: 1,
+      uiSettings: getReorderEditorUiSettings(),
     },
   );
+
+  const settingsDisposable = vscode.workspace.onDidChangeConfiguration(
+    (event) => {
+      if (event.affectsConfiguration("mojigoto.webviewFontScalePercent")) {
+        webviewPanel.webview.postMessage({
+          type: "webviewUiSettingsChanged",
+          payload: getReorderEditorUiSettings(),
+        });
+      }
+    },
+  );
+  context.subscriptions.push(settingsDisposable);
+  webviewPanel.onDidDispose(
+    () => settingsDisposable.dispose(),
+    null,
+    context.subscriptions,
+  );
+
+  async function handleRenameEntry(msg) {
+    const kind = msg.kind === "folder" ? "folder" : "file";
+    const oldPath = path.resolve(String(msg.entryPath || "").trim());
+    const rootPath = path.resolve(rootDir);
+
+    if (
+      !oldPath ||
+      oldPath === rootPath ||
+      !isPathInsideRoot(oldPath, rootPath) ||
+      !fs.existsSync(oldPath)
+    ) {
+      throw new Error("実名変更の対象が見つかりません。");
+    }
+
+    const stat = fs.statSync(oldPath);
+    if ((kind === "folder" && !stat.isDirectory()) || (kind === "file" && !stat.isFile())) {
+      throw new Error("実名変更の対象種別が一致しません。");
+    }
+
+    const nameParts = splitEditableEntryName(oldPath, kind);
+    const inputName = await vscode.window.showInputBox({
+      title: kind === "folder"
+        ? "もじごと: フォルダの実名を変更"
+        : "もじごと: ファイルの実名を変更",
+      prompt: kind === "folder"
+        ? `連番「${nameParts.prefix || "なし"}」は維持されます。使用できない記号: / ? < > \\ : * | \" \``
+        : `連番「${nameParts.prefix || "なし"}」と拡張子「${nameParts.ext}」は維持されます。使用できない記号: / ? < > \\ : * | \" \``,
+      value: nameParts.editableName,
+      ignoreFocusOut: true,
+      validateInput: (value) => {
+        const invalid = validateEditableEntryName(value);
+        if (invalid) return invalid;
+
+        const newName = `${nameParts.prefix}${String(value || "").trim()}${nameParts.ext}`;
+        const newPath = path.join(path.dirname(oldPath), newName);
+        if (
+          normalizeComparablePath(newPath) !== normalizeComparablePath(oldPath) &&
+          fs.existsSync(newPath)
+        ) {
+          return "同じ名前のファイルまたはフォルダがすでにあります。";
+        }
+        return null;
+      },
+    });
+
+    if (inputName == null) return;
+    const cleanName = String(inputName).trim();
+    const newName = `${nameParts.prefix}${cleanName}${nameParts.ext}`;
+    const newPath = path.join(path.dirname(oldPath), newName);
+    if (newPath === oldPath) return;
+
+    if (hasDirtyDocumentAtPath(oldPath, kind)) {
+      vscode.window.showWarningMessage(
+        kind === "folder"
+          ? "もじごと: フォルダ内に未保存の原稿があります。保存してから実名を変更してください。"
+          : "もじごと: この原稿に未保存の変更があります。保存してから実名を変更してください。",
+      );
+      return;
+    }
+
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    workspaceEdit.renameFile(
+      vscode.Uri.file(oldPath),
+      vscode.Uri.file(newPath),
+      { overwrite: false, ignoreIfExists: false },
+    );
+    const applied = await vscode.workspace.applyEdit(workspaceEdit);
+    if (!applied) throw new Error("実名を変更できませんでした。");
+
+    const trackerItem = {
+      fsPath: newPath,
+      workDir: path.dirname(rootDir),
+    };
+
+    try {
+      await saveDisplayNameChanges(rootDir, [], {
+        moves: [{ from: oldPath, to: newPath }],
+      });
+    } catch (error) {
+      console.warn("[mojigoto] reorder display-name migration failed:", error);
+      vscode.window.showWarningMessage(
+        "もじごと: 実名は変更しましたが、作品ツリーの表示名を引き継げませんでした。表示名を再設定してください。",
+      );
+    }
+
+    try {
+      if (kind === "folder") {
+        await updateWritingMemoPathsForFolderRename(
+          trackerItem,
+          oldPath,
+          newPath,
+        );
+      } else {
+        await updateWritingMemoFilePathForRenameOrMove(
+          trackerItem,
+          oldPath,
+          newPath,
+        );
+      }
+    } catch (error) {
+      console.warn("[mojigoto] reorder writing-memo migration failed:", error);
+      vscode.window.showWarningMessage(
+        "もじごと: 実名は変更しましたが、関連する執筆メモの参照先を更新できませんでした。",
+      );
+    }
+
+    const previousSelectedPath = String(msg.selectedFolderPath || rootDir);
+    let selectedFolderPath = previousSelectedPath;
+    if (kind === "folder" && isSameOrChildPath(previousSelectedPath, oldPath)) {
+      selectedFolderPath = path.join(
+        newPath,
+        path.relative(oldPath, previousSelectedPath),
+      );
+    }
+
+    const folders = await reorderCore.buildFolderViewModel(rootDir);
+    const files = await reorderCore.buildFileViewModel(
+      selectedFolderPath,
+      1,
+      rootDir,
+    );
+
+    await refreshMojigotoTreeAfterReorder();
+    scheduleRecalc("reorderEditorEntryRename");
+    await refreshStatsPanel();
+
+    webviewPanel.webview.postMessage({
+      type: "entry-renamed",
+      kind,
+      oldPath,
+      newPath,
+      selectedFolderPath,
+      folders,
+      files,
+    });
+
+    vscode.window.showInformationMessage(
+      `もじごと: ${kind === "folder" ? "フォルダ" : "ファイル"}の実名を変更しました: ${nameParts.actualName} → ${newName}`,
+    );
+  }
+
+  async function handleInsertHeading(msg) {
+    const filePath = path.resolve(String(msg.filePath || "").trim());
+    const rootPath = path.resolve(rootDir);
+
+    if (
+      !filePath ||
+      filePath === rootPath ||
+      !isPathInsideRoot(filePath, rootPath) ||
+      !fs.existsSync(filePath)
+    ) {
+      throw new Error("見出しを挿入する原稿ファイルが見つかりません。");
+    }
+
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || !isTextManuscriptFileName(filePath)) {
+      throw new Error("見出しを挿入できるのは .txt / .md の原稿ファイルです。");
+    }
+
+    if (hasDirtyDocumentAtPath(filePath, "file")) {
+      vscode.window.showWarningMessage(
+        "もじごと: この原稿に未保存の変更があります。保存してから見出しを挿入してください。",
+      );
+      return;
+    }
+
+    const displayData = await readDisplayNames(rootDir);
+    const fileTitle = getHeadingCandidateName(
+      displayData,
+      rootDir,
+      filePath,
+      "file",
+    );
+    const folderPath = path.dirname(filePath);
+    const folderTitle = getHeadingCandidateName(
+      displayData,
+      rootDir,
+      folderPath,
+      "folder",
+    );
+
+    const sourcePicked = await vscode.window.showQuickPick(
+      [
+        {
+          label: "ファイル名を使う",
+          description: fileTitle,
+          value: fileTitle,
+        },
+        {
+          label: "フォルダ名を使う",
+          description: folderTitle,
+          value: folderTitle,
+        },
+      ],
+      {
+        title: "もじごと: ファイル先頭へ見出しを挿入",
+        placeHolder: "見出しに使う名前を選んでください",
+        ignoreFocusOut: true,
+        matchOnDescription: true,
+      },
+    );
+    if (!sourcePicked) return;
+
+    const levelPicked = await vscode.window.showQuickPick(
+      [
+        { label: "# 大見出し", description: sourcePicked.value, value: 1 },
+        { label: "## 中見出し", description: sourcePicked.value, value: 2 },
+        { label: "### 小見出し", description: sourcePicked.value, value: 3 },
+      ],
+      {
+        title: "もじごと: 見出しの種類を選択",
+        placeHolder: "挿入する見出しレベルを選んでください",
+        ignoreFocusOut: true,
+      },
+    );
+    if (!levelPicked) return;
+
+    const document = await vscode.workspace.openTextDocument(
+      vscode.Uri.file(filePath),
+    );
+    if (document.isDirty) {
+      vscode.window.showWarningMessage(
+        "もじごと: この原稿に未保存の変更があります。保存してから見出しを挿入してください。",
+      );
+      return;
+    }
+
+    const title = String(sourcePicked.value || "").trim();
+    if (!title) throw new Error("見出しに使う名前を取得できませんでした。");
+
+    const heading = `${"#".repeat(Number(levelPicked.value) || 1)} ${title}`;
+    let firstContentLine = -1;
+    for (let index = 0; index < document.lineCount; index += 1) {
+      if (document.lineAt(index).text.trim()) {
+        firstContentLine = index;
+        break;
+      }
+    }
+
+    let replaceExisting = false;
+    if (firstContentLine >= 0) {
+      const firstLine = document.lineAt(firstContentLine);
+      const firstText = firstLine.text.trim();
+      if (/^#{1,6}(?:\s+|$)/.test(firstText)) {
+        if (firstText === heading) {
+          vscode.window.showInformationMessage(
+            `もじごと: 同じ見出しがすでにあります: ${heading}`,
+          );
+          return;
+        }
+
+        const choice = await vscode.window.showWarningMessage(
+          `先頭に既存の見出し「${firstText}」があります。`,
+          { modal: true },
+          "置き換える",
+          "さらに先頭へ追加",
+        );
+        if (!choice) return;
+        replaceExisting = choice === "置き換える";
+      }
+    }
+
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    if (replaceExisting) {
+      workspaceEdit.replace(
+        document.uri,
+        document.lineAt(firstContentLine).range,
+        heading,
+      );
+    } else {
+      const eol = document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+      workspaceEdit.insert(
+        document.uri,
+        new vscode.Position(0, 0),
+        `${heading}${eol}`,
+      );
+    }
+
+    const applied = await vscode.workspace.applyEdit(workspaceEdit);
+    if (!applied) throw new Error("見出しを挿入できませんでした。");
+    const saved = await document.save();
+    if (!saved) throw new Error("見出しを挿入しましたが、原稿を保存できませんでした。");
+
+    scheduleRecalc("reorderEditorHeadingInsert");
+    vscode.window.showInformationMessage(
+      `もじごと: ${path.basename(filePath)} に見出し「${heading}」を${replaceExisting ? "設定" : "挿入"}しました。`,
+    );
+  }
 
   webviewPanel.webview.onDidReceiveMessage(async (msg) => {
     try {
@@ -425,7 +831,7 @@ async function openReorderEditor(context, deps = {}) {
 
       if (msg.type === "select-folder") {
         const folderPath = String(msg.folderPath || "").trim();
-        const files = await reorderCore.buildFileViewModel(folderPath, 1);
+        const files = await reorderCore.buildFileViewModel(folderPath, 1, rootDir);
         webviewPanel.webview.postMessage({
           type: "folder-data",
           selectedFolderPath: folderPath,
@@ -445,7 +851,7 @@ async function openReorderEditor(context, deps = {}) {
 
       if (msg.type === "reload") {
         const folderPath = String(msg.folderPath || "").trim();
-        const files = await reorderCore.buildFileViewModel(folderPath, 1);
+        const files = await reorderCore.buildFileViewModel(folderPath, 1, rootDir);
         webviewPanel.webview.postMessage({
           type: "folder-data",
           selectedFolderPath: folderPath,
@@ -455,42 +861,86 @@ async function openReorderEditor(context, deps = {}) {
       }
 
       if (msg.type === "save-folder-order") {
-        const startPicked = await vscode.window.showQuickPick(
-          [
-            { label: "1から", value: 1 },
-            { label: "0から", value: 0 },
-          ],
-          {
-            title: "もじごと: フォルダ保存時の開始番号",
-            placeHolder: "保存時に付ける番号の開始位置を選んでください",
-            ignoreFocusOut: true,
-          },
-        );
-        if (!startPicked) return;
+        const orderedFolders = Array.isArray(msg.orderedFolders)
+          ? msg.orderedFolders
+          : [];
+        const orderChanged = msg.orderChanged === true;
+        let folders;
 
-        const folderStartIndex = Number(startPicked.value ?? 1);
+        if (orderChanged) {
+          const startPicked = await vscode.window.showQuickPick(
+            [
+              { label: "1から", value: 1 },
+              { label: "0から", value: 0 },
+            ],
+            {
+              title: "もじごと: フォルダ保存時の開始番号",
+              placeHolder: "保存時に付ける番号の開始位置を選んでください",
+              ignoreFocusOut: true,
+            },
+          );
+          if (!startPicked) return;
 
-        const folders = await reorderCore.saveFolderListOrder(
-          rootDir,
-          Array.isArray(msg.orderedFolders) ? msg.orderedFolders : [],
-          folderStartIndex,
-        );
+          folders = await reorderCore.saveFolderListOrder(
+            rootDir,
+            orderedFolders,
+            Number(startPicked.value ?? 1),
+          );
+        } else {
+          folders = await reorderCore.saveFolderDisplayNames(
+            rootDir,
+            orderedFolders,
+          );
+        }
 
         await refreshMojigotoTreeAfterReorder();
         scheduleRecalc("reorderEditorFolderSave");
+        await refreshStatsPanel();
+
+        const previousSelectedPath = String(msg.selectedFolderPath || "").trim();
+        let nextSelectedPath = previousSelectedPath || rootDir;
+        if (orderChanged && previousSelectedPath !== rootDir) {
+          const sourceFolders = orderedFolders.filter(
+            (item) =>
+              item?.kind === "folder" &&
+              (Number(item.depth) === 1 || path.dirname(item.path) === rootDir),
+          );
+          const selectedIndex = sourceFolders.findIndex((item) =>
+            isSameOrChildPath(previousSelectedPath, item?.path),
+          );
+          const savedFolders = folders.filter(
+            (item) => item?.kind === "folder" && Number(item.depth) === 1,
+          );
+          if (selectedIndex >= 0 && savedFolders[selectedIndex]?.path) {
+            const oldTopLevelPath = sourceFolders[selectedIndex].path;
+            nextSelectedPath = path.join(
+              savedFolders[selectedIndex].path,
+              path.relative(oldTopLevelPath, previousSelectedPath),
+            );
+          }
+        }
+        const files = await reorderCore.buildFileViewModel(
+          nextSelectedPath,
+          1,
+          rootDir,
+        );
 
         webviewPanel.webview.postMessage({
           type: "folder-order-saved",
           folders,
+          selectedFolderPath: nextSelectedPath,
+          files,
         });
 
         vscode.window.showInformationMessage(
-          "もじごと: フォルダ順を保存しました。",
+          orderChanged
+            ? "もじごと: フォルダ順と表示名を保存しました。"
+            : "もじごと: フォルダの表示名を保存しました。",
         );
 
         const promptKey = "mojigoto.reorderHideChapterNumberPrompted";
         const wasPrompted = !!context.globalState.get(promptKey, false);
-        if (!wasPrompted) {
+        if (orderChanged && !wasPrompted) {
           await context.globalState.update(promptKey, true);
 
           const answer = await vscode.window.showInformationMessage(
@@ -513,33 +963,51 @@ async function openReorderEditor(context, deps = {}) {
         return;
       }
 
+      if (msg.type === "rename-entry") {
+        await handleRenameEntry(msg);
+        return;
+      }
+
+      if (msg.type === "insert-heading") {
+        await handleInsertHeading(msg);
+        return;
+      }
+
       if (msg.type === "save-order") {
         const folderPath = String(msg.folderPath || "").trim();
         const orderedItems = Array.isArray(msg.orderedItems)
           ? msg.orderedItems
           : [];
+        const orderChanged = msg.orderChanged === true;
+        let files;
 
-        const startPicked = await vscode.window.showQuickPick(
-          [
-            { label: "1から", value: 1 },
-            { label: "0から", value: 0 },
-          ],
-          {
-            title: "もじごと: 保存時の開始番号",
-            placeHolder: "保存時に付ける番号の開始位置を選んでください",
-            ignoreFocusOut: true,
-          },
-        );
-        if (!startPicked) return;
+        if (orderChanged) {
+          const startPicked = await vscode.window.showQuickPick(
+            [
+              { label: "1から", value: 1 },
+              { label: "0から", value: 0 },
+            ],
+            {
+              title: "もじごと: 保存時の開始番号",
+              placeHolder: "保存時に付ける番号の開始位置を選んでください",
+              ignoreFocusOut: true,
+            },
+          );
+          if (!startPicked) return;
 
-        const files = await reorderCore.saveFolderOrder(
-          folderPath,
-          orderedItems,
-          Number(startPicked.value ?? 1),
-        );
+          files = await reorderCore.saveFolderOrder(
+            folderPath,
+            orderedItems,
+            Number(startPicked.value ?? 1),
+            rootDir,
+          );
+        } else {
+          files = await reorderCore.saveFileDisplayNames(rootDir, orderedItems);
+        }
 
         await refreshMojigotoTreeAfterReorder();
         scheduleRecalc("reorderEditorSave");
+        await refreshStatsPanel();
 
         webviewPanel.webview.postMessage({
           type: "saved",
@@ -548,27 +1016,34 @@ async function openReorderEditor(context, deps = {}) {
         });
 
         vscode.window.showInformationMessage(
-          "もじごと: 並び順を保存しました。",
+          orderChanged
+            ? "もじごと: 並び順と表示名を保存しました。"
+            : "もじごと: ファイルの表示名を保存しました。",
         );
       }
     } catch (err) {
       const message = err && err.message ? err.message : String(err);
       webviewPanel.webview.postMessage({ type: "error", message });
       vscode.window.showErrorMessage(
-        `もじごと: 並び順エディタでエラーが発生しました: ${message}`,
+        `もじごと: 原稿構成エディタでエラーが発生しました: ${message}`,
       );
     }
   });
 }
 
 function registerReorderCommands(context, deps = {}) {
-  const { scheduleRecalc = () => {}, refreshExplorer = async () => {} } = deps;
+  const {
+    scheduleRecalc = () => {},
+    refreshExplorer = async () => {},
+    refreshStatsPanel = async () => {},
+  } = deps;
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mojigoto.openReorderEditor", async () => {
       await openReorderEditor(context, {
         scheduleRecalc,
         refreshExplorer,
+        refreshStatsPanel,
       });
     }),
   );

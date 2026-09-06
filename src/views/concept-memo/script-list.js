@@ -158,6 +158,9 @@ function getConceptMemoListScript() {
       const memos = Array.isArray(currentState?.data?.memos)
         ? currentState.data.memos
         : [];
+      const folderFilterExists =
+        activeFolderId === "" ||
+        getMemoFolders().some((folder) => folder.id === activeFolderId);
 
       const visibleByQuickFilter = memos.filter((memo) => {
         return (
@@ -167,12 +170,18 @@ function getConceptMemoListScript() {
         );
       });
 
+      const visibleByFolder = activeFolderId === "__all__" || !folderFilterExists
+        ? visibleByQuickFilter
+        : visibleByQuickFilter.filter(
+            (memo) => String(memo?.folderId || "") === activeFolderId,
+          );
+
       const visibleByTag = activeTagFilter
-        ? visibleByQuickFilter.filter((memo) => {
+        ? visibleByFolder.filter((memo) => {
             const tags = Array.isArray(memo?.tags) ? memo.tags : [];
             return tags.includes(activeTagFilter);
           })
-        : visibleByQuickFilter;
+        : visibleByFolder;
 
       const query = String(searchQuery || "").trim().toLowerCase();
       const filtered = !query
@@ -200,6 +209,11 @@ function getConceptMemoListScript() {
       if (activeQuickFilters.source === "hasSource") labels.push("出典あり");
       if (activeQuickFilters.source === "cleared") labels.push("元メモなし");
       if (activeQuickFilters.source === "missing") labels.push("リンク切れ");
+      if (activeFolderId === "") labels.push("未分類");
+      if (activeFolderId !== "__all__" && activeFolderId !== "") {
+        const folderName = getMemoFolderName(activeFolderId);
+        if (folderName) labels.push("フォルダ: " + folderName);
+      }
 
       return labels.length ? "絞り込み: " + labels.join(" / ") : "絞り込み: なし";
     }
@@ -236,6 +250,7 @@ function getConceptMemoListScript() {
       const hasFilter =
         Boolean(searchQuery) ||
         Boolean(activeTagFilter) ||
+        activeFolderId !== "__all__" ||
         Boolean(activeQuickFilters.type) ||
         (Array.isArray(activeQuickFilters.state) && activeQuickFilters.state.length > 0) ||
         Boolean(activeQuickFilters.source);
@@ -635,6 +650,7 @@ function getConceptMemoListScript() {
         const title = memo?.title || "無題メモ";
         const typeLabel = getMemoTypeLabel(memo?.type || "text");
         const tags = Array.isArray(memo?.tags) ? memo.tags : [];
+        const folderName = getMemoFolderName(memo?.folderId || "");
         const sourceSummary = getSourceSummaryShort(memo);
         const sourceStatusBadgeHtml = getSourceStatusBadgeHtml(memo);
         const isSelectedClass = memo.id === selectedMemoId ? " isSelected" : "";
@@ -706,6 +722,7 @@ function getConceptMemoListScript() {
           statusRowHtml +
           '<div class="memoMetaRow">' +
             '<span class="muted">' + escapeHtml(typeLabel) + '</span>' +
+            (folderName ? '<span class="memoFolderBadge">' + escapeHtml(folderName) + '</span>' : '') +
             todoMeta +
             updatedAtHtml +
           '</div>' +

@@ -145,6 +145,51 @@ function makeStatsStyles() {
       border-left: 3px solid var(--mg-focus);
     }
     .highlight-group-row.is-selected td { font-weight:600; }
+    .headingBatchToolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--mg-border);
+      border-radius: 8px;
+      background: var(--mg-soft-bg);
+    }
+    .headingBatchToolbarText {
+      margin-right: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .headingBatchLevelLabel {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--mg-muted);
+      font-size: 12px;
+    }
+    .headingBatchToolbar button {
+      padding: 5px 8px;
+    }
+    .headingBatchToolbar button:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+    .headingBatchSelectedCount {
+      color: var(--mg-muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .headingBatchHint {
+      margin-top: 5px;
+    }
+    .headingBatchCheckCell {
+      width: 42px;
+      text-align: center;
+    }
+    .headingBatchCheckCell input {
+      cursor: pointer;
+    }
 
     .dashboardSectionTitle {
       font-size: 13px;
@@ -272,6 +317,166 @@ function makeStatsStyles() {
     .dashboardSummaryCard td {
       word-break: normal;
       overflow-wrap: anywhere;
+    }
+    .dashboardProgressHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .dashboardProgressHead .dashboardSubsectionLabel {
+      margin: 0;
+    }
+    .dashboardProgressToggle {
+      flex: 0 0 auto;
+    }
+    .dashboardProgressActions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .dashboardProgressActions select {
+      max-width: 120px;
+      padding: 4px 6px;
+      border: 1px solid var(--mg-border);
+      border-radius: 6px;
+      background: var(--vscode-dropdown-background, var(--mg-card-bg));
+      color: var(--mg-fg);
+    }
+    .dashboardProgressMeta,
+    .dashboardProgressFooter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--mg-muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .dashboardProgressMeta {
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .dashboardProgressMeta strong {
+      color: var(--mg-fg);
+      font-size: 12px;
+    }
+    .dashboardProgressChart {
+      position: relative;
+      height: 142px;
+      min-width: 0;
+      padding: 8px 4px 0;
+      box-sizing: border-box;
+      border-bottom: 1px solid var(--mg-border);
+      background: repeating-linear-gradient(
+        to top,
+        transparent 0,
+        transparent 34px,
+        var(--mg-border) 35px
+      );
+      overflow: hidden;
+    }
+    .dashboardProgressBars {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-around;
+      gap: 5px;
+      height: 100%;
+    }
+    .dashboardProgressBarItem {
+      flex: 1 1 0;
+      min-width: 22px;
+      max-width: 54px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      align-items: end;
+      text-align: center;
+    }
+    .dashboardProgressBarTrack {
+      align-self: stretch;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-height: 0;
+    }
+    .dashboardProgressBarTrack.is-daily {
+      position: relative;
+      align-items: initial;
+    }
+    .dashboardProgressBarTrack.is-daily::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-top: 1px solid var(--mg-border);
+      pointer-events: none;
+    }
+    .dashboardProgressBar {
+      width: min(70%, 30px);
+      min-height: 0;
+      border-radius: 4px 4px 0 0;
+      background: var(--mg-button-bg);
+      opacity: 0.86;
+    }
+    .dashboardProgressBarTrack.is-daily .dashboardProgressBar {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .dashboardProgressBarTrack.is-daily .dashboardProgressBar.is-positive {
+      bottom: 50%;
+    }
+    .dashboardProgressBarTrack.is-daily .dashboardProgressBar.is-negative {
+      top: 50%;
+      border-radius: 0 0 4px 4px;
+      background: var(--vscode-charts-red, #c94f4f);
+    }
+    .dashboardProgressBarValue {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--mg-fg);
+      font-size: 9px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    .dashboardProgressBarDate {
+      color: var(--mg-muted);
+      font-size: 9px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    .dashboardProgressGoalLine {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      z-index: 3;
+      border-top: 1px dashed var(--vscode-charts-orange, #d97706);
+      pointer-events: none;
+    }
+    .dashboardProgressGoalLine span {
+      position: absolute;
+      top: -15px;
+      right: 0;
+      color: var(--vscode-charts-orange, #d97706);
+      font-size: 9px;
+    }
+    .dashboardProgressEmpty {
+      align-self: center;
+      width: 100%;
+      color: var(--mg-muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    .dashboardProgressFooter {
+      margin-top: 6px;
+      flex-wrap: wrap;
     }
     .dashboardControlsBar {
       margin: 0 0 14px;

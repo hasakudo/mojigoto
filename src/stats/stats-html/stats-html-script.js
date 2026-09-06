@@ -5,6 +5,10 @@ function makeStatsScript() {
     let activeTab = uiState.activeTab || "dashboard";
     let hideZeroGroups = Boolean(uiState.hideZeroGroups);
     let selectedHighlightGroup = uiState.selectedHighlightGroup || "";
+    let headingBatchLevel = ["1", "2", "3"].includes(String(uiState.headingBatchLevel || ""))
+      ? String(uiState.headingBatchLevel)
+      : "1";
+    let selectedHeadingTargetKeys = new Set();
     let openDashboardNoteId = uiState.openDashboardNoteId || "";
     let isDashboardNoteModalOpen = Boolean(uiState.isDashboardNoteModalOpen);
     let isRetentionOpen = Boolean(uiState.isRetentionOpen);
@@ -84,6 +88,7 @@ function makeStatsScript() {
         activeTab,
         hideZeroGroups,
         selectedHighlightGroup,
+        headingBatchLevel,
         openDashboardNoteId,
         isDashboardNoteModalOpen,
         isRetentionOpen,
@@ -556,8 +561,102 @@ function makeStatsScript() {
       });
     }
 
+    function getHeadingTargetKey(item) {
+      return String(Number(item?.startLine || 0));
+    }
+
+    function updateHeadingBatchCount() {
+      const count = document.getElementById("headingBatchSelectedCount");
+      const applyButton = document.getElementById("applyHeadingBatchButton");
+      const selectedCount = selectedHeadingTargetKeys.size;
+      if (count) count.textContent = "選択 " + selectedCount + "件";
+      if (applyButton) applyButton.disabled = selectedCount === 0;
+    }
+
+    function renderHeadingBatchToolbar(found) {
+      if (found?.name !== "paragraphIndentMissing") return "";
+
+      return (
+        '<div class="headingBatchToolbar">' +
+          '<div class="headingBatchToolbarText">見出しにする行を選択</div>' +
+          '<label class="headingBatchLevelLabel">記号 ' +
+            '<select id="headingBatchLevelSelect">' +
+              '<option value="1"' + (headingBatchLevel === "1" ? ' selected' : '') + '># 大見出し</option>' +
+              '<option value="2"' + (headingBatchLevel === "2" ? ' selected' : '') + '>## 中見出し</option>' +
+              '<option value="3"' + (headingBatchLevel === "3" ? ' selected' : '') + '>### 小見出し</option>' +
+            '</select>' +
+          '</label>' +
+          '<button type="button" id="selectAllHeadingTargetsButton">すべて選択</button>' +
+          '<button type="button" id="clearHeadingTargetsButton">選択解除</button>' +
+          '<button type="button" id="applyHeadingBatchButton" disabled>見出しを付与</button>' +
+          '<span id="headingBatchSelectedCount" class="headingBatchSelectedCount">選択 0件</span>' +
+        '</div>' +
+        '<div class="muted headingBatchHint">現在開いているファイルの表示中の検出結果だけを変更します。実行前に確認します。</div>'
+      );
+    }
+
+    function bindHeadingBatchActions(found) {
+      if (found?.name !== "paragraphIndentMissing") return;
+
+      document.getElementById("headingBatchLevelSelect")?.addEventListener("change", (event) => {
+        headingBatchLevel = String(event.target.value || "1");
+        saveUiState();
+      });
+
+      document.querySelectorAll("[data-heading-target-index]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          const index = Number(checkbox.getAttribute("data-heading-target-index") || -1);
+          const item = found.items[index];
+          if (!item) return;
+          const key = getHeadingTargetKey(item);
+          if (checkbox.checked) selectedHeadingTargetKeys.add(key);
+          else selectedHeadingTargetKeys.delete(key);
+          updateHeadingBatchCount();
+        });
+      });
+
+      document.getElementById("selectAllHeadingTargetsButton")?.addEventListener("click", () => {
+        selectedHeadingTargetKeys = new Set(found.items.map(getHeadingTargetKey));
+        document.querySelectorAll("[data-heading-target-index]").forEach((checkbox) => {
+          checkbox.checked = true;
+        });
+        updateHeadingBatchCount();
+      });
+
+      document.getElementById("clearHeadingTargetsButton")?.addEventListener("click", () => {
+        selectedHeadingTargetKeys.clear();
+        document.querySelectorAll("[data-heading-target-index]").forEach((checkbox) => {
+          checkbox.checked = false;
+        });
+        updateHeadingBatchCount();
+      });
+
+      document.getElementById("applyHeadingBatchButton")?.addEventListener("click", () => {
+        const targets = found.items
+          .filter((item) => selectedHeadingTargetKeys.has(getHeadingTargetKey(item)))
+          .map((item) => ({
+            startLine: Number(item.startLine || 0),
+            preview: String(item.preview || ""),
+          }));
+        if (!targets.length) return;
+
+        const filePath = document.getElementById("highlightDetailsWrap")
+          ?.getAttribute("data-current-file-path") || "";
+
+        vscode.postMessage({
+          type: "applyHeadingBatch",
+          filePath,
+          level: Number(headingBatchLevel || 1),
+          targets,
+        });
+      });
+
+      updateHeadingBatchCount();
+    }
+
     function renderHighlightDetails(groupName) {
       selectedHighlightGroup = groupName || "";
+      selectedHeadingTargetKeys.clear();
 
       const panel = document.getElementById("highlightDetailsPanel");
       const empty = document.getElementById("highlightDetailsEmpty");
@@ -587,11 +686,15 @@ function makeStatsScript() {
       }
 
       const rows = found.items.map((item, index) => {
+        const headingCheckbox = found.name === "paragraphIndentMissing"
+          ? '<td class="headingBatchCheckCell"><input type="checkbox" data-heading-target-index="' + index + '" aria-label="' + escapeHtml(String(item.line || index + 1)) + '行目を選択"></td>'
+          : "";
         return (
           '<tr class="highlight-detail-row" ' +
             'data-group="' + escapeHtml(found.name) + '" ' +
             'data-index="' + index + '" ' +
             'style="cursor:pointer;">' +
+            headingCheckbox +
             '<td class="num">' + escapeHtml(item.line) + "</td>" +
             "<td>" + renderHighlightedPreview(item) + "</td>" +
           "</tr>"
@@ -605,9 +708,10 @@ function makeStatsScript() {
           (found.countable === false ? "" : "（" + escapeHtml(found.count) + "件）") +
         "</div>" +
         '<div class="muted" style="margin-top:4px;">行をクリックすると本文の該当箇所へジャンプします。</div>' +
+        renderHeadingBatchToolbar(found) +
         '<table style="margin-top:8px;">' +
           "<thead>" +
-            "<tr><th>行</th><th>内容</th></tr>" +
+            "<tr>" + (found.name === "paragraphIndentMissing" ? '<th class="headingBatchCheckCell">選択</th>' : '') + "<th>行</th><th>内容</th></tr>" +
           "</thead>" +
           "<tbody>" +
             rows +
@@ -615,7 +719,8 @@ function makeStatsScript() {
         "</table>";
 
       panel.querySelectorAll(".highlight-detail-row").forEach((row) => {
-        row.addEventListener("click", () => {
+        row.addEventListener("click", (event) => {
+          if (event.target?.closest("input, button, select, label")) return;
           const index = Number(row.getAttribute("data-index") || -1);
           if (index < 0) return;
 
@@ -634,6 +739,8 @@ function makeStatsScript() {
           });
         });
       });
+
+      bindHeadingBatchActions(found);
 
       updateSelectedGroupRow();
     }
@@ -822,6 +929,22 @@ function makeStatsScript() {
         });
       });
 
+      document.getElementById("toggleDashboardProgressGraph")?.addEventListener("change", (event) => {
+        vscode.postMessage({
+          type: "setDashboardMemoVisibility",
+          key: "progressGraph",
+          enabled: !!event.target.checked,
+        });
+      });
+
+      document.getElementById("dashboardProgressGraphMode")?.addEventListener("change", (event) => {
+        vscode.postMessage({
+          type: "setDashboardMemoVisibility",
+          key: "progressGraphMode",
+          value: event.target.value === "total" ? "total" : "daily",
+        });
+      });
+
       document.getElementById("toggleDashboardCommonTodo")?.addEventListener("change", (event) => {
         vscode.postMessage({
           type: "setDashboardMemoVisibility",
@@ -858,6 +981,7 @@ function makeStatsScript() {
               filePath: item.filePath,
               absoluteFilePath: item.absoluteFilePath,
               writingMemoFilePath: item.writingMemoFilePath,
+              targetLocation: item.targetLocation || "",
               excerpt: item.excerpt || "",
               startLine: item.startLine,
               startCharacter: item.startCharacter,
@@ -882,6 +1006,33 @@ function makeStatsScript() {
           if (!memoId) return;
 
           openWritingMemoStatusMenu(memoId, writingMemoFilePath, el);
+        });
+      });
+
+      document.querySelectorAll("[data-writing-memo-relink]").forEach((el) => {
+        el.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const memoId = el.getAttribute("data-writing-memo-relink") || "";
+          const writingMemoFilePath =
+            el.getAttribute("data-writing-memo-file") || "";
+          if (!memoId || !writingMemoFilePath) return;
+
+          const itemEl = el.closest("[data-writing-memo]");
+          let item = {};
+          try {
+            item = JSON.parse(
+              itemEl?.getAttribute("data-writing-memo") || "{}",
+            );
+          } catch (error) {
+            console.error("[mojigoto] writing memo relink parse error:", error);
+          }
+
+          vscode.postMessage({
+            type: "relinkWritingMemo",
+            memoId,
+            writingMemoFilePath,
+            absoluteFilePath: item.absoluteFilePath || "",
+          });
         });
       });
 

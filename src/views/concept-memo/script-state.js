@@ -11,6 +11,8 @@ function getConceptMemoStateScript() {
         sortDirection,
         activeQuickFilters,
         activeTagFilter,
+        activeFolderId,
+        isFolderManagerOpen,
         isSidebarCollapsed,
         isCommonTodoCollapsed,
         openListPanel,
@@ -31,6 +33,8 @@ function getConceptMemoStateScript() {
         sortDirection,
         activeQuickFilters,
         activeTagFilter,
+        activeFolderId,
+        isFolderManagerOpen,
         isSidebarCollapsed,
         isCommonTodoCollapsed,
         openListPanel,
@@ -52,6 +56,7 @@ function getConceptMemoStateScript() {
           payload: {
             selectedMemoId,
             memos: currentState.data.memos,
+            folders: currentState.data.folders,
             commonTodoItems: currentState.data.commonTodoItems,
             silentToast: true,
           },
@@ -112,6 +117,7 @@ function getConceptMemoStateScript() {
         payload: {
           selectedMemoId,
           memos: currentState.data.memos,
+          folders: currentState.data.folders,
           commonTodoItems: currentState.data.commonTodoItems,
           silentToast,
           successMessage,

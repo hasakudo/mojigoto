@@ -190,8 +190,9 @@ body {
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 
-  background: var(--vscode-editorInfo-foreground);
-  color: var(--vscode-editor-background);
+  border-left: 3px solid var(--vscode-editorInfo-foreground);
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
 
   opacity: 0;
   transform: translateY(-6px);
@@ -2563,6 +2564,133 @@ button {
 .previewPane.isBoardMode .noteBoardColumnBody {
   min-height: 0;
   overflow: auto;
+}
+
+.noteTocPanel {
+  position: fixed;
+  top: 72px;
+  right: 18px;
+  z-index: 65;
+  width: min(320px, calc(100vw - 36px));
+  max-height: calc(100vh - var(--note-footer-height) - 96px);
+  overflow: hidden;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  background: var(--vscode-editor-background);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.noteTocPanel[hidden] {
+  display: none;
+}
+
+.noteTocHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+}
+
+.noteTocTitle {
+  flex: 1 1 auto;
+  font-weight: 700;
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+}
+
+.noteTocIconButton {
+  min-width: 28px;
+  padding: 3px 7px;
+}
+
+.noteTocBody {
+  max-height: calc(100vh - var(--note-footer-height) - 142px);
+  overflow: auto;
+}
+
+.noteTocPanel.isCollapsed {
+  width: 132px;
+}
+
+.noteTocPanel.isCollapsed .noteTocBody {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .noteTocPanel.isCollapsed {
+    top: 50px;
+  }
+}
+
+.noteTocSettings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  font-size: calc(12px * var(--mojigoto-content-font-scale));
+}
+
+.noteTocSettings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.noteTocList {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+}
+
+.noteTocEntry {
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  font-size: calc(13px * var(--mojigoto-content-font-scale));
+  cursor: pointer;
+}
+
+.noteTocEntry:hover,
+.noteTocEntry:focus-visible {
+  background: var(--vscode-list-hoverBackground);
+  outline: none;
+}
+
+.noteTocEntry-divider {
+  padding-left: 18px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.noteTocEntry-item {
+  padding-left: 30px;
+}
+
+.noteTocEmpty {
+  padding: 12px 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: calc(12px * var(--mojigoto-content-font-scale));
+}
+
+@media (max-width: 700px) {
+  .noteTocPanel {
+    top: 60px;
+    right: 8px;
+    width: min(300px, calc(100vw - 16px));
+  }
+
+  .noteTocPanel.isCollapsed {
+    top: 60px;
+  }
 }
 
 /* プレビューボードと全画面ボードの内容文字を設定倍率へ合わせる。 */

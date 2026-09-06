@@ -285,7 +285,19 @@ function getConceptMemoUtilsScript() {
             ? state.data.memos.map((memo) => ({
                 ...memo,
                 showInDashboard: Boolean(memo?.showInDashboard),
+                folderId: String(memo?.folderId || "").trim(),
               }))
+            : [],
+          folders: Array.isArray(state?.data?.folders)
+            ? state.data.folders
+                .map((folder, index) => ({
+                  id: String(folder?.id || "").trim(),
+                  name: String(folder?.name || "").trim(),
+                  order: Number.isFinite(Number(folder?.order))
+                    ? Number(folder.order)
+                    : index,
+                }))
+                .filter((folder) => folder.id && folder.name)
             : [],
           commonTodoItems: Array.isArray(state?.data?.commonTodoItems)
             ? state.data.commonTodoItems

@@ -16,6 +16,7 @@ function createEmptyWritingMemos() {
 function normalizeWritingMemo(memo = {}) {
   const now = getNowIsoString();
   const status = String(memo?.status || "active").trim();
+  const targetLocation = String(memo?.targetLocation || "").trim();
 
   return {
     id:
@@ -23,6 +24,10 @@ function normalizeWritingMemo(memo = {}) {
       `wm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     filePath: String(memo?.filePath || "").trim(),
     fileName: String(memo?.fileName || "").trim(),
+    targetLocation:
+      targetLocation === "view" || targetLocation === "work"
+        ? targetLocation
+        : "",
     startLine: Number.isFinite(Number(memo?.startLine))
       ? Number(memo.startLine)
       : 0,
@@ -95,6 +100,7 @@ function createWritingMemoDraft(input = {}) {
     fileName:
       String(input?.fileName || "").trim() ||
       (filePath ? path.basename(filePath) : ""),
+    targetLocation: String(input?.targetLocation || ""),
     startLine: Number(input?.startLine || 0),
     startCharacter: Number(input?.startCharacter || 0),
     endLine: Number(input?.endLine || 0),

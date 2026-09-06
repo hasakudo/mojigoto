@@ -188,6 +188,9 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
       memos: Array.isArray(message?.payload?.memos)
         ? message.payload.memos
         : [],
+      folders: Array.isArray(message?.payload?.folders)
+        ? message.payload.folders
+        : [],
       commonTodoItems: [],
     };
   }
@@ -258,6 +261,7 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
         const nextMemo = createConceptMemoDraft({
           order: memos.length,
           title: "新規メモ",
+          folderId: String(message.payload?.folderId || "").trim(),
         });
 
         memos.unshift(nextMemo);

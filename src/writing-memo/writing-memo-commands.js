@@ -67,6 +67,7 @@ function resolveWritingMemoTargetForFile(context, filePath) {
       writingMemoFilePath: getWritingMemosPathForSingle(),
       workDir: "",
       manuscriptRoot: configuredManuscriptRoot,
+      targetLocation: "",
     };
   }
 
@@ -114,6 +115,7 @@ function resolveWritingMemoTargetForFile(context, filePath) {
             : "",
           workDir: currentWork?.fsPath || "",
           manuscriptRoot: candidate.manuscriptRoot,
+          targetLocation: "view",
         };
       }
 
@@ -122,6 +124,7 @@ function resolveWritingMemoTargetForFile(context, filePath) {
         writingMemoFilePath: candidate.writingMemoFilePath,
         workDir: candidate.workDir,
         manuscriptRoot: candidate.manuscriptRoot,
+        targetLocation: "work",
       };
     }
   }
@@ -211,6 +214,7 @@ async function addWritingMemo(context) {
   const nextMemo = createWritingMemoDraft({
     filePath: relativeFilePath,
     fileName: path.basename(relativeFilePath),
+    targetLocation: target.targetLocation || "",
     startLine: selection.start.line,
     startCharacter: selection.start.character,
     endLine: selection.end.line,

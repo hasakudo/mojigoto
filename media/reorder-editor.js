@@ -10,6 +10,7 @@
   const vscode = acquireVsCodeApi();
   const boot = window.__Mojigoto_REORDER_BOOT__ || {};
   const state = {
+    rootDir: boot.rootDir || "",
     folders: (boot.folders || []).map((f) => ({
       ...f,
       dirty: false,
@@ -19,6 +20,8 @@
     files: boot.files || [],
     originalFiles: JSON.parse(JSON.stringify(boot.files || [])),
     dirtyMap: {},
+    fileDrafts: {},
+    fileOriginalsByFolder: {},
     dirty: false,
 
     viewMode: "arrow",
@@ -62,18 +65,116 @@
   function clone(v) {
     return JSON.parse(JSON.stringify(v));
   }
+
+  if (state.selectedFolderPath) {
+    state.fileDrafts[state.selectedFolderPath] = clone(state.files);
+    state.fileOriginalsByFolder[state.selectedFolderPath] = clone(
+      state.originalFiles,
+    );
+  }
+
+  function normalizedDisplayName(item) {
+    return String(item?.displayName || "").trim();
+  }
+
+  function hasFileOrderChanged() {
+    const current = state.files.map((item) => String(item?.id || item?.path || ""));
+    const original = state.originalFiles.map((item) => String(item?.id || item?.path || ""));
+    return JSON.stringify(current) !== JSON.stringify(original);
+  }
+
+  function hasFileDisplayNameChanged() {
+    const originals = new Map(
+      state.originalFiles.map((item) => [
+        String(item?.id || item?.path || ""),
+        normalizedDisplayName(item),
+      ]),
+    );
+    return state.files.some((item) => {
+      const key = String(item?.id || item?.path || "");
+      return normalizedDisplayName(item) !== String(originals.get(key) || "");
+    });
+  }
+
+  function hasFileChanges() {
+    return hasFileOrderChanged() || hasFileDisplayNameChanged();
+  }
+
+  function editableFolders(items = state.folders) {
+    return items.filter((item) => item?.kind === "folder");
+  }
+
+  function isTopLevelFolder(item) {
+    if (!item || item.kind !== "folder") return false;
+    if (Number(item.depth) === 1) return true;
+    return !!state.rootDir && item.parentPath === state.rootDir;
+  }
+
+  function getFolderBreadcrumb(folder) {
+    if (!folder) return "";
+    if (folder.kind === "root") return folder.cleanName || folder.name || "manuscript";
+
+    const byPath = new Map(state.folders.map((item) => [item.path, item]));
+    const labels = [];
+    let current = folder;
+    while (current && current.kind === "folder") {
+      labels.unshift(current.displayName || current.cleanName || current.name);
+      current = byPath.get(current.parentPath);
+    }
+    return labels.join(" / ");
+  }
+
+  function hasFolderOrderChanged() {
+    const current = editableFolders().map((item) => String(item?.id || item?.path || ""));
+    const original = editableFolders(state.folderOriginals).map((item) => String(item?.id || item?.path || ""));
+    return JSON.stringify(current) !== JSON.stringify(original);
+  }
+
+  function hasFolderDisplayNameChanged() {
+    const originals = new Map(
+      editableFolders(state.folderOriginals).map((item) => [
+        String(item?.id || item?.path || ""),
+        normalizedDisplayName(item),
+      ]),
+    );
+    return editableFolders().some((item) => {
+      const key = String(item?.id || item?.path || "");
+      return normalizedDisplayName(item) !== String(originals.get(key) || "");
+    });
+  }
+
+  function updateFolderDirty() {
+    state.folderDirty = hasFolderOrderChanged() || hasFolderDisplayNameChanged();
+    updateDirtyBadge();
+    updateRenameButtons();
+  }
+
+  function updateDirtyBadge() {
+    const hasDirtyFiles = Object.values(state.dirtyMap || {}).some(Boolean);
+    $dirtyBadge.hidden = !hasDirtyFiles && !state.folderDirty;
+  }
+
+  function hasPendingChanges() {
+    return state.folderDirty || Object.values(state.dirtyMap || {}).some(Boolean);
+  }
+
+  function updateRenameButtons() {
+    const disabled = hasPendingChanges();
+    document
+      .querySelectorAll("[data-rename-entry], [data-insert-heading]")
+      .forEach((button) => {
+        button.disabled = disabled;
+        button.title = disabled
+          ? "先に表示名・並び順の変更を保存または破棄してください"
+          : button.hasAttribute("data-insert-heading")
+            ? "このファイル1件の先頭へ見出しを挿入"
+            : "実名を個別に変更";
+      });
+  }
+
   function updateModeUI() {
     $modeArrowBtn.classList.toggle("mode-active", state.viewMode === "arrow");
     $modeDragBtn.classList.toggle("mode-active", state.viewMode === "drag");
-    $folderModeArrowBtn?.addEventListener("click", () => {
-      state.folderViewMode = "arrow";
-      renderFolders();
-    });
-
-    $folderModeDragBtn?.addEventListener("click", () => {
-      state.folderViewMode = "drag";
-      renderFolders();
-    });
   }
   function updateFolderModeUI() {
     $folderModeArrowBtn?.classList.toggle(
@@ -95,6 +196,7 @@
 
     state.dirty = v;
     state.dirtyMap[state.selectedFolderPath] = v;
+    state.fileDrafts[state.selectedFolderPath] = clone(state.files);
 
     state.folders = state.folders.map((folder) => {
       if (folder.path === state.selectedFolderPath) {
@@ -116,7 +218,8 @@
       })),
     );
 
-    $dirtyBadge.hidden = !state.dirty;
+    updateDirtyBadge();
+    updateRenameButtons();
   }
 
   function reindexLabels(startIndex = 1) {
@@ -139,7 +242,7 @@
     state.files = copy;
 
     reindexLabels(1);
-    setDirty(true);
+    setDirty(hasFileChanges());
 
     dlog("[Mojigoto reorder] file move -> dirtyMap", state.dirtyMap);
 
@@ -149,7 +252,7 @@
 
   function onFolderDragStart(index, row) {
     const item = state.folders[index];
-    if (!item || item.kind !== "folder") return;
+    if (!isTopLevelFolder(item)) return;
 
     state.folderDragIndex = index;
     row.classList.add("is-dragging");
@@ -166,7 +269,7 @@
 
   function onFolderDragOver(event, index, row) {
     const target = state.folders[index];
-    if (!target || target.kind !== "folder") return;
+    if (!isTopLevelFolder(target)) return;
 
     event.preventDefault();
     row.classList.add("is-drag-over");
@@ -186,21 +289,21 @@
     const fromItem = state.folders[from];
     const toItem = state.folders[index];
 
-    if (!fromItem || fromItem.kind !== "folder") return;
-    if (!toItem || toItem.kind !== "folder") return;
+    if (!isTopLevelFolder(fromItem)) return;
+    if (!isTopLevelFolder(toItem)) return;
 
     moveFolder(from, index);
     state.folderDragIndex = -1;
   }
 
   function getFirstFolderIndex() {
-    return state.folders.findIndex((item) => item && item.kind === "folder");
+    return state.folders.findIndex(isTopLevelFolder);
   }
 
   function getLastFolderIndex() {
     for (let i = state.folders.length - 1; i >= 0; i--) {
       const item = state.folders[i];
-      if (item && item.kind === "folder") return i;
+      if (isTopLevelFolder(item)) return i;
     }
     return -1;
   }
@@ -211,15 +314,32 @@
     const fromItem = state.folders[from];
     const toItem = state.folders[to];
 
-    if (!fromItem || fromItem.kind !== "folder") return;
-    if (!toItem || toItem.kind !== "folder") return;
+    if (!isTopLevelFolder(fromItem)) return;
+    if (!isTopLevelFolder(toItem)) return;
 
-    const copy = [...state.folders];
-    const [item] = copy.splice(from, 1);
-    copy.splice(to, 0, item);
+    const rootItems = state.folders.filter((item) => item?.kind === "root");
+    const groups = [];
+    let currentGroup = null;
 
-    state.folders = copy;
-    state.folderDirty = true;
+    for (const item of state.folders) {
+      if (item?.kind === "root") continue;
+      if (isTopLevelFolder(item)) {
+        currentGroup = [item];
+        groups.push(currentGroup);
+      } else if (currentGroup) {
+        currentGroup.push(item);
+      }
+    }
+
+    const fromGroupIndex = groups.findIndex((group) => group[0] === fromItem);
+    const toGroupIndex = groups.findIndex((group) => group[0] === toItem);
+    if (fromGroupIndex < 0 || toGroupIndex < 0) return;
+
+    const [group] = groups.splice(fromGroupIndex, 1);
+    groups.splice(toGroupIndex, 0, group);
+
+    state.folders = [...rootItems, ...groups.flat()];
+    updateFolderDirty();
 
     console.log(
       "[Mojigoto reorder] folder move -> folderDirty",
@@ -232,7 +352,7 @@
   function renderFolders() {
     $folderList.innerHTML = "";
 
-    const movableFolders = state.folders.filter((f) => f.kind === "folder");
+    const movableFolders = state.folders.filter(isTopLevelFolder);
     const canReorderFolders = movableFolders.length >= 2;
 
     updateFolderModeUI();
@@ -244,8 +364,11 @@
 
       const row = document.createElement("div");
       row.className = `folder-item${activeClass}${dirtyClass}`;
+      const visualDepth = Math.max(0, Number(folder.depth || 0) - 1);
+      row.style.setProperty("--folder-depth", String(visualDepth));
+      if (visualDepth > 0) row.classList.add("is-nested");
 
-      const canMove = canReorderFolders && folder.kind === "folder";
+      const canMove = canReorderFolders && isTopLevelFolder(folder);
 
       if (canMove && state.folderViewMode === "drag") {
         row.classList.add("is-draggable");
@@ -277,15 +400,67 @@
       <div class="folder-main-wrap">
         ${dragHandle}
         <div class="folder-main">
-          <div class="folder-name">${escapeHtml(folder.cleanName || folder.name)}</div>
-          <div class="folder-meta">対象ファイル: ${Number(folder.count || 0)}件</div>
+          <button type="button" class="folder-select-button">
+            <span class="folder-name">${escapeHtml(folder.displayName || folder.cleanName || folder.name)}</span>
+          </button>
+          ${folder.kind === "folder" ? `
+            <label class="display-name-field">
+              <span>表示名</span>
+              <input
+                type="text"
+                data-folder-display-name="${index}"
+                value="${escapeHtml(folder.displayName || "")}"
+                placeholder="${escapeHtml(folder.cleanName || folder.name)}"
+                aria-label="${escapeHtml(folder.cleanName || folder.name)}の表示名"
+              >
+            </label>
+            <div class="actual-name-row">
+              <div class="actual-name" title="${escapeHtml(folder.name)}">実フォルダ名: ${escapeHtml(folder.name)}</div>
+              <button
+                type="button"
+                class="rename-entry-button"
+                data-rename-entry="folder"
+                data-entry-index="${index}"
+              >実名変更</button>
+            </div>
+          ` : ""}
+          <div class="folder-meta">直下ファイル: ${Number(folder.count || 0)}件</div>
         </div>
       </div>
       ${state.folderViewMode === "arrow" ? actionsHtml : dragNoteHtml}
     `;
 
-      row.querySelector(".folder-main").addEventListener("click", () => {
+      row.querySelector(".folder-select-button").addEventListener("click", () => {
         vscode.postMessage({ type: "select-folder", folderPath: folder.path });
+      });
+
+      row.querySelector("[data-folder-display-name]")?.addEventListener("input", (event) => {
+        state.folders[index].displayName = String(event.target.value || "");
+        const name = row.querySelector(".folder-name");
+        if (name) {
+          name.textContent =
+            String(event.target.value || "").trim() || folder.cleanName || folder.name;
+        }
+        if (folder.path === state.selectedFolderPath) {
+          const activeLabel =
+            String(event.target.value || "").trim() || folder.cleanName || folder.name;
+          $filePaneTitle.textContent = `${activeLabel} のファイル`;
+          $currentTarget.textContent = `対象: ${getFolderBreadcrumb(state.folders[index])}`;
+        }
+        updateFolderDirty();
+        if ($saveFolderOrderBtn) {
+          const hasDirtyFiles = Object.values(state.dirtyMap || {}).some(Boolean);
+          $saveFolderOrderBtn.disabled = !state.folderDirty || hasDirtyFiles;
+        }
+      });
+
+      row.querySelector('[data-rename-entry="folder"]')?.addEventListener("click", () => {
+        vscode.postMessage({
+          type: "rename-entry",
+          kind: "folder",
+          entryPath: folder.path,
+          selectedFolderPath: state.selectedFolderPath,
+        });
       });
 
       if (canMove && state.folderViewMode === "arrow") {
@@ -302,7 +477,7 @@
               let target = -1;
               for (let i = index - 1; i >= 0; i--) {
                 const item = state.folders[i];
-                if (item && item.kind === "folder") {
+                if (isTopLevelFolder(item)) {
                   target = i;
                   break;
                 }
@@ -314,7 +489,7 @@
               let target = -1;
               for (let i = index + 1; i < state.folders.length; i++) {
                 const item = state.folders[i];
-                if (item && item.kind === "folder") {
+                if (isTopLevelFolder(item)) {
                   target = i;
                   break;
                 }
@@ -345,18 +520,26 @@
       $folderList.appendChild(row);
     });
 
+    updateRenameButtons();
+
+    const hasEditableFolders = movableFolders.length > 0;
+
     if ($saveFolderOrderBtn) {
-      $saveFolderOrderBtn.hidden = !canReorderFolders;
-      $saveFolderOrderBtn.disabled = !state.folderDirty;
+      $saveFolderOrderBtn.hidden = !hasEditableFolders;
+      const hasDirtyFiles = Object.values(state.dirtyMap || {}).some(Boolean);
+      $saveFolderOrderBtn.disabled = !state.folderDirty || hasDirtyFiles;
+      $saveFolderOrderBtn.title = hasDirtyFiles
+        ? "先にファイル側の変更を保存または破棄してください"
+        : "";
     }
 
     if ($discardFolderOrderBtn) {
-      $discardFolderOrderBtn.hidden = !canReorderFolders;
+      $discardFolderOrderBtn.hidden = !hasEditableFolders;
       $discardFolderOrderBtn.disabled = !state.folderDirty;
     }
 
     if ($reloadFolderListBtn) {
-      $reloadFolderListBtn.hidden = !canReorderFolders;
+      $reloadFolderListBtn.hidden = !hasEditableFolders;
     }
 
     if ($folderModeArrowBtn) {
@@ -404,9 +587,12 @@
       (f) => f.path === state.selectedFolderPath,
     );
 
-    $filePaneTitle.textContent = `${active ? active.cleanName || active.name : "フォルダ"} のファイル`;
+    const activeLabel = active
+      ? active.displayName || active.cleanName || active.name
+      : "フォルダ";
+    $filePaneTitle.textContent = `${activeLabel} のファイル`;
     $fileCount.textContent = `全 ${state.files.length} 件`;
-    $currentTarget.textContent = `対象: ${active ? active.cleanName || active.name : ""}`;
+    $currentTarget.textContent = `対象: ${active ? getFolderBreadcrumb(active) : ""}`;
     $fileList.innerHTML = "";
     $emptyState.hidden = state.files.length > 0;
 
@@ -440,15 +626,71 @@
           <span class="muted">ドラッグで移動</span>
         </div>`;
 
+      const orderNumber = String(index + 1).padStart(
+        Math.max(2, String(Math.max(state.files.length, 1)).length),
+        "0",
+      );
+
       row.innerHTML = `
       <div class="file-main-wrap">
         ${dragHandle}
+        <div class="order-number" aria-label="並び順 ${index + 1}">${orderNumber}</div>
         <div class="file-main">
-          <div class="file-label">${escapeHtml(file.previewLabel)}</div>
+          <label class="display-name-field file-display-name-field">
+            <span>表示名</span>
+            <input
+              type="text"
+              data-file-display-name="${index}"
+              value="${escapeHtml(file.displayName || "")}"
+              placeholder="${escapeHtml(file.cleanName || file.originalName)}"
+              aria-label="${escapeHtml(file.cleanName || file.originalName)}の表示名"
+            >
+          </label>
+          <div class="actual-name-row">
+            <div class="actual-name" title="${escapeHtml(file.originalName)}">実ファイル名: ${escapeHtml(file.originalName)}</div>
+            <div class="entry-row-actions">
+              <button
+                type="button"
+                class="insert-heading-button"
+                data-insert-heading
+                data-entry-index="${index}"
+              >見出し挿入</button>
+              <button
+                type="button"
+                class="rename-entry-button"
+                data-rename-entry="file"
+                data-entry-index="${index}"
+              >実名変更</button>
+            </div>
+          </div>
         </div>
       </div>
       ${actionHtml}
     `;
+
+      row.querySelector("[data-file-display-name]")?.addEventListener("input", (event) => {
+        state.files[index].displayName = String(event.target.value || "");
+        setDirty(hasFileChanges());
+        $saveBtn.disabled = !state.dirty;
+        $discardBtn.disabled = !state.dirty;
+        renderFolders();
+      });
+
+      row.querySelector('[data-rename-entry="file"]')?.addEventListener("click", () => {
+        vscode.postMessage({
+          type: "rename-entry",
+          kind: "file",
+          entryPath: file.path,
+          selectedFolderPath: state.selectedFolderPath,
+        });
+      });
+
+      row.querySelector("[data-insert-heading]")?.addEventListener("click", () => {
+        vscode.postMessage({
+          type: "insert-heading",
+          filePath: file.path,
+        });
+      });
 
       if (state.viewMode === "arrow") {
         row.querySelectorAll("button[data-move]").forEach((btn) => {
@@ -472,10 +714,23 @@
 
       $fileList.appendChild(row);
     });
+
+    $saveBtn.disabled = !state.dirty;
+    $discardBtn.disabled = !state.dirty;
+    updateRenameButtons();
   }
 
   window.addEventListener("message", (event) => {
     const msg = event.data || {};
+
+    if (msg.type === "webviewUiSettingsChanged") {
+      const scale = Number(msg.payload?.fontScale || 1);
+      document.body.style.setProperty(
+        "--mojigoto-content-font-scale",
+        String(Math.min(1.6, Math.max(0.8, scale))),
+      );
+      return;
+    }
 
     if (msg.type === "folder-order-saved") {
       state.folders = (msg.folders || []).map((f) => ({
@@ -484,24 +739,76 @@
       }));
       state.folderOriginals = clone(msg.folders || []);
       state.folderDirty = false;
+      state.selectedFolderPath =
+        msg.selectedFolderPath || state.selectedFolderPath;
+      if (Array.isArray(msg.files)) {
+        state.files = msg.files;
+        state.originalFiles = clone(msg.files);
+        state.dirty = false;
+        state.dirtyMap = {};
+        state.fileDrafts = {
+          [state.selectedFolderPath]: clone(msg.files),
+        };
+        state.fileOriginalsByFolder = {
+          [state.selectedFolderPath]: clone(msg.files),
+        };
+      }
 
       renderFolders();
+      renderFiles();
+      updateDirtyBadge();
     }
 
-    if (msg.type === "folder-data") {
+    if (msg.type === "entry-renamed") {
+      state.folders = (msg.folders || []).map((folder) => ({
+        ...folder,
+        dirty: false,
+      }));
+      state.folderOriginals = clone(msg.folders || []);
+      state.folderDirty = false;
       state.selectedFolderPath =
         msg.selectedFolderPath || state.selectedFolderPath;
       state.files = msg.files || [];
       state.originalFiles = clone(state.files);
+      state.dirty = false;
+      state.dirtyMap = {};
+      state.fileDrafts = {
+        [state.selectedFolderPath]: clone(state.files),
+      };
+      state.fileOriginalsByFolder = {
+        [state.selectedFolderPath]: clone(state.files),
+      };
 
-      state.dirty = !!state.dirtyMap[state.selectedFolderPath];
+      renderFolders();
+      renderFiles();
+      updateDirtyBadge();
+    }
+
+    if (msg.type === "folder-data") {
+      const folderPath = msg.selectedFolderPath || state.selectedFolderPath;
+      const serverFiles = msg.files || [];
+      const hasDraft = !!state.dirtyMap[folderPath] && !!state.fileDrafts[folderPath];
+
+      state.selectedFolderPath = folderPath;
+      if (!state.fileOriginalsByFolder[folderPath] || !hasDraft) {
+        state.fileOriginalsByFolder[folderPath] = clone(serverFiles);
+      }
+      if (!state.fileDrafts[folderPath] || !hasDraft) {
+        state.fileDrafts[folderPath] = clone(serverFiles);
+      }
+      state.files = clone(
+        hasDraft ? state.fileDrafts[folderPath] : serverFiles,
+      );
+      state.originalFiles = clone(state.fileOriginalsByFolder[folderPath]);
+
+      state.dirty = !!state.dirtyMap[folderPath];
 
       state.folders = state.folders.map((folder) => ({
         ...folder,
         dirty: !!state.dirtyMap[folder.path],
       }));
 
-      $dirtyBadge.hidden = !state.dirty;
+      updateDirtyBadge();
 
       renderFolders();
       renderFiles();
@@ -516,11 +823,14 @@
       state.folderDirty = false;
 
       renderFolders();
+      updateDirtyBadge();
     }
 
     if (msg.type === "saved") {
       state.files = msg.files || [];
       state.originalFiles = clone(state.files);
+      state.fileDrafts[state.selectedFolderPath] = clone(state.files);
+      state.fileOriginalsByFolder[state.selectedFolderPath] = clone(state.files);
       setDirty(false);
       renderFolders();
       renderFiles();
@@ -536,17 +846,22 @@
       type: "save-order",
       folderPath: state.selectedFolderPath,
       orderedItems: state.files,
+      orderChanged: hasFileOrderChanged(),
     });
   });
 
   $discardBtn.addEventListener("click", () => {
     state.files = clone(state.originalFiles);
+    state.fileDrafts[state.selectedFolderPath] = clone(state.originalFiles);
     setDirty(false);
     renderFolders();
     renderFiles();
   });
 
   $reloadBtn.addEventListener("click", () => {
+    state.dirtyMap[state.selectedFolderPath] = false;
+    delete state.fileDrafts[state.selectedFolderPath];
+    delete state.fileOriginalsByFolder[state.selectedFolderPath];
     vscode.postMessage({
       type: "reload",
       folderPath: state.selectedFolderPath,
@@ -583,6 +898,8 @@
     vscode.postMessage({
       type: "save-folder-order",
       orderedFolders: state.folders,
+      selectedFolderPath: state.selectedFolderPath,
+      orderChanged: hasFolderOrderChanged(),
     });
   });
 
@@ -593,10 +910,21 @@
     }));
     state.folderDirty = false;
     renderFolders();
+    updateDirtyBadge();
   });
 
   $reloadFolderListBtn?.addEventListener("click", () => {
     vscode.postMessage({ type: "reload-folder-list" });
+  });
+
+  $folderModeArrowBtn?.addEventListener("click", () => {
+    state.folderViewMode = "arrow";
+    renderFolders();
+  });
+
+  $folderModeDragBtn?.addEventListener("click", () => {
+    state.folderViewMode = "drag";
+    renderFolders();
   });
 
   setDirty(false);

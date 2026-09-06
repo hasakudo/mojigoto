@@ -49,6 +49,7 @@ const { getViewStateScript } = require("./note-webview/script-view-state");
 const { getUiPanelsScript } = require("./note-webview/script-ui-panels");
 const { getNavigationScript } = require("./note-webview/script-navigation");
 const { getBoardScript } = require("./note-webview/script-board");
+const { getNoteTocScript } = require("./note-webview/script-toc");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 
 function escapeScriptJson(value) {
@@ -151,6 +152,9 @@ ${getInputAssistToolbarCss()}
             <button class="menuItem" type="button" data-menu-action="toggleSearch">
               ノート検索
               <span class="kbdHint">Ctrl/Cmd+F</span>
+            </button>
+            <button class="menuItem" type="button" data-menu-action="openTocSettings">
+              目次・表示設定
             </button>
             <button class="menuItem" type="button" data-menu-action="toggleCopyPanel">
               他ノートからコピー
@@ -267,6 +271,7 @@ ${getInputAssistToolbarCss()}
           </div>
 
           <div class="previewModeToggle">
+            <button class="secondary" type="button" id="toggleNoteTocBtn" aria-expanded="false">目次</button>
             <button class="secondary isActive" type="button" id="previewListBtn">リスト</button>
             <button class="secondary" type="button" id="previewBoardBtn">ボード</button>
             <button class="secondary" type="button" id="openBoardBtn" title="ボードを全画面で表示">全画面</button>
@@ -278,6 +283,23 @@ ${getInputAssistToolbarCss()}
         <div id="previewBoardRoot" class="noteBoardRoot noteBoardRootInline" hidden></div>
       </aside>
     </div>
+
+    <aside id="noteTocPanel" class="noteTocPanel" hidden>
+      <div class="noteTocHead">
+        <div class="noteTocTitle">目次</div>
+        <button class="secondary noteTocIconButton" type="button" id="collapseNoteTocBtn" title="目次を折りたたむ">−</button>
+        <button class="secondary noteTocIconButton" type="button" id="closeNoteTocBtn" title="目次を閉じる">×</button>
+      </div>
+      <div class="noteTocBody">
+        <div id="noteTocSettings" class="noteTocSettings">
+          <span>表示:</span>
+          <label><input type="checkbox" id="noteTocShowGroups" checked> 大分類</label>
+          <label><input type="checkbox" id="noteTocShowDividers" checked> 区分</label>
+          <label><input type="checkbox" id="noteTocShowItems" checked> 項目</label>
+        </div>
+        <nav id="noteTocList" class="noteTocList" aria-label="ノート目次"></nav>
+      </div>
+    </aside>
 
     <div id="noteBoardPanel" class="noteBoardPanel" hidden>
       <header class="noteBoardHead">
@@ -569,6 +591,7 @@ ${getInputAssistToolbarCss()}
     ${getUtilsScript()}
     ${getViewStateScript()}
     ${getUiPanelsScript()}
+    ${getNoteTocScript()}
 
     // panels
     ${getTemplatePanelScript()}
@@ -756,6 +779,7 @@ ${getInputAssistToolbarCss()}
     });
 
     registerNoteEvents();
+    bindNoteTocEvents();
 
     const noteInputAssist = createInputAssistController();
 

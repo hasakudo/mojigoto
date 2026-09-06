@@ -6,6 +6,7 @@ const {
 const { getConceptMemoStyles } = require("./concept-memo-styles");
 const { getConceptMemoUtilsScript } = require("./script-utils");
 const { getConceptMemoStateScript } = require("./script-state");
+const { getConceptMemoFoldersScript } = require("./script-folders");
 const { getConceptMemoListScript } = require("./script-list");
 const { getConceptMemoLayoutScript } = require("./script-layout");
 const { getConceptMemoEditorScript } = require("./script-editor");
@@ -143,6 +144,23 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         <div class="muted" id="memoSortModeText" style="margin-top:4px;"></div>
       </div>
 
+      <div class="box memoFolderBox">
+        <div class="row memoFolderHead">
+          <span class="muted">フォルダ</span>
+          <div class="spacer"></div>
+          <button class="button secondary folderManageButton" type="button" id="toggleFolderManagerButton">管理</button>
+        </div>
+        <div id="folderQuickList" class="folderQuickList"></div>
+        <select class="input folderOverflowSelect" id="folderOverflowSelect" hidden></select>
+        <div id="folderManager" class="folderManager" hidden>
+          <div class="row folderAddRow">
+            <input class="input" id="newFolderNameInput" type="text" maxlength="40" placeholder="新しいフォルダ名" />
+            <button class="button secondary" type="button" id="addFolderButton">追加</button>
+          </div>
+          <div id="folderManagerList" class="folderManagerList"></div>
+        </div>
+      </div>
+
       <div class="box" id="tagFilterBox" style="display:none;">
         <div class="row">
           <span class="muted">タグ絞り込み:</span>
@@ -206,6 +224,11 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                     <span class="menuItemValue" id="memoTagsMenuValue">未設定</span>
                   </button>
 
+                  <button type="button" class="menuItemButton" id="openMemoFolderMenuButton">
+                    <span>フォルダ</span>
+                    <span class="menuItemValue" id="memoFolderMenuValue">未分類</span>
+                  </button>
+
                   <button type="button" class="menuItemButton" id="copyMemoButton">
                     本文をコピー
                   </button>
@@ -250,6 +273,11 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                     <div class="muted tagSuggestionLabel">再利用候補</div>
                     <div id="memoTagsSuggestionsAll" class="tagSuggestions"></div>
                   </div>
+                </div>
+
+                <div id="memoFolderSubmenu" class="editorSubmenu" hidden>
+                  <div class="submenuTitle">フォルダ</div>
+                  <select class="input" id="memoFolderSelect"></select>
                 </div>
               </div>
             </div>
@@ -361,6 +389,10 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         "",
     };
     let activeTagFilter = persistedUiState.activeTagFilter || "";
+    let activeFolderId = typeof persistedUiState.activeFolderId === "string"
+      ? persistedUiState.activeFolderId
+      : "__all__";
+    let isFolderManagerOpen = Boolean(persistedUiState.isFolderManagerOpen);
     let sortField =
       localStorage.getItem(getSortFieldStorageKey()) ||
       persistedUiState.sortField ||
@@ -387,6 +419,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
 
     ${getConceptMemoUtilsScript()}
     ${getConceptMemoStateScript()}
+    ${getConceptMemoFoldersScript()}
     ${getConceptMemoListScript()}
     ${getConceptMemoLayoutScript()}
     ${getConceptMemoEditorScript()}
@@ -408,6 +441,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       renderTagFilter();
       renderSortSelect();
       renderMemoCounts();
+      renderMemoFolders();
       renderBulkDeleteActions();
       renderListPanels();
       renderMemoList();
@@ -424,6 +458,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     bindQuickFilter();
     bindListPanelActions();
     bindTagFilterActions();
+    bindMemoFolderActions();
     bindSortActions();
     bindSidebarActions();
     bindCommonTodoLayoutActions();

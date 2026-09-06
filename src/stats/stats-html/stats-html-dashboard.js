@@ -204,7 +204,117 @@ function renderDashboardControlsBar(state) {
   `;
 }
 
+function renderDashboardProgressChart(state, esc) {
+  const rows = Array.isArray(state?.last7) ? state.last7.slice(-7) : [];
+  const mode = state?.dashboardVisibility?.progressGraphMode === "total"
+    ? "total"
+    : "daily";
+  const isDaily = mode === "daily";
+  const goal = Math.max(0, Number(state?.currentWorkGoal || 0));
+  const values = rows.map((row) =>
+    isDaily
+      ? Number(row?.deltaTotal || 0)
+      : Math.max(0, Number(row?.totalSaved || 0)),
+  );
+  const current = isDaily
+    ? Number(state?.today?.deltaTotal || 0)
+    : Math.max(0, Number(state?.today?.totalSaved || 0));
+  const scaleMax = isDaily
+    ? Math.max(1, ...values.map((value) => Math.abs(value)))
+    : Math.max(1, goal, current, ...values);
+  const goalPosition = goal > 0
+    ? Math.max(0, Math.min(100, (goal / scaleMax) * 100))
+    : 0;
+  const formatValue = (value, signed = false) => {
+    const number = Number(value || 0);
+    const formatted = Math.abs(number).toLocaleString("ja-JP");
+    if (!signed || number === 0) return number < 0 ? `-${formatted}` : formatted;
+    return `${number > 0 ? "+" : "-"}${formatted}`;
+  };
+
+  const bars = rows.map((row, index) => {
+    const value = values[index];
+    const ratio = Math.max(
+      0,
+      Math.min(100, (Math.abs(value) / scaleMax) * 100),
+    );
+    const visibleHeight = value !== 0
+      ? Math.max(2, isDaily ? ratio * 0.48 : ratio)
+      : 0;
+    const date = String(row?.date || "");
+    const shortDate = date.length >= 10
+      ? date.slice(5).replace("-", "/")
+      : date;
+    const valueText = formatValue(value, isDaily);
+    const barClass = value < 0 ? " is-negative" : " is-positive";
+
+    return `
+      <div class="dashboardProgressBarItem" title="${esc(date || "-")}: ${esc(valueText)}文字${isDaily ? "（純増減）" : ""}">
+        <div class="dashboardProgressBarTrack${isDaily ? " is-daily" : ""}">
+          <div class="dashboardProgressBar${barClass}" style="height:${visibleHeight.toFixed(2)}%"></div>
+        </div>
+        <div class="dashboardProgressBarValue">${esc(valueText)}</div>
+        <div class="dashboardProgressBarDate">${esc(shortDate || "-")}</div>
+      </div>
+    `;
+  }).join("");
+
+  const sevenDayDelta = rows.reduce(
+    (total, row) => total + Number(row?.deltaTotal || 0),
+    0,
+  );
+
+  return `
+    <div class="dashboardProgressMeta">
+      ${
+        isDaily
+          ? `
+            <span>今日 <strong>${esc(formatValue(current, true))}</strong>文字</span>
+            <span>7日合計 <strong>${esc(formatValue(sevenDayDelta, true))}</strong>文字</span>
+            <span>純増減</span>
+          `
+          : `
+            <span>現在 <strong>${esc(formatValue(current))}</strong>文字</span>
+            <span>目標 <strong>${esc(goal > 0 ? goal.toLocaleString("ja-JP") : "未設定")}</strong></span>
+            <span>${esc(state.currentWorkPctText || "-")}</span>
+          `
+      }
+    </div>
+    <div class="dashboardProgressChart${isDaily ? " is-daily" : ""}" role="img" aria-label="${isDaily ? "直近7日の日別文字数差分" : "直近7日の現在文字数の推移"}">
+      ${
+        !isDaily && goal > 0
+          ? `<div class="dashboardProgressGoalLine" style="bottom:${goalPosition.toFixed(2)}%"><span>目標</span></div>`
+          : ""
+      }
+      <div class="dashboardProgressBars">
+        ${bars || '<div class="dashboardProgressEmpty">保存後に進捗が表示されます。</div>'}
+      </div>
+    </div>
+    <div class="dashboardProgressFooter">
+      <span>直近7日${isDaily ? "（保存なしは0）" : ""}</span>
+      <span>締切 ${esc(state.currentWorkDeadline || "-")}（${esc(state.currentWorkDeadlineText || "-")}）</span>
+    </div>
+  `;
+}
+
+function renderDashboardGoalTable(state, esc) {
+  return `
+    <table>
+      <tr><th>目標文字数</th><td class="num">${esc(state.currentWorkGoal ?? 0)}</td></tr>
+      <tr><th>現在の進捗</th><td class="num">${esc(state.currentWorkPctText ?? "-")}</td></tr>
+      <tr><th>締切</th><td class="num">${esc(state.currentWorkDeadline || "-")}</td></tr>
+      <tr><th>締切まで</th><td class="num">${esc(state.currentWorkDeadlineText || "-")}</td></tr>
+    </table>
+
+    <p class="statsHint">目標・締切の変更は作品ツリーの「作品設定」から行えます。</p>
+  `;
+}
+
 function renderDashboardSummaryCard(state, esc) {
+  const showProgressGraph = state?.dashboardVisibility?.progressGraph !== false;
+  const progressGraphMode = state?.dashboardVisibility?.progressGraphMode === "total"
+    ? "total"
+    : "daily";
   return `
     <div class="card dashboardSummaryCard">
       <div class="dashboardSummarySplit">
@@ -222,14 +332,28 @@ function renderDashboardSummaryCard(state, esc) {
         </section>
 
         <section class="dashboardSummaryCol">
-          <table>
-            <tr><th>目標文字数</th><td class="num">${esc(state.currentWorkGoal ?? 0)}</td></tr>
-            <tr><th>現在の進捗</th><td class="num">${esc(state.currentWorkPctText ?? "-")}</td></tr>
-            <tr><th>締切</th><td class="num">${esc(state.currentWorkDeadline || "-")}</td></tr>
-            <tr><th>締切まで</th><td class="num">${esc(state.currentWorkDeadlineText || "-")}</td></tr>
-          </table>
-
-          <p class="statsHint">目標・締切の変更は作品ツリーの「作品設定」から行えます。</p>
+          <div class="dashboardProgressHead">
+            <div class="dashboardSubsectionLabel">${
+              showProgressGraph
+                ? progressGraphMode === "daily"
+                  ? "日別の執筆差分"
+                  : "現在文字数の推移"
+                : "作品の目標"
+            }</div>
+            <div class="dashboardProgressActions">
+              <select id="dashboardProgressGraphMode" aria-label="進捗グラフの表示内容" ${showProgressGraph ? "" : "disabled"}>
+                <option value="daily" ${progressGraphMode === "daily" ? "selected" : ""}>日別差分</option>
+                <option value="total" ${progressGraphMode === "total" ? "selected" : ""}>現在文字数</option>
+              </select>
+              <label class="chip dashboardProgressToggle">
+                <input type="checkbox" id="toggleDashboardProgressGraph" ${showProgressGraph ? "checked" : ""}>
+                グラフ
+              </label>
+            </div>
+          </div>
+          ${showProgressGraph
+            ? renderDashboardProgressChart(state, esc)
+            : renderDashboardGoalTable(state, esc)}
         </section>
       </div>
     </div>
