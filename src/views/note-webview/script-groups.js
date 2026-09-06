@@ -4,6 +4,15 @@ function getGroupsScript() {
     let openImagePreview = null;
     let isAllImagesGalleryOpen = false;
 
+    function touchAutoSyncedItemMemos(items) {
+      const updatedAt = new Date().toISOString();
+      for (const item of Array.isArray(items) ? items : []) {
+        if (item?.memo?.autoSyncToConceptMemo) {
+          item.memo.updatedAt = updatedAt;
+        }
+      }
+    }
+
     function getGroupTitleForMove(group, index) {
       const title = String(group?.title || "").trim();
       return title || \`無題大分類 \${index + 1}\`;
@@ -670,6 +679,84 @@ function getGroupsScript() {
       return options.join("");
     }
 
+    function collectAvailableItemMemoTags() {
+      const tags = new Set();
+
+      for (const group of Array.isArray(state?.groups) ? state.groups : []) {
+        for (const item of Array.isArray(group?.items) ? group.items : []) {
+          for (const tag of Array.isArray(item?.memo?.tags) ? item.memo.tags : []) {
+            const normalized = String(tag || "").trim();
+            if (normalized) tags.add(normalized);
+          }
+        }
+      }
+
+      return [...tags].sort((a, b) => a.localeCompare(b, "ja"));
+    }
+
+    function renderItemMemoTagSuggestionsHtml(item) {
+      const selectedTags = new Set(
+        (Array.isArray(item?.memo?.tags) ? item.memo.tags : [])
+          .map((tag) => String(tag || "").trim())
+          .filter(Boolean),
+      );
+      const candidates = collectAvailableItemMemoTags().filter((tag) => !selectedTags.has(tag));
+
+      if (!candidates.length) return "";
+
+      return '<span class="itemMemoTagSuggestionLabel">既存タグ</span>' +
+        candidates.map((tag) =>
+          '<button type="button" class="itemMemoTagSuggestionChip" data-action="addItemMemoTag" data-tag="' +
+          esc(tag) + '">' + esc(tag) + '</button>',
+        ).join("");
+    }
+
+    function refreshItemMemoTagSuggestions(item) {
+      const root = groupsRoot.querySelector(
+        '[data-role="itemMemoTagSuggestions"][data-item-id="' + item.id + '"]',
+      );
+      if (!root) return;
+      root.innerHTML = renderItemMemoTagSuggestionsHtml(item);
+      root.hidden = !root.innerHTML;
+      bindItemMemoTagSuggestionClicks(root);
+    }
+
+    function bindItemMemoTagSuggestionClicks(root) {
+      root.querySelectorAll("[data-action='addItemMemoTag']").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const panel = btn.closest(".itemMemoPanel");
+          const itemId = String(panel?.dataset.itemId || "");
+          const tag = String(btn.dataset.tag || "").trim();
+          if (!itemId || !tag) return;
+
+          let targetItem = null;
+          for (const group of state.groups) {
+            targetItem = (Array.isArray(group.items) ? group.items : [])
+              .find((item) => item.id === itemId) || null;
+            if (targetItem) break;
+          }
+          if (!targetItem || targetItem.kind !== "entry") return;
+
+          if (!targetItem.memo || typeof targetItem.memo !== "object") {
+            targetItem.memo = {
+              type: "text",
+              body: "",
+              updatedAt: "",
+              tags: [],
+              linkedConceptMemoIds: [],
+            };
+          }
+
+          const tags = Array.isArray(targetItem.memo.tags) ? targetItem.memo.tags : [];
+          targetItem.memo.tags = [...new Set([...tags, tag])].slice(0, 8);
+          targetItem.memo.updatedAt = new Date().toISOString();
+          markDirty();
+          renderGroups();
+          refreshViewsAfterItemMemoChange(targetItem.id, targetItem.memo.updatedAt);
+        });
+      });
+    }
+
     function renderGroups() {
       groupsRoot.innerHTML = "";
 
@@ -1083,9 +1170,29 @@ function getGroupsScript() {
                           <option value="text" \${item?.memo?.type !== "list" ? "selected" : ""}>通常</option>
                           <option value="list" \${item?.memo?.type === "list" ? "selected" : ""}>リスト</option>
                         </select>
+                        <div
+                          class="itemMemoTagSuggestions"
+                          data-role="itemMemoTagSuggestions"
+                          data-item-id="\${item.id}"
+                          \${renderItemMemoTagSuggestionsHtml(item) ? "" : "hidden"}
+                        >\${renderItemMemoTagSuggestionsHtml(item)}</div>
                       </div>
                       <div class="itemMemoActions">
                         <span class="itemMemoActionsLabel">構想メモ：</span>
+
+                        <label
+                          class="itemMemoAutoSyncToggle"
+                          title="ノート保存時に、この項目メモを構想メモへ自動反映します"
+                        >
+                          <input
+                            type="checkbox"
+                            data-field="itemMemoAutoSync"
+                            data-group-id="\${group.id}"
+                            data-item-id="\${item.id}"
+                            \${item?.memo?.autoSyncToConceptMemo ? "checked" : ""}
+                          >
+                          <span>自動反映</span>
+                        </label>
 
                         <button
                           class="secondary"
@@ -1408,6 +1515,7 @@ function getGroupsScript() {
 
           if (field === "groupTitle") {
             group.title = event.target.value;
+            touchAutoSyncedItemMemos(group.items);
             markDirty();
             renderPreview();
             renderNoteToc();
@@ -1419,6 +1527,7 @@ function getGroupsScript() {
 
           if (field === "itemHeading") {
             item.heading = event.target.value;
+            touchAutoSyncedItemMemos([item]);
           } else if (field === "itemHeadingRuby") {
             item.headingRuby = event.target.value;
           } else if (field === "itemBody") {
@@ -1472,6 +1581,26 @@ function getGroupsScript() {
             return;
           }
 
+          if (field === "itemMemoAutoSync") {
+            if (!item.memo || typeof item.memo !== "object") {
+              item.memo = {
+                type: "text",
+                body: "",
+                updatedAt: "",
+                tags: [],
+                linkedConceptMemoIds: [],
+                autoSyncToConceptMemo: false,
+                conceptMemoSyncedAt: "",
+              };
+            }
+
+            item.memo.autoSyncToConceptMemo = Boolean(event.target.checked);
+            item.memo.updatedAt = new Date().toISOString();
+            markDirty();
+            refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
+            return;
+          }
+
           if (field === "itemMemoTags") {
             if (!item.memo || typeof item.memo !== "object") {
               item.memo = {
@@ -1492,6 +1621,7 @@ function getGroupsScript() {
             item.memo.tags = nextTags;
             item.memo.updatedAt = new Date().toISOString();
             markDirty();
+            refreshItemMemoTagSuggestions(item);
             refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
             return;
           }
@@ -2031,6 +2161,8 @@ function getGroupsScript() {
           });
         });
 
+      bindItemMemoTagSuggestionClicks(groupsRoot);
+
       groupsRoot
         .querySelectorAll("[data-action='clearItemMemo']")
         .forEach((btn) => {
@@ -2055,6 +2187,8 @@ function getGroupsScript() {
               body: "",
               updatedAt: "",
               tags: [],
+              autoSyncToConceptMemo: false,
+              conceptMemoSyncedAt: "",
             };
 
             const linkedIds = Array.isArray(item.memo.linkedConceptMemoIds)

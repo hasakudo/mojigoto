@@ -287,6 +287,8 @@ function getUtilsScript() {
               .map((id) => String(id || "").trim())
               .filter(Boolean)
           : [],
+        autoSyncToConceptMemo: Boolean(memo?.autoSyncToConceptMemo),
+        conceptMemoSyncedAt: String(memo?.conceptMemoSyncedAt || ""),
       };
     }
 

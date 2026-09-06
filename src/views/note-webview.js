@@ -1579,19 +1579,120 @@ function attachNotePanel(context, treeProvider, panel, options) {
   let isCloseConfirmOpen = false;
   let noteSaveQueue = Promise.resolve();
 
+  async function syncAutoConceptMemosAfterNoteSave(savedNote) {
+    const groups = (Array.isArray(savedNote?.groups) ? savedNote.groups : []).map(
+      (group) => ({
+        ...group,
+        items: (Array.isArray(group?.items) ? group.items : []).map((item) => ({
+          ...item,
+          ...(item?.memo && typeof item.memo === "object"
+            ? { memo: { ...item.memo } }
+            : {}),
+        })),
+      }),
+    );
+    const conceptMemoFilePath = resolveConceptMemoFilePath(
+      resolveWorkDirForCurrentNote(),
+    );
+    const updates = [];
+    const errors = [];
+
+    for (const group of groups) {
+      for (const item of Array.isArray(group?.items) ? group.items : []) {
+        const memo = item?.memo;
+        if (
+          String(item?.kind || "entry") !== "entry" ||
+          !memo ||
+          !memo.autoSyncToConceptMemo
+        ) {
+          continue;
+        }
+
+        const sourceUpdatedAt = String(memo.updatedAt || "");
+        const linkedIds = Array.isArray(memo.linkedConceptMemoIds)
+          ? memo.linkedConceptMemoIds.map((id) => String(id || "").trim()).filter(Boolean)
+          : [];
+        const hasBody = Boolean(String(memo.body || "").trim());
+
+        if (!hasBody && linkedIds.length === 0) continue;
+        if (
+          linkedIds.length > 0 &&
+          String(memo.conceptMemoSyncedAt || "") === sourceUpdatedAt
+        ) {
+          continue;
+        }
+
+        try {
+          const synced = await createConceptMemoFromNoteItem(
+            conceptMemoFilePath,
+            {
+              notePath: String(filePath || ""),
+              noteType: String(savedNote?.type || type || "plot"),
+              noteTitle: String(savedNote?.title || ""),
+              groupId: String(group?.id || ""),
+              groupTitle: String(group?.title || ""),
+              itemId: String(item?.id || ""),
+              heading: String(item?.heading || ""),
+              memoBody: String(memo.body || ""),
+              memoType: String(memo.type || "text"),
+              memoTags: Array.isArray(memo.tags) ? memo.tags : [],
+            },
+          );
+          const conceptMemoId = String(synced?.memo?.id || "").trim();
+          const nextLinkedIds = conceptMemoId && !linkedIds.includes(conceptMemoId)
+            ? [...linkedIds, conceptMemoId]
+            : linkedIds;
+
+          item.memo = {
+            ...memo,
+            linkedConceptMemoIds: nextLinkedIds,
+            conceptMemoSyncedAt: sourceUpdatedAt,
+          };
+          updates.push({
+            groupId: String(group?.id || ""),
+            itemId: String(item?.id || ""),
+            conceptMemoId,
+            linkedConceptMemoIds: nextLinkedIds,
+            conceptMemoSyncedAt: sourceUpdatedAt,
+          });
+        } catch (error) {
+          errors.push(error?.message || String(error));
+        }
+      }
+    }
+
+    let finalNote = savedNote;
+    if (updates.length) {
+      finalNote = await saveNoteFile(filePath, {
+        ...savedNote,
+        groups,
+        type,
+      });
+      await notifyConceptMemoUpdated(conceptMemoFilePath);
+    }
+
+    return {
+      note: finalNote,
+      updates,
+      errors,
+    };
+  }
+
   async function persistNoteMessage(message, notifyWebview = true) {
     const revision = Number(message?.revision || 0);
     const savePayload = message?.payload || {};
     noteSaveQueue = noteSaveQueue
       .catch(() => undefined)
-      .then(() =>
-        saveNoteFile(filePath, {
+      .then(async () => {
+        const saved = await saveNoteFile(filePath, {
           ...note,
           ...savePayload,
           type,
-        }),
-      );
-    const saved = await noteSaveQueue;
+        });
+        return syncAutoConceptMemosAfterNoteSave(saved);
+      });
+    const saveResult = await noteSaveQueue;
+    const saved = saveResult.note;
     const nextNote = buildNoteBootState(saved, {
       filePath,
       type,
@@ -1601,7 +1702,17 @@ function attachNotePanel(context, treeProvider, panel, options) {
     });
     panel.__mojigotoNoteData = nextNote;
     if (notifyWebview) {
-      panel.webview.postMessage({ type: "noteSaved", revision });
+      panel.webview.postMessage({
+        type: "noteSaved",
+        revision,
+        autoConceptSyncUpdates: saveResult.updates,
+      });
+      if (saveResult.errors.length) {
+        panel.webview.postMessage({
+          type: "error",
+          message: `構想メモへの自動反映に失敗しました: ${saveResult.errors[0]}`,
+        });
+      }
     }
     treeProvider?.refresh();
   }
@@ -1981,11 +2092,13 @@ function attachNotePanel(context, treeProvider, panel, options) {
         }
 
         if (message?.type === "saveAndExport") {
-          const saved = await saveNoteFile(filePath, {
+          const initiallySaved = await saveNoteFile(filePath, {
             ...note,
             ...message.payload,
             type,
           });
+          const saveResult = await syncAutoConceptMemosAfterNoteSave(initiallySaved);
+          const saved = saveResult.note;
 
           const nextNote = buildNoteBootState(saved, {
             filePath,
@@ -2007,7 +2120,16 @@ function attachNotePanel(context, treeProvider, panel, options) {
             noteType: type,
           });
 
-          panel.webview.postMessage({ type: "noteSaved" });
+          panel.webview.postMessage({
+            type: "noteSaved",
+            autoConceptSyncUpdates: saveResult.updates,
+          });
+          if (saveResult.errors.length) {
+            panel.webview.postMessage({
+              type: "error",
+              message: `構想メモへの自動反映に失敗しました: ${saveResult.errors[0]}`,
+            });
+          }
           return;
         }
 

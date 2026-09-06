@@ -58,6 +58,27 @@ function getConceptMemoLayoutScript() {
       }
     }
 
+    function renderOverviewState() {
+      const body = document.getElementById("memoOverviewBody");
+      const button = document.getElementById("toggleMemoOverviewButton");
+      const icon = document.getElementById("memoOverviewToggleIcon");
+
+      if (body) body.hidden = isOverviewCollapsed;
+      if (button) {
+        button.setAttribute("aria-expanded", String(!isOverviewCollapsed));
+        button.title = isOverviewCollapsed ? "概要を表示" : "概要を折りたたむ";
+      }
+      if (icon) icon.textContent = isOverviewCollapsed ? "⌄" : "⌃";
+    }
+
+    function bindOverviewActions() {
+      document.getElementById("toggleMemoOverviewButton")?.addEventListener("click", () => {
+        isOverviewCollapsed = !isOverviewCollapsed;
+        renderOverviewState();
+        persistUiState();
+      });
+    }
+
     function renderCommonTodoState() {
       const app = document.getElementById("conceptMemoApp");
       const toggleButton = document.getElementById("toggleCommonTodoButton");

@@ -491,6 +491,16 @@ function getConceptMemoListScript() {
     function renderBulkDeleteActions() {
       const toggleButton = document.getElementById("toggleBulkDeleteButton");
       const executeButton = document.getElementById("executeBulkDeleteButton");
+      const moveRow = document.getElementById("bulkFolderMoveRow");
+      const folderSelect = document.getElementById("bulkFolderSelect");
+      const moveButton = document.getElementById("executeBulkFolderMoveButton");
+
+      const existingIds = new Set(
+        (Array.isArray(currentState?.data?.memos) ? currentState.data.memos : [])
+          .map((memo) => memo.id),
+      );
+      selectedMemoIdsForDelete = selectedMemoIdsForDelete.filter((id) => existingIds.has(id));
+      const selectedCount = selectedMemoIdsForDelete.length;
 
       if (toggleButton) {
         toggleButton.textContent = isBulkDeleteMode ? "選択解除" : "選択";
@@ -498,16 +508,76 @@ function getConceptMemoListScript() {
 
       if (executeButton) {
         executeButton.hidden = !isBulkDeleteMode;
-        executeButton.textContent = selectedMemoIdsForDelete.length > 0
-          ? \`削除 (\${selectedMemoIdsForDelete.length})\`
+        executeButton.textContent = selectedCount > 0
+          ? \`削除 (\${selectedCount})\`
           : "削除";
-        executeButton.disabled = selectedMemoIdsForDelete.length === 0;
+        executeButton.disabled = selectedCount === 0;
       }
+
+      if (moveRow) moveRow.hidden = !isBulkDeleteMode;
+
+      if (folderSelect) {
+        const previousValue = folderSelect.value;
+        folderSelect.innerHTML =
+          '<option value="__choose__">移動先フォルダを選択</option>' +
+          getMemoFolders().map((folder) =>
+            '<option value="' + escapeHtml(folder.id) + '">' +
+            escapeHtml(folder.name) + '</option>',
+          ).join("") +
+          '<option value="">未分類</option>';
+
+        const canRestore = [...folderSelect.options].some(
+          (option) => option.value === previousValue,
+        );
+        folderSelect.value = canRestore ? previousValue : "__choose__";
+        folderSelect.disabled = !isBulkDeleteMode;
+      }
+
+      if (moveButton) {
+        moveButton.textContent = selectedCount > 0
+          ? \`移動 (\${selectedCount})\`
+          : "移動";
+        moveButton.disabled = selectedCount === 0 || folderSelect?.value === "__choose__";
+      }
+    }
+
+    function moveSelectedMemosToFolder() {
+      const folderSelect = document.getElementById("bulkFolderSelect");
+      const targetFolderId = String(folderSelect?.value ?? "__choose__");
+      if (targetFolderId === "__choose__" || selectedMemoIdsForDelete.length === 0) return;
+
+      const selectedIds = new Set(selectedMemoIdsForDelete);
+      const updatedAt = new Date().toISOString();
+      let movedCount = 0;
+
+      currentState.data.memos = currentState.data.memos.map((memo) => {
+        if (!selectedIds.has(memo.id)) return memo;
+        movedCount += 1;
+        return {
+          ...memo,
+          folderId: targetFolderId,
+          updatedAt,
+        };
+      });
+
+      if (!movedCount) return;
+
+      currentState.data.updatedAt = updatedAt;
+      selectedMemoIdsForDelete = [];
+      isBulkDeleteMode = false;
+      ensureVisibleMemoSelection();
+      setDirty(true);
+      renderAll();
+
+      const folderName = getMemoFolderName(targetFolderId) || "未分類";
+      showToast(movedCount + "件を「" + folderName + "」へ移動しました。");
     }
 
     function bindBulkDeleteActions() {
       const toggleButton = document.getElementById("toggleBulkDeleteButton");
       const executeButton = document.getElementById("executeBulkDeleteButton");
+      const folderSelect = document.getElementById("bulkFolderSelect");
+      const moveButton = document.getElementById("executeBulkFolderMoveButton");
 
       if (toggleButton) {
         toggleButton.addEventListener("click", () => {
@@ -526,6 +596,15 @@ function getConceptMemoListScript() {
           requestBulkDeleteSelectedMemos();
         });
       }
+
+      folderSelect?.addEventListener("change", () => {
+        if (moveButton) {
+          moveButton.disabled =
+            selectedMemoIdsForDelete.length === 0 || folderSelect.value === "__choose__";
+        }
+      });
+
+      moveButton?.addEventListener("click", moveSelectedMemosToFolder);
     }
 
     function renderListPanels() {

@@ -48,7 +48,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           <button class="iconButton pushButton" id="openSearchPanelButton" title="検索">⌕</button>
           <button class="iconButton pushButton" id="openSortPanelButton" title="並び順">⇅</button>
           <button class="iconButton pushButton" id="openFilterPanelButton" title="絞り込み">▤</button>
-          <button class="iconButton pushButton" id="openBulkDeletePanelButton" title="選択削除">☑</button>
+          <button class="iconButton pushButton" id="openBulkDeletePanelButton" title="一括操作">☑</button>
 
           <div class="listMenuPopover" id="memoSearchPanel" hidden>
             <div class="row" style="margin-bottom:8px;">
@@ -127,21 +127,31 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           </div>
 
           <div class="listMenuPopover" id="memoBulkDeletePanel" hidden>
-            <div class="row">
-              <label class="muted">選択削除</label>
+            <div class="row bulkActionHeader">
+              <label class="muted">一括操作</label>
               <div class="spacer"></div>
               <button class="button secondary" id="toggleBulkDeleteButton">選択</button>
               <button class="button secondary dangerButton" id="executeBulkDeleteButton" hidden>削除</button>
+            </div>
+            <div class="row bulkFolderMoveRow" id="bulkFolderMoveRow" hidden>
+              <select class="input" id="bulkFolderSelect" aria-label="移動先フォルダ"></select>
+              <button class="button secondary" id="executeBulkFolderMoveButton">移動</button>
             </div>
           </div>
         </div>
         <button class="button" id="createMemoButton">＋ 新規</button>
       </div>
 
-      <div class="box countSummaryStrong">
-        <div class="muted" id="memoCountText">件数を集計中…</div>
-        <div class="muted" id="memoCountSubText" style="margin-top:4px;"></div>
-        <div class="muted" id="memoSortModeText" style="margin-top:4px;"></div>
+      <div class="box countSummaryStrong" id="memoOverviewBox">
+        <button class="overviewToggleButton" type="button" id="toggleMemoOverviewButton" aria-expanded="true">
+          <span>概要</span>
+          <span class="overviewToggleIcon" id="memoOverviewToggleIcon">⌃</span>
+        </button>
+        <div id="memoOverviewBody">
+          <div class="muted" id="memoCountText">件数を集計中…</div>
+          <div class="muted" id="memoCountSubText" style="margin-top:4px;"></div>
+          <div class="muted" id="memoSortModeText" style="margin-top:4px;"></div>
+        </div>
       </div>
 
       <div class="box memoFolderBox">
@@ -189,8 +199,8 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           <div class="row editorHeaderActions">
             <button class="button secondary compactActionButton" id="toggleCommonTodoButton">共通TODO</button>
             <button class="button secondary compactActionButton" id="pinButton">ピン留め</button>
-            <button class="button secondary compactActionButton" id="archiveButton">保管</button>
-            <button class="button secondary compactActionButton" id="dashboardButton">ダッシュボード</button>
+            <button class="button secondary compactActionButton" id="archiveButton" title="アーカイブする">保管</button>
+            <button class="button secondary compactActionButton" id="dashboardButton" title="Dashboardの表示">ダッシュボード</button>
           </div>
         </div>
       </div>
@@ -402,6 +412,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       persistedUiState.sortDirection ||
       "desc";
     let isSidebarCollapsed = Boolean(persistedUiState.isSidebarCollapsed);
+    let isOverviewCollapsed = Boolean(persistedUiState.isOverviewCollapsed);
     let isCommonTodoCollapsed =
       persistedUiState.isCommonTodoCollapsed === undefined
         ? window.innerWidth <= 1100
@@ -435,6 +446,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
 
     function renderAll() {
       renderSidebarState();
+      renderOverviewState();
       renderCommonTodoState();
       renderSearchInput();
       renderQuickFilter();
@@ -461,6 +473,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     bindMemoFolderActions();
     bindSortActions();
     bindSidebarActions();
+    bindOverviewActions();
     bindCommonTodoLayoutActions();
     bindResponsiveLayout();
     bindEditorMenuActions();

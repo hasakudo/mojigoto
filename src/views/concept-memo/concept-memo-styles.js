@@ -248,6 +248,7 @@ function getConceptMemoStyles() {
       color: var(--vscode-foreground);
       background: var(--vscode-button-secondaryBackground);
       cursor: pointer;
+      font-size: 12px;
     }
 
     .folderChip.isActive {
@@ -746,6 +747,23 @@ function getConceptMemoStyles() {
 
     .listMenuPopover[hidden] {
       display: none !important;
+    }
+
+    .bulkActionHeader {
+      margin-bottom: 8px;
+    }
+
+    .bulkFolderMoveRow {
+      align-items: stretch;
+    }
+
+    .bulkFolderMoveRow[hidden] {
+      display: none !important;
+    }
+
+    .bulkFolderMoveRow .input {
+      flex: 1 1 auto;
+      min-width: 0;
     }
 
     .sortPanelStack {
@@ -1247,6 +1265,41 @@ function getConceptMemoStyles() {
     .countSummaryStrong {
       font-weight: 500;
       line-height: 1.4;
+    }
+
+    .overviewToggleButton {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      color: var(--vscode-editor-foreground);
+      background: transparent;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .overviewToggleButton:hover {
+      color: var(--vscode-textLink-foreground);
+    }
+
+    .overviewToggleIcon {
+      flex: 0 0 auto;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    #memoOverviewBody {
+      margin-top: 7px;
+    }
+
+    #memoOverviewBody[hidden] {
+      display: none;
     }
 
     .workTitleLabel {

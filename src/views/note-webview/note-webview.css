@@ -1694,6 +1694,28 @@ button {
   align-self: center;
 }
 
+.itemMemoAutoSyncToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-editor-background);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.itemMemoAutoSyncToggle:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
+}
+
+.itemMemoAutoSyncToggle input {
+  margin: 0;
+}
+
 .itemMemoClearButton {
   margin-left: auto;
 }
@@ -2794,6 +2816,40 @@ button {
 .itemMemoTypeSelect {
   width: 100%;
   min-width: 92px;
+}
+
+.itemMemoTagSuggestions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.itemMemoTagSuggestions[hidden] {
+  display: none;
+}
+
+.itemMemoTagSuggestionLabel {
+  margin-right: 2px;
+  font-size: calc(11px * var(--mojigoto-content-font-scale));
+  opacity: 0.75;
+}
+
+.itemMemoTagSuggestionChip {
+  padding: 2px 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 999px;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.itemMemoTagSuggestionChip:hover {
+  border-color: var(--vscode-focusBorder);
+  background: var(--vscode-list-hoverBackground);
 }
 
 @media (max-width: 520px) {

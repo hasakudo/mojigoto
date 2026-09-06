@@ -14,6 +14,7 @@ function getConceptMemoStateScript() {
         activeFolderId,
         isFolderManagerOpen,
         isSidebarCollapsed,
+        isOverviewCollapsed,
         isCommonTodoCollapsed,
         openListPanel,
       });
@@ -36,6 +37,7 @@ function getConceptMemoStateScript() {
         activeFolderId,
         isFolderManagerOpen,
         isSidebarCollapsed,
+        isOverviewCollapsed,
         isCommonTodoCollapsed,
         openListPanel,
       });

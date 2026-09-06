@@ -458,8 +458,14 @@ function getConceptMemoEditorScript() {
           button.classList.remove("isActive");
         });
         if (pinButton) pinButton.textContent = "ピン留め";
-        if (archiveButton) archiveButton.textContent = "保管";
-        if (dashboardButton) dashboardButton.textContent = "ダッシュボード";
+        if (archiveButton) {
+          archiveButton.textContent = "保管";
+          archiveButton.title = "アーカイブする";
+        }
+        if (dashboardButton) {
+          dashboardButton.textContent = "ダッシュボード";
+          dashboardButton.title = "Dashboardの表示";
+        }
         return;
       }
 
@@ -485,12 +491,18 @@ function getConceptMemoEditorScript() {
       }
       if (archiveButton) {
         archiveButton.textContent = memo?.isArchived ? "保管解除" : "保管";
+        archiveButton.title = memo?.isArchived
+          ? "アーカイブを解除する"
+          : "アーカイブする";
         archiveButton.classList.toggle("isActive", Boolean(memo?.isArchived));
       }
       if (dashboardButton) {
         dashboardButton.textContent = memo?.showInDashboard
           ? "表示解除"
           : "ダッシュボード";
+        dashboardButton.title = memo?.showInDashboard
+          ? "Dashboardの表示を解除する"
+          : "Dashboardの表示";
         dashboardButton.classList.toggle(
           "isActive",
           Boolean(memo?.showInDashboard),

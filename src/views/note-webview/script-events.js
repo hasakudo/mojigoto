@@ -161,6 +161,9 @@ function getEventsScript() {
   function registerTitleEvents() {
     titleInput.addEventListener("input", () => {
       state.title = titleInput.value;
+      for (const group of state.groups) {
+        touchAutoSyncedItemMemos(group?.items);
+      }
       markDirty();
       renderPreview();
     });
@@ -491,6 +494,29 @@ function getEventsScript() {
       }
 
       if (msg.type === "noteSaved") {
+        const autoSyncUpdates = Array.isArray(msg.autoConceptSyncUpdates)
+          ? msg.autoConceptSyncUpdates
+          : [];
+
+        for (const update of autoSyncUpdates) {
+          const group = state.groups.find(
+            (entry) => entry.id === String(update?.groupId || ""),
+          );
+          const item = (Array.isArray(group?.items) ? group.items : []).find(
+            (entry) => entry.id === String(update?.itemId || ""),
+          );
+          if (!item?.memo) continue;
+
+          item.memo.linkedConceptMemoIds = Array.isArray(update?.linkedConceptMemoIds)
+            ? update.linkedConceptMemoIds
+                .map((id) => String(id || "").trim())
+                .filter(Boolean)
+            : item.memo.linkedConceptMemoIds;
+          item.memo.conceptMemoSyncedAt = String(
+            update?.conceptMemoSyncedAt || "",
+          );
+        }
+
         clearDirty(msg.revision);
 
         if (suppressNextNoteSavedMessage) {
@@ -498,7 +524,12 @@ function getEventsScript() {
           return;
         }
 
-        setStatus("保存しました。", true);
+        setStatus(
+          autoSyncUpdates.length
+            ? "保存し、構想メモへ自動反映しました。"
+            : "保存しました。",
+          true,
+        );
         return;
       }
 
@@ -631,6 +662,7 @@ function getEventsScript() {
         }
 
         item.memo.updatedAt = new Date().toISOString();
+        item.memo.conceptMemoSyncedAt = item.memo.updatedAt;
         markDirty();
         renderGroups();
         refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
