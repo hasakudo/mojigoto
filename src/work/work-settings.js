@@ -27,6 +27,30 @@ function inferWorkNameFromManuscriptRoot() {
   try {
     const real = fs.realpathSync(mr);
     const parent = path.dirname(real);
+    const workRoot = String(cfg.get("workRoot", "") || "").trim();
+
+    if (workRoot) {
+      const resolvedWorkRoot = fs.existsSync(workRoot)
+        ? fs.realpathSync(workRoot)
+        : path.resolve(workRoot);
+      const normalize = (value) => {
+        const normalized = path.normalize(String(value || ""));
+        return process.platform === "win32"
+          ? normalized.toLowerCase()
+          : normalized;
+      };
+      const workName = path.basename(parent);
+
+      if (
+        workName.toLowerCase() !== "_work" &&
+        normalize(path.dirname(parent)) === normalize(resolvedWorkRoot)
+      ) {
+        return workName;
+      }
+
+      return "";
+    }
+
     const baseParent = path.basename(parent).toLowerCase();
 
     // .../<WORK>/_WORK/manuscript
@@ -74,10 +98,13 @@ function getCurrentWorkSettingsPath(context) {
   const workRoot = String(cfg.get("workRoot", "") || "").trim();
   if (!workRoot) return "";
 
+  // globalState is shared across VS Code windows. In Multi mode the actual
+  // manuscript junction belongs to this workspace, so prefer its target.
   const currentWorkName =
+    String(inferWorkNameFromManuscriptRoot() || "").trim() ||
     String(
       context.globalState.get("mojigoto.currentWorkName", "") || "",
-    ).trim() || inferWorkNameFromManuscriptRoot();
+    ).trim();
 
   if (!currentWorkName) return "";
 
@@ -92,6 +119,7 @@ function getCurrentWorkSettings(context) {
     schemaVersion: 1,
     folderName: "",
     title: "",
+    penName: "",
     genre: "",
     targetChars: 0,
     deadline: "",
@@ -142,6 +170,9 @@ function getSingleWorkFolderName(context) {
 }
 
 function getMultiWorkFolderName(context) {
+  const inferred = String(inferWorkNameFromManuscriptRoot() || "").trim();
+  if (inferred) return sanitizeFolderName(inferred);
+
   const currentName = String(
     context.globalState.get("mojigoto.currentWorkName", "") || "",
   ).trim();
@@ -151,9 +182,6 @@ function getMultiWorkFolderName(context) {
 
   const folderName = String(settings?.folderName || "").trim();
   if (folderName) return sanitizeFolderName(folderName);
-
-  const inferred = String(inferWorkNameFromManuscriptRoot() || "").trim();
-  if (inferred) return sanitizeFolderName(inferred);
 
   return "multi-unknown";
 }
@@ -195,16 +223,16 @@ function getMultiWorkDisplayName(context) {
   const title = String(settings?.title || "").trim();
   if (title) return title;
 
-  const currentName = String(
-    context.globalState.get("mojigoto.currentWorkName", "") || "",
-  ).trim();
-  if (currentName) return currentName;
-
   const folderName = String(settings?.folderName || "").trim();
   if (folderName) return folderName;
 
   const inferred = String(inferWorkNameFromManuscriptRoot() || "").trim();
   if (inferred) return inferred;
+
+  const currentName = String(
+    context.globalState.get("mojigoto.currentWorkName", "") || "",
+  ).trim();
+  if (currentName) return currentName;
 
   return "multi-unknown";
 }

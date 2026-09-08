@@ -35,6 +35,11 @@ const {
 const GENRE_EMPTY_FILTER = "__empty__";
 const WORK_STATUS_NOT_HOLD_COMPLETE_FILTER = "__not_hold_complete__";
 
+function normalizeComparablePath(value) {
+  const normalized = path.normalize(String(value || "").trim());
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
 function readJsonFileSafe(filePath) {
   try {
     if (!filePath || !fs.existsSync(filePath)) return null;
@@ -43,6 +48,28 @@ function readJsonFileSafe(filePath) {
   } catch {
     return null;
   }
+}
+
+function getWarehouseRoot() {
+  const cfg = vscode.workspace.getConfiguration("mojigoto");
+  const exportRoot = String(cfg.get("exportRoot", "") || "").trim();
+  if (!exportRoot || !fs.existsSync(exportRoot)) return "";
+  try {
+    if (!fs.statSync(exportRoot).isDirectory()) return "";
+  } catch {
+    return "";
+  }
+
+  const mode = String(cfg.get("mode", "single") || "single").trim();
+  const expectedParent = mode === "multi"
+    ? getWorkRoot()
+    : path.dirname(getResolvedManuscriptRoot());
+  if (!expectedParent) return "";
+
+  return normalizeComparablePath(path.dirname(exportRoot)) ===
+    normalizeComparablePath(expectedParent)
+    ? exportRoot
+    : "";
 }
 
 function getWorkStatusFromDir(workDir) {
@@ -402,6 +429,10 @@ class MojigotoWorkTreeProvider {
       case "trashRoot":
         return this.getTrashChildren(element);
 
+      case "warehouseRoot":
+      case "warehouseFolder":
+        return this.getWarehouseChildren(element);
+
       default:
         return [];
     }
@@ -428,6 +459,8 @@ class MojigotoWorkTreeProvider {
       "plotRoot",
       "referenceRoot",
       "trashRoot",
+      "warehouseRoot",
+      "warehouseFolder",
     ]);
 
     const walk = async (parent) => {
@@ -472,6 +505,84 @@ class MojigotoWorkTreeProvider {
       kind: "separator",
       contextValue: "separator",
     });
+  }
+
+  createWarehouseRootItem() {
+    const warehouseRoot = getWarehouseRoot();
+    if (!warehouseRoot) return null;
+
+    return new MojigotoTreeItem(
+      `倉庫: ${path.basename(warehouseRoot)}`,
+      vscode.TreeItemCollapsibleState.Collapsed,
+      {
+        kind: "warehouseRoot",
+        contextValue: "warehouseRoot",
+        fsPath: warehouseRoot,
+        iconId: "archive",
+        tooltip: warehouseRoot,
+      },
+    );
+  }
+
+  getWarehouseRootItems() {
+    const warehouse = this.createWarehouseRootItem();
+    return warehouse
+      ? [this.createSeparator("────── 倉庫 ──────"), warehouse]
+      : [];
+  }
+
+  getWarehouseChildren(parentItem) {
+    const dirPath = String(parentItem?.fsPath || "").trim();
+    if (!dirPath) return [];
+
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+
+    return entries
+      .map((entry) => {
+        const fsPath = path.join(dirPath, entry.name);
+        let isDirectory = entry.isDirectory();
+        if (!isDirectory && entry.isSymbolicLink()) {
+          try {
+            isDirectory = fs.statSync(fsPath).isDirectory();
+          } catch {}
+        }
+
+        return new MojigotoTreeItem(
+          entry.name,
+          isDirectory
+            ? vscode.TreeItemCollapsibleState.Collapsed
+            : vscode.TreeItemCollapsibleState.None,
+          {
+            kind: isDirectory ? "warehouseFolder" : "warehouseFile",
+            contextValue: isDirectory ? "warehouseFolder" : "warehouseFile",
+            fsPath,
+            iconId: isDirectory ? "folder" : "file",
+            parent: parentItem,
+            tooltip: fsPath,
+            command: isDirectory
+              ? undefined
+              : {
+                  command: "vscode.open",
+                  title: "ファイルを開く",
+                  arguments: [vscode.Uri.file(fsPath)],
+                },
+          },
+        );
+      })
+      .sort((a, b) => {
+        const aFolder = a.kind === "warehouseFolder" ? 0 : 1;
+        const bFolder = b.kind === "warehouseFolder" ? 0 : 1;
+        if (aFolder !== bFolder) return aFolder - bFolder;
+        return String(a.label).localeCompare(String(b.label), "ja", {
+          numeric: true,
+          sensitivity: "base",
+        });
+      });
   }
 
   createConceptMemosItem(options = {}) {
@@ -574,7 +685,11 @@ class MojigotoWorkTreeProvider {
 
     this.singleViewRootItem = viewRootItem;
 
-    return [this.createSeparator("────── View ──────"), viewRootItem];
+    return [
+      this.createSeparator("────── View ──────"),
+      viewRootItem,
+      ...this.getWarehouseRootItems(),
+    ];
   }
 
   getSingleSections() {
@@ -644,11 +759,10 @@ class MojigotoWorkTreeProvider {
   getMultiRootItems() {
     const works = listWorkDirectories();
     const current = this.resolveCurrentViewWork();
-    const currentWorkFolderName =
-      current.workName || getCurrentWorkName(this.context);
-
+    const currentWorkFolderName = current.workName;
+    const currentSettings = getWorkSettingsFromDir(current.workDir);
     const currentViewDisplayName = String(
-      getCurrentWorkDisplayName(this.context) || "",
+      currentSettings?.title || currentSettings?.folderName || "",
     ).trim();
 
     const currentViewLabel =
@@ -763,13 +877,41 @@ class MojigotoWorkTreeProvider {
       }),
     );
 
+    items.push(...this.getWarehouseRootItems());
+
     return items;
   }
 
   resolveCurrentViewWork() {
-    const currentWorkName = getCurrentWorkName(this.context);
     const workRoot = getWorkRoot();
+    const manuscriptRoot = getResolvedManuscriptRoot();
 
+    // globalState is shared by every VS Code window. The junction target is
+    // workspace-specific, so use it as the source of truth for the View tree.
+    if (manuscriptRoot && fs.existsSync(manuscriptRoot)) {
+      try {
+        const real = fs.realpathSync(manuscriptRoot);
+        const inferredWorkDir = path.dirname(real);
+        const inferredWorkName = path.basename(inferredWorkDir);
+
+        if (
+          inferredWorkName &&
+          inferredWorkName.toLowerCase() !== "_work" &&
+          (!workRoot ||
+            normalizeComparablePath(path.dirname(inferredWorkDir)) ===
+              normalizeComparablePath(workRoot))
+        ) {
+          return {
+            workName: inferredWorkName,
+            workDir: inferredWorkDir,
+          };
+        }
+      } catch {
+        // Fall back to the stored work name when the junction cannot be read.
+      }
+    }
+
+    const currentWorkName = getCurrentWorkName(this.context);
     if (currentWorkName && workRoot) {
       const currentWorkDir = path.join(workRoot, currentWorkName);
       if (fs.existsSync(currentWorkDir)) {
@@ -780,39 +922,10 @@ class MojigotoWorkTreeProvider {
       }
     }
 
-    const manuscriptRoot = getResolvedManuscriptRoot();
-    if (!manuscriptRoot || !fs.existsSync(manuscriptRoot)) {
-      return {
-        workName: "",
-        workDir: "",
-      };
-    }
-
-    try {
-      const real = fs.realpathSync(manuscriptRoot);
-      const parentDir = path.dirname(real);
-      const inferredWorkName = path.basename(parentDir);
-
-      if (workRoot) {
-        const inferredWorkDir = path.join(workRoot, inferredWorkName);
-        if (fs.existsSync(inferredWorkDir)) {
-          return {
-            workName: inferredWorkName,
-            workDir: inferredWorkDir,
-          };
-        }
-      }
-
-      return {
-        workName: inferredWorkName,
-        workDir: "",
-      };
-    } catch {
-      return {
-        workName: "",
-        workDir: "",
-      };
-    }
+    return {
+      workName: "",
+      workDir: "",
+    };
   }
 
   getCurrentViewSections() {

@@ -667,11 +667,12 @@ ${getInputAssistToolbarCss()}
       }
     }
 
-    function setStatus(message, useToast = false) {
+    function setStatus(message, useToast = false, isError = false) {
       if (!toastStatusEl) return;
 
       if (!useToast || !message) {
         toastStatusEl.classList.remove("isVisible");
+        toastStatusEl.classList.remove("isError");
         toastStatusEl.textContent = "";
         return;
       }
@@ -682,10 +683,12 @@ ${getInputAssistToolbarCss()}
       }
 
       toastStatusEl.textContent = message;
+      toastStatusEl.classList.toggle("isError", Boolean(isError));
       toastStatusEl.classList.add("isVisible");
 
       toastTimer = setTimeout(() => {
         toastStatusEl.classList.remove("isVisible");
+        toastStatusEl.classList.remove("isError");
         toastStatusEl.textContent = "";
       }, 1800);
     }
@@ -693,6 +696,7 @@ ${getInputAssistToolbarCss()}
     function clearStatus() {
       if (!toastStatusEl) return;
       toastStatusEl.classList.remove("isVisible");
+      toastStatusEl.classList.remove("isError");
       toastStatusEl.textContent = "";
     }
 

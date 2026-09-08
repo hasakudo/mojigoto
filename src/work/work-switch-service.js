@@ -528,11 +528,16 @@ async function updateWorkJsonFolderName(workDir, folderName) {
     schemaVersion: Number(current.schemaVersion || 1) || 1,
     folderName: String(folderName || "").trim(),
     title: String(current.title || "").trim(),
+    penName: String(current.penName || "").trim(),
     genre: String(current.genre || "").trim(),
     targetChars: Number(current.targetChars || 0) || 0,
     deadline: String(current.deadline || "").trim(),
     summary: String(current.summary || "").trim(),
     memo: String(current.memo || "").trim(),
+    exportOptions:
+      current.exportOptions && typeof current.exportOptions === "object"
+        ? { ...current.exportOptions }
+        : undefined,
     updatedAt: new Date().toISOString(),
   };
 

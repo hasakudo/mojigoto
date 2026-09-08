@@ -255,6 +255,7 @@ function formatSettingsTxt(settings) {
     `ジャンル: ${formatSettingsGenre(settings)}`,
     `目標文字数: ${settings.targetChars || 0}`,
     `締切: ${settings.deadline || ""}`,
+    `ペンネーム: ${settings.penName || ""}`,
     "",
     "あらすじ",
     "--------",
@@ -279,6 +280,7 @@ function formatSettingsMd(settings) {
     `- ジャンル: ${formatSettingsGenre(settings)}`,
     `- 目標文字数: ${settings.targetChars || 0}`,
     `- 締切: ${settings.deadline || ""}`,
+    `- ペンネーム: ${settings.penName || ""}`,
     `- 更新日時: ${formatDateTimeJst(settings.updatedAt || "")}`,
     "",
     "## あらすじ",
@@ -300,6 +302,7 @@ function formatSettingsCsv(settings) {
     ["genre", formatSettingsGenre(settings)],
     ["targetChars", String(settings.targetChars || 0)],
     ["deadline", settings.deadline || ""],
+    ["penName", settings.penName || ""],
     ["summary", settings.summary || ""],
     ["memo", settings.memo || ""],
     ["updatedAt", formatDateTimeJst(settings.updatedAt || "")],
@@ -336,6 +339,12 @@ function formatSettingsHtml(settings) {
   if (exportOptions.includeDeadline) {
     metaRows.push(
       `<dt>締切</dt><dd>${escapeHtml(settings.deadline || "")}</dd>`,
+    );
+  }
+
+  if (exportOptions.includePenName) {
+    metaRows.push(
+      `<dt>ペンネーム</dt><dd>${escapeHtml(settings.penName || "")}</dd>`,
     );
   }
 

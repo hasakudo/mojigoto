@@ -1,11 +1,11 @@
+const { getWorkName } = require("../work/work-settings");
+
 function normalizeStatsWorkScope(workName) {
   return String(workName || "").trim() || "default";
 }
 
 function getStatsWorkScope(context) {
-  return normalizeStatsWorkScope(
-    context.globalState.get("mojigoto.currentWorkName", "") || "default",
-  );
+  return normalizeStatsWorkScope(getWorkName(context));
 }
 
 function keyDaily(context) {

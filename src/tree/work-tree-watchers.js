@@ -20,7 +20,8 @@ function registerTreeRefreshWatchers(context, treeProvider) {
       if (
         e.affectsConfiguration("mojigoto.mode") ||
         e.affectsConfiguration("mojigoto.workRoot") ||
-        e.affectsConfiguration("mojigoto.manuscriptRoot")
+        e.affectsConfiguration("mojigoto.manuscriptRoot") ||
+        e.affectsConfiguration("mojigoto.exportRoot")
       ) {
         refresh();
       }

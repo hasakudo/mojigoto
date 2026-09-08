@@ -13,6 +13,7 @@ function getExportFieldDefaults() {
     includeGenre: config.get("exportIncludeGenre", true),
     includeTargetChars: config.get("exportIncludeTargetChars", true),
     includeDeadline: config.get("exportIncludeDeadline", true),
+    includePenName: config.get("exportIncludePenName", true),
     includeMemo: config.get("exportIncludeMemo", false),
     includeUpdatedAt: config.get("exportIncludeUpdatedAt", false),
   };
@@ -42,6 +43,11 @@ function getEffectiveExportOptions(settings) {
       typeof local.includeDeadline === "boolean"
         ? local.includeDeadline
         : defaults.includeDeadline,
+
+    includePenName:
+      typeof local.includePenName === "boolean"
+        ? local.includePenName
+        : defaults.includePenName,
 
     includeMemo:
       typeof local.includeMemo === "boolean"
@@ -158,15 +164,6 @@ async function offerToExcludeExportRoot(cfg, exportRoot) {
     return;
   }
 
-  const answer = await vscode.window.showInformationMessage(
-    `書き出し先「${folderName}」を作品ツリーの除外フォルダに追加しますか？`,
-    { modal: true },
-    "はい",
-    "いいえ",
-  );
-
-  if (answer !== "はい") return;
-
   await cfg.update(
     "workExclude",
     [...excludes, folderName],
@@ -178,6 +175,20 @@ async function offerToExcludeExportRoot(cfg, exportRoot) {
   } catch {
     // ツリー未初期化時は設定だけ保存する。
   }
+}
+
+function isWarehouseCompatibleExportRoot(cfg, exportRoot) {
+  const mode = String(cfg.get("mode", "single") || "single").trim();
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "";
+  const workRoot = String(cfg.get("workRoot", "") || "").trim();
+  const manuscriptRoot = String(cfg.get("manuscriptRoot", "") || "").trim();
+  const expectedParent = mode === "multi"
+    ? workRoot
+    : manuscriptRoot
+      ? path.dirname(manuscriptRoot)
+      : workspaceRoot;
+
+  return Boolean(expectedParent && isDirectChildPath(expectedParent, exportRoot));
 }
 
 async function getOrPickExportRoot(context) {
@@ -198,7 +209,7 @@ async function getOrPickExportRoot(context) {
     if (!shouldRepick) return "";
   } else {
     const proceed = await vscode.window.showInformationMessage(
-      "書き出し先の親フォルダを選択します。フォルダがまだない場合は、次の画面で親フォルダを作成してから選択してください。",
+      "書き出し先の親フォルダを選択します。Singleでは原稿フォルダと同じ階層、Multiでは作品フォルダと同じ階層のフォルダを選ぶと、作品ツリーに「倉庫」として表示されます。別の場所も従来どおり書き出し先にできますが、倉庫には表示されません。",
       { modal: true },
       "フォルダを選択",
     );
@@ -233,7 +244,9 @@ async function getOrPickExportRoot(context) {
     await offerToExcludeExportRoot(cfg, root);
 
     vscode.window.showInformationMessage(
-      "もじごと: 書き出し先の親フォルダを設定しました。",
+      isWarehouseCompatibleExportRoot(cfg, root)
+        ? "もじごと: 書き出し先を設定し、作品ツリーの倉庫に追加しました。"
+        : "もじごと: 書き出し先を設定しました。倉庫の表示条件を満たさないため、作品ツリーには追加しません。",
     );
   } catch (e) {
     vscode.window.showErrorMessage(

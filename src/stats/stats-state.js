@@ -671,9 +671,6 @@ function createBuildStatsState(deps) {
 
     const currentWorkTitle =
       getCurrentWorkTitleFromSettings(context) ||
-      String(
-        context.globalState.get("mojigoto.currentWorkName", "") || "",
-      ).trim() ||
       getWorkName(context);
 
     const currentWorkGoal = getCurrentWorkGoal(context);

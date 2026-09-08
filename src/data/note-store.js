@@ -38,6 +38,12 @@ function createDefaultItemMemo() {
   };
 }
 
+function normalizeNoteOrder(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const order = Number(value);
+  return Number.isFinite(order) ? order : null;
+}
+
 function createDefaultEntry() {
   return {
     id: makeId("item"),
@@ -73,6 +79,7 @@ function createDefaultNote(type, title = "") {
     id: makeId(type),
     type,
     title: String(title || "").trim(),
+    order: null,
     groups: [createDefaultGroup()],
     updatedAt: "",
   };
@@ -148,6 +155,7 @@ async function readNoteFile(filePath, fallbackType = "plot") {
     id: String(parsed?.id || makeId(fallbackType)),
     type: String(parsed?.type || fallbackType),
     title: String(parsed?.title || ""),
+    order: normalizeNoteOrder(parsed?.order),
     groups: normalizeGroupsFromLegacy(parsed),
     updatedAt: String(parsed?.updatedAt || ""),
   };
@@ -165,16 +173,24 @@ async function listNotesWithMeta(type, item) {
       title:
         String(note?.title || "").trim() || file.name.replace(/\.json$/i, ""),
       type,
+      order: note.order,
       updatedAt: String(note?.updatedAt || ""),
     });
   }
 
-  return results.sort((a, b) =>
-    a.title.localeCompare(b.title, "ja", {
+  return results.sort((a, b) => {
+    const orderA = Number.isFinite(a.order) ? a.order : null;
+    const orderB = Number.isFinite(b.order) ? b.order : null;
+    if (orderA !== null && orderB !== null && orderA !== orderB) {
+      return orderA - orderB;
+    }
+    if (orderA !== null) return -1;
+    if (orderB !== null) return 1;
+    return a.title.localeCompare(b.title, "ja", {
       numeric: true,
       sensitivity: "base",
-    }),
-  );
+    });
+  });
 }
 
 async function createNewNote(type, item, title, templateId = "blank") {
@@ -196,6 +212,19 @@ async function createNewNote(type, item, title, templateId = "blank") {
   }
 
   const note = createDefaultNote(type, title);
+  const existingNotes = await listNotesWithMeta(type, item);
+  const hasCompleteCustomOrder =
+    existingNotes.length > 0 &&
+    existingNotes.every((entry) => Number.isFinite(entry.order));
+  note.order = hasCompleteCustomOrder
+    ? Math.max(
+        ...existingNotes.map((entry, index) =>
+          Number.isFinite(entry.order) ? entry.order : index,
+        ),
+      ) + 1
+    : existingNotes.length
+      ? null
+      : 0;
   const template = await getTemplateById(type, templateId);
 
   if (template) {
@@ -305,6 +334,7 @@ async function saveNoteFile(filePath, data) {
     id: String(data?.id || makeId(data?.type || "note")),
     type: String(data?.type || "plot"),
     title: String(data?.title || "").trim(),
+    order: normalizeNoteOrder(data?.order),
     groups:
       Array.isArray(data?.groups) && data.groups.length
         ? data.groups.map((group) => normalizeGroup(group))
@@ -314,6 +344,34 @@ async function saveNoteFile(filePath, data) {
 
   await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
   return payload;
+}
+
+async function moveNoteInOrder(type, item, filePath, direction) {
+  const notes = await listNotesWithMeta(type, item);
+  const normalizedPath = path.normalize(String(filePath || ""));
+  const currentIndex = notes.findIndex(
+    (entry) => path.normalize(entry.fsPath) === normalizedPath,
+  );
+  if (currentIndex < 0) return false;
+
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= notes.length) return false;
+
+  [notes[currentIndex], notes[targetIndex]] = [
+    notes[targetIndex],
+    notes[currentIndex],
+  ];
+
+  await Promise.all(
+    notes.map(async (entry, order) => {
+      const raw = await fs.readFile(entry.fsPath, "utf8");
+      const parsed = JSON.parse(raw);
+      parsed.order = order;
+      await fs.writeFile(entry.fsPath, JSON.stringify(parsed, null, 2), "utf8");
+    }),
+  );
+
+  return true;
 }
 
 async function applyConceptMemoToNoteItem(input) {
@@ -401,6 +459,7 @@ module.exports = {
   readNoteFile,
   createNewNote,
   saveNoteFile,
+  moveNoteInOrder,
   deleteNoteFile,
   applyConceptMemoToNoteItem,
 };

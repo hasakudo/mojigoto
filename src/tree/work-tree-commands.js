@@ -5,7 +5,7 @@ const { spawn } = require("child_process");
 const { handleRenamedWorkFolders } = require("../work/work-switch-service");
 const { isSingleMode, getWorkRoot } = require("../core/mojigoto-context");
 const { openSettingsWebview } = require("../views/settings-webview");
-const { createNewNote } = require("../data/note-store");
+const { createNewNote, moveNoteInOrder } = require("../data/note-store");
 const { exportTreeItem } = require("../export/export-service");
 const { openConceptMemoWebview } = require("../views/concept-memo-webview");
 const { getCurrentWorkDisplayName } = require("../work/work-settings");
@@ -1104,6 +1104,38 @@ async function registerMojigotoTreeCommands(
         }
       },
     ),
+
+    vscode.commands.registerCommand("mojigoto.moveNoteUp", async (item) => {
+      try {
+        const moved = await moveNoteInOrder(
+          item?.noteType || item?.type || "plot",
+          { fsPath: item?.workDir || "", workDir: item?.workDir || "" },
+          item?.fsPath || "",
+          "up",
+        );
+        if (moved) treeProvider.refresh();
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `もじごと: ノートを上へ移動できませんでした: ${String(e)}`,
+        );
+      }
+    }),
+
+    vscode.commands.registerCommand("mojigoto.moveNoteDown", async (item) => {
+      try {
+        const moved = await moveNoteInOrder(
+          item?.noteType || item?.type || "plot",
+          { fsPath: item?.workDir || "", workDir: item?.workDir || "" },
+          item?.fsPath || "",
+          "down",
+        );
+        if (moved) treeProvider.refresh();
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          `もじごと: ノートを下へ移動できませんでした: ${String(e)}`,
+        );
+      }
+    }),
 
     vscode.commands.registerCommand(
       "mojigoto.createEmptyConceptMemos",

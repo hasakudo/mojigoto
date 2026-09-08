@@ -9,11 +9,30 @@ const {
   hideCustomGenreOptions,
   restoreGenreOptions,
   collectGenreOptions,
+  getPenNameOptions,
+  rememberPenName,
 } = require("../data/settings-store");
 const { exportTreeItem } = require("../export/export-service");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 
 const settingsPanels = new Map();
+
+function getSettingsUiSettings() {
+  const config = vscode.workspace.getConfiguration("mojigoto");
+  const percent = Math.min(
+    200,
+    Math.max(80, Number(config.get("webviewFontScalePercent", 100)) || 100),
+  );
+  const autoSaveDelaySeconds = Math.min(
+    30,
+    Math.max(0.5, Number(config.get("webviewAutoSaveDelaySeconds", 2)) || 2),
+  );
+  return {
+    fontScale: percent / 100,
+    autoSaveEnabled: config.get("webviewAutoSaveEnabled", true) !== false,
+    autoSaveDelayMs: Math.round(autoSaveDelaySeconds * 1000),
+  };
+}
 
 function getSettingsPanelKey(target, item) {
   if (target?.mode === "single") {
@@ -26,14 +45,19 @@ function getSettingsWebviewHtml(webview, settings, meta) {
   const genreOptions = Array.isArray(meta?.genreOptions)
     ? meta.genreOptions
     : [];
+  const penNameOptions = Array.isArray(meta?.penNameOptions)
+    ? meta.penNameOptions
+    : [];
   const nonce = getNonce();
   const config = vscode.workspace.getConfiguration("mojigoto");
+  const { fontScale } = getSettingsUiSettings();
 
   const exportDefaults = {
     includeFolderName: config.get("exportIncludeFolderName", false),
     includeGenre: config.get("exportIncludeGenre", true),
     includeTargetChars: config.get("exportIncludeTargetChars", true),
     includeDeadline: config.get("exportIncludeDeadline", true),
+    includePenName: config.get("exportIncludePenName", true),
     includeMemo: config.get("exportIncludeMemo", false),
     includeUpdatedAt: config.get("exportIncludeUpdatedAt", false),
   };
@@ -52,6 +76,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
   <style>
     :root {
       color-scheme: light dark;
+      --mojigoto-content-font-scale: ${fontScale};
     }
 
     body {
@@ -59,12 +84,82 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       color: var(--vscode-editor-foreground);
       background: var(--vscode-editor-background);
       margin: 0;
-      padding: 20px;
+      padding: 20px 20px 86px;
+      font-size: calc(13px * var(--mojigoto-content-font-scale));
     }
 
     .wrap {
-      max-width: 980px;
+      max-width: 1420px;
       margin: 0 auto;
+    }
+
+    .settingsLayout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .exportPreview {
+      position: sticky;
+      top: 18px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+    }
+
+    .exportPreview > summary {
+      padding: 11px 13px;
+      cursor: pointer;
+      font-weight: 700;
+      border-bottom: 1px solid transparent;
+    }
+
+    .exportPreview[open] > summary {
+      border-bottom-color: var(--vscode-panel-border);
+    }
+
+    .previewPaper {
+      margin: 14px;
+      padding: 20px;
+      min-height: 320px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      color: var(--vscode-editor-foreground);
+      background: var(--vscode-editor-background);
+    }
+
+    .previewPaper h2,
+    .previewPaper h3 {
+      margin: 0 0 12px;
+    }
+
+    .previewPaper h3 {
+      margin-top: 20px;
+      font-size: 1em;
+    }
+
+    .previewMeta {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      gap: 6px 12px;
+      margin: 0;
+    }
+
+    .previewMeta dt {
+      font-weight: 700;
+    }
+
+    .previewMeta dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .previewBlock {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.7;
     }
 
     .grid {
@@ -109,7 +204,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     .hint {
-      font-size: 12px;
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
       opacity: 0.8;
       margin-top: 6px;
       line-height: 1.5;
@@ -120,7 +215,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       flex-wrap: wrap;
       gap: 10px 18px;
       margin-top: 6px;
-      font-size: 12px;
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
       opacity: 0.9;
       line-height: 1.5;
     }
@@ -131,8 +226,19 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     .actions {
       display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 10px;
-      margin-top: 20px;
+      position: fixed;
+      z-index: 30;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0;
+      padding: 12px 20px;
+      border-top: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+      box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.12);
     }
 
     button {
@@ -154,10 +260,36 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     .status {
-      margin-top: 14px;
-      min-height: 1.4em;
-      font-size: 12px;
-      opacity: 0.9;
+      flex: 0 1 auto;
+      z-index: 50;
+      width: max-content;
+      min-width: min(220px, calc(100vw - 24px));
+      max-width: min(420px, calc(100vw - 24px));
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 1px solid var(--vscode-panel-border);
+      border-left: 3px solid var(--vscode-editorInfo-foreground);
+      border-radius: 8px;
+      background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+      color: var(--vscode-notifications-foreground, var(--vscode-editorWidget-foreground));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-6px);
+      transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+    }
+
+    .status.isVisible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      transition-delay: 0s;
+    }
+
+    .status.isError {
+      border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
     }
 
     .menuWrap {
@@ -209,7 +341,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     .headerRow h1 {
-      font-size: 20px;
+      font-size: calc(20px * var(--mojigoto-content-font-scale));
       margin: 0;
     }
 
@@ -217,7 +349,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       flex: 0 0 auto;
       padding: 4px 10px;
       border-radius: 999px;
-      font-size: 12px;
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
       font-weight: 600;
       color: var(--vscode-editorWarning-foreground, #d19a00);
       background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #d19a00) 14%, transparent);
@@ -281,7 +413,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       flex: 0 0 auto;
       padding: 1px 6px;
       border-radius: 999px;
-      font-size: 10px;
+      font-size: calc(10px * var(--mojigoto-content-font-scale));
       color: var(--vscode-badge-foreground, #ffffff);
       background: var(--vscode-badge-background);
     }
@@ -311,7 +443,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       border-radius: 999px;
       background: var(--vscode-input-background);
       color: var(--vscode-input-foreground);
-      font-size: 12px;
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
     }
 
     .genreChipRemove {
@@ -331,7 +463,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     .kbdHint {
       margin-left: 6px;
-      font-size: 11px;
+      font-size: calc(11px * var(--mojigoto-content-font-scale));
       opacity: 0.65;
       font-weight: 500;
       white-space: nowrap;
@@ -345,6 +477,26 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       label {
         padding-top: 0;
       }
+
+      body {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+
+      .actions {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .settingsLayout {
+        grid-template-columns: 1fr;
+      }
+
+      .exportPreview {
+        position: static;
+      }
     }
   </style>
 </head>
@@ -353,9 +505,12 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     <div class="headerRow">
       <h1>${escapeHtml(title)}</h1>
       <div id="dirtyBadge" class="dirtyBadge" hidden>未保存</div>
+      <div class="status" id="statusMessage" role="status" aria-live="polite"></div>
     </div>
 
-    <div class="grid">
+    <div class="settingsLayout">
+      <div class="settingsForm">
+        <div class="grid">
       <label for="title">作品名</label>
       <div>
         <input id="title" type="text" value="${escapeHtml(settings.title)}" />
@@ -409,6 +564,15 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         </div>
       </div>
 
+      <label for="penName">ペンネーム</label>
+      <div>
+        <input id="penName" type="text" list="penNameOptions" value="${escapeHtml(settings.penName || "")}" placeholder="ペンネームを入力または選択" />
+        <datalist id="penNameOptions">
+          ${penNameOptions.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}
+        </datalist>
+        <div class="hint">保存したペンネームは、ほかの作品でも候補から選べます。</div>
+      </div>
+
       <label for="summary">あらすじ</label>
       <div>
         <textarea id="summary">${escapeHtml(settings.summary)}</textarea>
@@ -422,6 +586,22 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         <textarea id="memo">${escapeHtml(settings.memo || "")}</textarea>
         <div class="hint">必須ではありません。応募条件、改稿方針、注意点など自由に書けます。</div>
       </div>
+        </div>
+      </div>
+
+      <details class="exportPreview" id="exportPreview" open>
+        <summary>HTML書き出しプレビュー</summary>
+        <div class="previewPaper">
+          <h2>設定</h2>
+          <dl class="previewMeta" id="exportPreviewMeta"></dl>
+          <h3>あらすじ</h3>
+          <div class="previewBlock" id="exportPreviewSummary"></div>
+          <div id="exportPreviewMemoSection">
+            <h3>メモ</h3>
+            <div class="previewBlock" id="exportPreviewMemo"></div>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="actions">
@@ -440,6 +620,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
             <label><input type="checkbox" id="includeGenre"> ジャンル</label>
             <label><input type="checkbox" id="includeTargetChars"> 目標文字数</label>
             <label><input type="checkbox" id="includeDeadline"> 締切日</label>
+            <label><input type="checkbox" id="includePenName"> ペンネーム</label>
             <label><input type="checkbox" id="includeMemo"> メモ</label>
             <label><input type="checkbox" id="includeUpdatedAt"> 更新日時</label>
           </div>
@@ -447,13 +628,13 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       </div>
     </div>
 
-    <div class="status" id="statusMessage"></div>
   </div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const initial = ${JSON.stringify(settings)};
     const exportDefaults = ${JSON.stringify(exportDefaults)};
+    let currentUiSettings = ${JSON.stringify(getSettingsUiSettings())};
 
     let availableGenreOptions = ${JSON.stringify(genreOptions)};
     const defaultGenreOptionKeys = new Set(
@@ -473,6 +654,8 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     const dirtyBadgeEl = document.getElementById("dirtyBadge");
     let dirty = false;
+    let statusTimer = 0;
+    let changeRevision = 0;
 
     function updateDirtyUi() {
       if (dirtyBadgeEl) {
@@ -482,16 +665,32 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     function markDirty() {
       dirty = true;
+      changeRevision += 1;
       updateDirtyUi();
+      vscode.postMessage({
+        type: "scheduleSettingsSave",
+        payload: collectPayload(),
+        revision: changeRevision,
+      });
     }
 
-    function clearDirty() {
+    function clearDirty(savedRevision = changeRevision) {
+      if (Number(savedRevision) < changeRevision) return;
       dirty = false;
       updateDirtyUi();
     }
 
-    function setStatus(message) {
+    function setStatus(message, persist = false, isError = false) {
+      window.clearTimeout(statusTimer);
       statusEl.textContent = message || "";
+      statusEl.classList.toggle("isError", Boolean(isError));
+      statusEl.classList.toggle("isVisible", Boolean(message));
+      if (message && !persist) {
+        statusTimer = window.setTimeout(() => {
+          statusEl.classList.remove("isVisible", "isError");
+          statusEl.textContent = "";
+        }, 1800);
+      }
     }
 
     function countChars(text) {
@@ -588,6 +787,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
       if (!selectedGenres.length) {
         wrap.innerHTML = '<span class="hint">未設定</span>';
+        renderExportPreview();
         return;
       }
 
@@ -613,6 +813,8 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           renderGenreOptions();
         });
       });
+
+      renderExportPreview();
     }
 
     function isGenreSelected(value) {
@@ -703,6 +905,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         status: document.getElementById("status").value,
         targetChars: document.getElementById("targetChars").value,
         deadline: document.getElementById("deadline").value,
+        penName: document.getElementById("penName").value,
         summary: document.getElementById("summary").value,
         memo: memoInput.value,
 
@@ -711,10 +914,49 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           includeGenre: document.getElementById("includeGenre").checked,
           includeTargetChars: document.getElementById("includeTargetChars").checked,
           includeDeadline: document.getElementById("includeDeadline").checked,
+          includePenName: document.getElementById("includePenName").checked,
           includeMemo: document.getElementById("includeMemo").checked,
           includeUpdatedAt: document.getElementById("includeUpdatedAt").checked,
         },
       };
+    }
+
+    function renderExportPreview() {
+      const payload = collectPayload();
+      const rows = [
+        ["作品名", payload.title || "（未入力）"],
+      ];
+
+      if (payload.exportOptions.includeFolderName) {
+        rows.push(["フォルダ名", initial.folderName || "（未設定）"]);
+      }
+      if (payload.exportOptions.includeGenre) {
+        rows.push(["ジャンル", payload.genres.join("、") || "（未設定）"]);
+      }
+      if (payload.exportOptions.includeTargetChars) {
+        rows.push(["目標文字数", payload.targetChars || "0"]);
+      }
+      if (payload.exportOptions.includeDeadline) {
+        rows.push(["締切", payload.deadline || "（未設定）"]);
+      }
+      if (payload.exportOptions.includePenName) {
+        rows.push(["ペンネーム", payload.penName || "（未設定）"]);
+      }
+      if (payload.exportOptions.includeUpdatedAt) {
+        rows.push(["更新日時", initial.updatedAt || "（保存後に更新）"]);
+      }
+
+      document.getElementById("exportPreviewMeta").innerHTML = rows
+        .map(([label, value]) =>
+          "<dt>" + escapeHtml(label) + "</dt><dd>" + escapeHtml(value) + "</dd>",
+        )
+        .join("");
+      document.getElementById("exportPreviewSummary").textContent =
+        payload.summary || "（未入力）";
+      document.getElementById("exportPreviewMemo").textContent =
+        payload.memo || "（未入力）";
+      document.getElementById("exportPreviewMemoSection").hidden =
+        !payload.exportOptions.includeMemo;
     }
 
     function applyExportOptions(initial) {
@@ -740,6 +982,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           ? opts.includeDeadline
           : !!exportDefaults.includeDeadline;
 
+      document.getElementById("includePenName").checked =
+        typeof opts.includePenName === "boolean"
+          ? opts.includePenName
+          : !!exportDefaults.includePenName;
+
       document.getElementById("includeMemo").checked =
         typeof opts.includeMemo === "boolean"
           ? opts.includeMemo
@@ -754,10 +1001,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     function saveCurrentSettings() {
       vscode.postMessage({
         type: "save",
-        payload: collectPayload()
+        payload: collectPayload(),
+        revision: changeRevision,
       });
 
-      setStatus("保存中...");
+      setStatus("保存中...", true);
     }
 
     function handleSettingsShortcut(event) {
@@ -797,9 +1045,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     });
 
     document.getElementById("exportBtn")?.addEventListener("click", () => {
+      setStatus("保存して書き出しています...", true);
       vscode.postMessage({
         type: "saveAndExport",
         payload: collectPayload(),
+        revision: changeRevision,
       });
     });
 
@@ -837,12 +1087,14 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         "status",
         "targetChars",
         "deadline",
+        "penName",
         "summary",
         "memo",
         "includeFolderName",
         "includeGenre",
         "includeTargetChars",
         "includeDeadline",
+        "includePenName",
         "includeMemo",
         "includeUpdatedAt",
       ].forEach((id) => {
@@ -858,6 +1110,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
         el.addEventListener(eventName, () => {
           markDirty();
+          renderExportPreview();
         });
       });
     }
@@ -876,6 +1129,12 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     updateDeadlineDisplay();
 
     applyExportOptions(initial);
+    renderExportPreview();
+
+    const exportPreviewEl = document.getElementById("exportPreview");
+    if (exportPreviewEl && window.matchMedia("(max-width: 980px)").matches) {
+      exportPreviewEl.open = false;
+    }
 
     clearDirty();
 
@@ -883,9 +1142,22 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       const msg = event.data;
       if (!msg) return;
 
+      if (msg.type === "webviewUiSettingsChanged") {
+        const scale = Number(msg.payload?.fontScale || 1);
+        currentUiSettings = {
+          ...currentUiSettings,
+          ...(msg.payload || {}),
+        };
+        document.documentElement.style.setProperty(
+          "--mojigoto-content-font-scale",
+          String(scale),
+        );
+        return;
+      }
+
       if (msg.type === "saved") {
-        clearDirty();
-        setStatus("保存しました。");
+        clearDirty(msg.revision);
+        setStatus(msg.autoSave ? "自動保存しました。" : "保存しました。");
       } else if (msg.type === "genreOptionsRemoved") {
         const hidden = normalizeGenres(msg.hidden || []);
         const deleted = normalizeGenres(msg.deleted || []);
@@ -906,7 +1178,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           setStatus("作品で使用中のため、作品設定を残して候補欄から非表示にしました。");
         }
       } else if (msg.type === "error") {
-        setStatus(msg.message || "保存に失敗しました。");
+        setStatus(msg.message || "保存に失敗しました。", false, true);
       }
     });
   </script>
@@ -930,6 +1202,7 @@ async function openSettingsWebview(context, treeProvider, item) {
     existing.webview.html = getSettingsWebviewHtml(existing.webview, latest, {
       ...target,
       genreOptions,
+      penNameOptions: getPenNameOptions(context, latest.penName),
     });
     existing.reveal(vscode.ViewColumn.One);
     return;
@@ -949,11 +1222,42 @@ async function openSettingsWebview(context, treeProvider, item) {
 
   settingsPanels.set(panelKey, panel);
 
+  let settingsAutoSaveTimer = null;
+  let settingsSaveQueue = Promise.resolve();
+
   panel.onDidDispose(() => {
+    if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
+    settingsAutoSaveTimer = null;
     if (settingsPanels.get(panelKey) === panel) {
       settingsPanels.delete(panelKey);
     }
   });
+
+  const settingsDisposable = vscode.workspace.onDidChangeConfiguration(
+    (event) => {
+      if (event.affectsConfiguration("mojigoto.webviewFontScalePercent")) {
+        panel.webview.postMessage({
+          type: "webviewUiSettingsChanged",
+          payload: getSettingsUiSettings(),
+        });
+      }
+      if (
+        event.affectsConfiguration("mojigoto.webviewAutoSaveEnabled") ||
+        event.affectsConfiguration("mojigoto.webviewAutoSaveDelaySeconds")
+      ) {
+        panel.webview.postMessage({
+          type: "webviewUiSettingsChanged",
+          payload: getSettingsUiSettings(),
+        });
+        if (!getSettingsUiSettings().autoSaveEnabled) {
+          if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
+          settingsAutoSaveTimer = null;
+        }
+      }
+    },
+  );
+  context.subscriptions.push(settingsDisposable);
+  panel.onDidDispose(() => settingsDisposable.dispose());
 
   const genreOptions = await collectGenreOptions(
     initial.genres || initial.genre,
@@ -963,7 +1267,47 @@ async function openSettingsWebview(context, treeProvider, item) {
   panel.webview.html = getSettingsWebviewHtml(panel.webview, initial, {
     ...target,
     genreOptions,
+    penNameOptions: getPenNameOptions(context, initial.penName),
   });
+
+  async function persistSettings(message, notifyWebview = true) {
+    const revision = Number(message?.revision || 0);
+    const autoSave = Boolean(message?.autoSave);
+
+    settingsSaveQueue = settingsSaveQueue
+      .catch(() => undefined)
+      .then(async () => {
+        const saved = await writeSettingsFile(target.path, {
+          ...initial,
+          ...(message?.payload || {}),
+          folderName: initial.folderName || item?.workName || "",
+        });
+
+        initial = saved;
+        await rememberPenName(context, saved.penName);
+        await collectGenreOptions(saved.genres || saved.genre, context);
+        panel.title = saved.title ? `作品設定: ${saved.title}` : "作品設定";
+        treeProvider?.refresh();
+        await syncExportOptionsToWorkspace(saved.exportOptions);
+        await vscode.commands.executeCommand("mojigoto.refreshStats");
+        await vscode.commands.executeCommand(
+          "setContext",
+          "mojigoto.settingsUpdated",
+          Date.now(),
+        );
+        return saved;
+      });
+
+    const saved = await settingsSaveQueue;
+    if (notifyWebview) {
+      panel.webview.postMessage({
+        type: "saved",
+        revision,
+        autoSave,
+      });
+    }
+    return saved;
+  }
 
   panel.webview.onDidReceiveMessage(
     async (message) => {
@@ -991,6 +1335,31 @@ async function openSettingsWebview(context, treeProvider, item) {
           return;
         }
 
+        if (message?.type === "scheduleSettingsSave") {
+          if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
+          const uiSettings = getSettingsUiSettings();
+          if (!uiSettings.autoSaveEnabled) {
+            settingsAutoSaveTimer = null;
+            return;
+          }
+
+          const pendingMessage = {
+            payload: message.payload || {},
+            revision: Number(message.revision || 0),
+            autoSave: true,
+          };
+          settingsAutoSaveTimer = setTimeout(() => {
+            settingsAutoSaveTimer = null;
+            persistSettings(pendingMessage, true).catch((error) => {
+              panel.webview.postMessage({
+                type: "error",
+                message: `自動保存に失敗しました: ${String(error)}`,
+              });
+            });
+          }, uiSettings.autoSaveDelayMs);
+          return;
+        }
+
         if (message?.type === "requestClose") {
           const dirty = Boolean(message?.payload?.dirty);
 
@@ -1014,34 +1383,9 @@ async function openSettingsWebview(context, treeProvider, item) {
         }
 
         if (message?.type === "saveAndExport") {
-          const saved = await writeSettingsFile(target.path, {
-            ...initial,
-            ...message.payload,
-            folderName: initial.folderName || item?.workName || "",
-          });
-
-          initial = saved;
-
-          const genreOptions = await collectGenreOptions(
-            saved.genres || saved.genre,
-            context,
-          );
-
-          panel.title = saved.title ? `作品設定: ${saved.title}` : "作品設定";
-          panel.webview.html = getSettingsWebviewHtml(panel.webview, initial, {
-            ...target,
-            genreOptions,
-          });
-
-          treeProvider?.refresh();
-
-          await syncExportOptionsToWorkspace(saved.exportOptions);
-          await vscode.commands.executeCommand("mojigoto.refreshStats");
-          await vscode.commands.executeCommand(
-            "setContext",
-            "mojigoto.settingsUpdated",
-            Date.now(),
-          );
+          if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
+          settingsAutoSaveTimer = null;
+          await persistSettings(message, false);
 
           await exportTreeItem(context, {
             kind: "settingsEntry",
@@ -1050,34 +1394,18 @@ async function openSettingsWebview(context, treeProvider, item) {
             workName: item?.workName || "",
           });
 
-          panel.webview.postMessage({ type: "saved" });
+          panel.webview.postMessage({
+            type: "saved",
+            revision: Number(message.revision || 0),
+            autoSave: false,
+          });
           return;
         }
 
         if (message?.type === "save") {
-          const saved = await writeSettingsFile(target.path, {
-            ...initial,
-            ...message.payload,
-            folderName: initial.folderName || item?.workName || "",
-          });
-
-          initial = saved;
-
-          await collectGenreOptions(saved.genres || saved.genre, context);
-
-          panel.title = saved.title ? `作品設定: ${saved.title}` : "作品設定";
-
-          treeProvider?.refresh();
-
-          await syncExportOptionsToWorkspace(saved.exportOptions);
-          await vscode.commands.executeCommand("mojigoto.refreshStats");
-          await vscode.commands.executeCommand(
-            "setContext",
-            "mojigoto.settingsUpdated",
-            Date.now(),
-          );
-
-          panel.webview.postMessage({ type: "saved" });
+          if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
+          settingsAutoSaveTimer = null;
+          await persistSettings(message, true);
           return;
         }
       } catch (e) {

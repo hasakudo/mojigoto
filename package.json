@@ -2,7 +2,7 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
@@ -316,7 +316,7 @@
         "mojigoto.webviewAutoSaveEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "ノートと構想メモの自動保存を有効にします。無効時は手動保存するまで未保存状態になります。",
+          "description": "ノート・構想メモ・作品設定の自動保存を有効にします。無効時は手動保存するまで未保存状態になります。",
           "category": "もじごと:保存",
           "order": 45
         },
@@ -325,14 +325,14 @@
           "default": 0.8,
           "minimum": 0.3,
           "maximum": 30,
-          "description": "ノートと構想メモで、最後の変更から自動保存するまでの秒数。",
+          "description": "ノート・構想メモ・作品設定で、最後の変更から自動保存するまでの秒数。",
           "category": "もじごと:保存",
           "order": 46
         },
         "mojigoto.exportRoot": {
           "type": "string",
           "default": "",
-          "description": "書き出し先の親フォルダ。未設定の場合、初回の書き出し時に選択します。作品ごとに用途別フォルダを自動作成します。",
+          "description": "書き出し先兼倉庫フォルダ。Singleでは原稿フォルダと同じ階層、Multiでは作品フォルダと同じ階層に置くと作品ツリーへ表示します。別の場所では従来どおり書き出し先としてのみ使用します。",
           "category": "もじごと:書き出し",
           "order": 50
         },
@@ -403,19 +403,26 @@
           "category": "もじごと:書き出し",
           "order": 57
         },
+        "mojigoto.exportIncludePenName": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "作品設定のHTML書き出しにペンネームを含めます。",
+          "category": "もじごと:書き出し",
+          "order": 58
+        },
         "mojigoto.exportIncludeMemo": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しにメモを含めます。",
           "category": "もじごと:書き出し",
-          "order": 58
+          "order": 59
         },
         "mojigoto.exportIncludeUpdatedAt": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しに更新日時を含めます。単一書き出しのみ",
           "category": "もじごと:書き出し",
-          "order": 59
+          "order": 60
         },
         "mojigoto.sheetsEnabled": {
           "type": "boolean",
@@ -851,6 +858,18 @@
         "icon": "$(trash)"
       },
       {
+        "command": "mojigoto.moveNoteUp",
+        "title": "ノートを上へ移動",
+        "category": "もじごと",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "mojigoto.moveNoteDown",
+        "title": "ノートを下へ移動",
+        "category": "もじごと",
+        "icon": "$(arrow-down)"
+      },
+      {
         "command": "mojigoto.openTrashFolder",
         "title": "ゴミ箱フォルダを開く",
         "category": "もじごと",
@@ -1226,6 +1245,16 @@
           "group": "navigation@7"
         },
         {
+          "command": "mojigoto.moveNoteUp",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "navigation@5"
+        },
+        {
+          "command": "mojigoto.moveNoteDown",
+          "when": "view == mojigoto.workTree && viewItem == noteFile",
+          "group": "navigation@6"
+        },
+        {
           "command": "mojigoto.deleteNote",
           "when": "view == mojigoto.workTree && viewItem == noteFile",
           "group": "inline@9"
@@ -1512,6 +1541,14 @@
         },
         {
           "command": "mojigoto.deleteNote",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.moveNoteUp",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.moveNoteDown",
           "when": "false"
         },
         {

@@ -283,7 +283,7 @@ async function pickIncludeSettings() {
         label: "設定を含める",
         value: true,
         detail:
-          "HTMLでは、フォルダ名・目標文字数・締切日・メモの出力は作品設定の書き出し設定に従います。",
+          "HTMLでは、フォルダ名・目標文字数・締切日・ペンネーム・メモの出力は作品設定の書き出し設定に従います。",
       },
       {
         label: "設定を含めない",
@@ -362,6 +362,7 @@ function formatSettingsSectionTxt(settings) {
     `ジャンル: ${formatSettingsGenre(settings)}`,
     `目標文字数: ${settings.targetChars || 0}`,
     `締切: ${settings.deadline || ""}`,
+    `ペンネーム: ${settings.penName || ""}`,
     "",
     "[あらすじ]",
     settings.summary || "",
@@ -381,6 +382,7 @@ function formatSettingsSectionMd(settings) {
     `- ジャンル: ${formatSettingsGenre(settings)}`,
     `- 目標文字数: ${settings.targetChars || 0}`,
     `- 締切: ${settings.deadline || ""}`,
+    `- ペンネーム: ${settings.penName || ""}`,
     "",
     "### あらすじ",
     "",
@@ -421,6 +423,12 @@ function formatSettingsSectionHtml(settings) {
   if (exportOptions.includeDeadline) {
     metaRows.push(
       `<dt>締切</dt><dd>${escapeHtml(settings.deadline || "")}</dd>`,
+    );
+  }
+
+  if (exportOptions.includePenName) {
+    metaRows.push(
+      `<dt>ペンネーム</dt><dd>${escapeHtml(settings.penName || "")}</dd>`,
     );
   }
 

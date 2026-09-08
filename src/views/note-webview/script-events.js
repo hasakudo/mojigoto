@@ -588,7 +588,7 @@ function getEventsScript() {
       }
           
       if (msg.type === "error") {
-        setStatus(msg.message || "処理に失敗しました。", true);
+        setStatus(msg.message || "処理に失敗しました。", true, true);
       }
 
       if (msg.type === "templateDeleted") {

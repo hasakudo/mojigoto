@@ -14,6 +14,9 @@ const {
   updateWritingMemoPathsForFolderRename,
 } = require("../writing-memo/writing-memo-tracker");
 
+let activeReorderPanel = null;
+let openingReorderEditor = null;
+
 function normalizeComparablePath(value) {
   const normalized = path.normalize(String(value || "").trim());
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
@@ -426,7 +429,7 @@ async function refreshMojigotoTreeAfterReorder() {
   } catch {}
 }
 
-async function openReorderEditor(context, deps = {}) {
+async function openReorderEditorImpl(context, deps = {}) {
   const {
     scheduleRecalc = () => {},
     refreshExplorer = async () => {},
@@ -477,6 +480,7 @@ async function openReorderEditor(context, deps = {}) {
       uiSettings: getReorderEditorUiSettings(),
     },
   );
+  activeReorderPanel = webviewPanel;
 
   const settingsDisposable = vscode.workspace.onDidChangeConfiguration(
     (event) => {
@@ -490,7 +494,12 @@ async function openReorderEditor(context, deps = {}) {
   );
   context.subscriptions.push(settingsDisposable);
   webviewPanel.onDidDispose(
-    () => settingsDisposable.dispose(),
+    () => {
+      settingsDisposable.dispose();
+      if (activeReorderPanel === webviewPanel) {
+        activeReorderPanel = null;
+      }
+    },
     null,
     context.subscriptions,
   );
@@ -1029,6 +1038,27 @@ async function openReorderEditor(context, deps = {}) {
       );
     }
   });
+
+  return webviewPanel;
+}
+
+async function openReorderEditor(context, deps = {}) {
+  if (activeReorderPanel) {
+    activeReorderPanel.reveal(vscode.ViewColumn.Active);
+    return activeReorderPanel;
+  }
+
+  if (!openingReorderEditor) {
+    openingReorderEditor = openReorderEditorImpl(context, deps);
+  }
+
+  try {
+    const panel = await openingReorderEditor;
+    panel?.reveal(vscode.ViewColumn.Active);
+    return panel;
+  } finally {
+    openingReorderEditor = null;
+  }
 }
 
 function registerReorderCommands(context, deps = {}) {

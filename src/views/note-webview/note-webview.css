@@ -186,17 +186,20 @@ body {
   min-width: 220px;
   max-width: min(520px, calc(100% - 32px));
   box-sizing: border-box;
-  padding: 5px 12px;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 
   border-left: 3px solid var(--vscode-editorInfo-foreground);
-  background: var(--vscode-editorWidget-background);
-  color: var(--vscode-editorWidget-foreground);
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-notifications-foreground, var(--vscode-editorWidget-foreground));
 
   opacity: 0;
+  visibility: hidden;
   transform: translateY(-6px);
   pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
 }
 
 @media (max-width: 900px) {
@@ -211,13 +214,13 @@ body {
 
 .toastStatus.isVisible {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0);
+  transition-delay: 0s;
 }
 
-.toastStatus {
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
+.toastStatus.isError {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
 }
 
 .paneHeaderLeft {

@@ -1794,12 +1794,6 @@ function getGroupsScript() {
         });
       });
 
-      groupsRoot.querySelectorAll("[data-action='insertItemAfter']").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          insertItemAfter(btn.dataset.groupId || "", btn.dataset.itemId || "");
-        });
-      });
-
       groupsRoot.querySelectorAll("[data-action='addDivider']").forEach((btn) => {
         btn.addEventListener("click", () => {
           const groupId = btn.dataset.groupId;

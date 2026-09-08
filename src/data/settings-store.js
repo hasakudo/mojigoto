@@ -52,6 +52,35 @@ const DEFAULT_GENRE_OPTIONS = [
 ];
 
 const HIDDEN_GENRE_OPTIONS_KEY = "mojigoto.hiddenGenreOptions";
+const PEN_NAME_OPTIONS_KEY = "mojigoto.penNameOptions";
+
+function normalizePenName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function getPenNameOptions(context, currentPenName = "") {
+  const stored = context?.globalState?.get(PEN_NAME_OPTIONS_KEY, []);
+  const source = Array.isArray(stored) ? stored : [];
+  const seen = new Set();
+  const result = [];
+
+  for (const value of [currentPenName, ...source]) {
+    const penName = normalizePenName(value);
+    const key = penName.toLowerCase();
+    if (!penName || seen.has(key)) continue;
+    seen.add(key);
+    result.push(penName);
+  }
+
+  return result;
+}
+
+async function rememberPenName(context, value) {
+  const penName = normalizePenName(value);
+  if (!penName || typeof context?.globalState?.update !== "function") return;
+  const options = getPenNameOptions(context, penName).slice(0, 50);
+  await context.globalState.update(PEN_NAME_OPTIONS_KEY, options);
+}
 
 function normalizeGenreText(value) {
   return String(value || "")
@@ -150,6 +179,7 @@ function createDefaultSettings(item) {
     schemaVersion: 1,
     folderName: item?.workName || "",
     title: item?.workName || "",
+    penName: "",
     genre: "",
     genres: [],
     status: "",
@@ -163,6 +193,7 @@ function createDefaultSettings(item) {
       includeGenre: true,
       includeTargetChars: true,
       includeDeadline: true,
+      includePenName: true,
       includeMemo: false,
       includeUpdatedAt: false,
     },
@@ -198,6 +229,7 @@ async function writeSettingsFile(targetPath, data) {
     schemaVersion: 1,
     folderName: String(data.folderName || "").trim(),
     title: String(data.title || "").trim(),
+    penName: normalizePenName(data.penName),
     genre: getGenreTextFromGenres(genres),
     genres,
     status: normalizeWorkStatus(data.status),
@@ -214,6 +246,10 @@ async function writeSettingsFile(targetPath, data) {
           : true,
       includeTargetChars: !!data.exportOptions?.includeTargetChars,
       includeDeadline: !!data.exportOptions?.includeDeadline,
+      includePenName:
+        typeof data.exportOptions?.includePenName === "boolean"
+          ? data.exportOptions.includePenName
+          : true,
       includeMemo: !!data.exportOptions?.includeMemo,
       includeUpdatedAt: !!data.exportOptions?.includeUpdatedAt,
     },
@@ -249,6 +285,13 @@ async function syncExportOptionsToWorkspace(exportOptions) {
     config.update(
       "exportIncludeDeadline",
       !!exportOptions.includeDeadline,
+      vscode.ConfigurationTarget.Workspace,
+    ),
+    config.update(
+      "exportIncludePenName",
+      typeof exportOptions.includePenName === "boolean"
+        ? exportOptions.includePenName
+        : true,
       vscode.ConfigurationTarget.Workspace,
     ),
     config.update(
@@ -367,4 +410,8 @@ module.exports = {
   restoreGenreOptions,
   collectLinkedGenreOptions,
   collectGenreOptions,
+  PEN_NAME_OPTIONS_KEY,
+  normalizePenName,
+  getPenNameOptions,
+  rememberPenName,
 };

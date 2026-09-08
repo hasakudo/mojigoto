@@ -63,6 +63,7 @@ function buildWorkJsonFromSingleSettings(
     schemaVersion: Number(src.schemaVersion || 1) || 1,
     folderName: normalizedFolderName,
     title: normalizedTitle,
+    penName: String(src.penName || "").trim(),
     genre: genres.join(", "),
     genres,
     status: normalizeWorkStatus(src.status),

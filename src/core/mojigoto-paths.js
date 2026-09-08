@@ -67,9 +67,19 @@ function buildWorkExcludeSet() {
   ];
 
   const user = getUserWorkExcludeNames();
+  const cfg = vscode.workspace.getConfiguration("mojigoto");
+  const workRoot = getWorkRoot();
+  const exportRoot = String(cfg.get("exportRoot", "") || "").trim();
+  const warehouseName =
+    workRoot &&
+    exportRoot &&
+    path.dirname(path.resolve(exportRoot)).toLowerCase() ===
+      path.resolve(workRoot).toLowerCase()
+      ? path.basename(exportRoot)
+      : "";
 
   return new Set(
-    [...fixed, ...user].map((name) =>
+    [...fixed, ...user, warehouseName].filter(Boolean).map((name) =>
       String(name || "")
         .trim()
         .toLowerCase(),
