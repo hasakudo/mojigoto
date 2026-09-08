@@ -123,7 +123,7 @@ function getConceptMemoStyles() {
       padding-right: 3px;
     }
 
-    @media (max-width: 1100px) {
+    @media (max-width: 1300px) {
       .app {
         grid-template-columns: 350px minmax(0, 1fr);
       }
@@ -1307,7 +1307,7 @@ function getConceptMemoStyles() {
       opacity: 0.85;
     }
 
-    @media (min-width: 981px) and (max-width: 1100px) {
+    @media (min-width: 981px) and (max-width: 1300px) {
       .app,
       .app.isCommonTodoCollapsed {
         grid-template-columns: 350px minmax(0, 1fr);
