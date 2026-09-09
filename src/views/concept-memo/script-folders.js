@@ -17,6 +17,31 @@ function getConceptMemoFoldersScript() {
       return folderId === "writing" || folderId === "note-item";
     }
 
+    function getMemoFolderCounts() {
+      const memos = Array.isArray(currentState?.data?.memos)
+        ? currentState.data.memos
+        : [];
+      const byFolder = new Map(getMemoFolders().map((folder) => [folder.id, 0]));
+      let unclassified = 0;
+
+      memos.forEach((memo) => {
+        const folderId = String(memo?.folderId || "");
+        if (!folderId) {
+          unclassified += 1;
+          return;
+        }
+        if (byFolder.has(folderId)) {
+          byFolder.set(folderId, byFolder.get(folderId) + 1);
+        }
+      });
+
+      return {
+        total: memos.length,
+        unclassified,
+        byFolder,
+      };
+    }
+
     function ensureVisibleMemoSelection() {
       const visible = getFilteredMemos();
       if (!visible.some((memo) => memo.id === selectedMemoId)) {
@@ -97,13 +122,19 @@ function getConceptMemoFoldersScript() {
       renderAll();
     }
 
-    function createFolderFilterButton(value, label) {
+    function createFolderFilterButton(value, label, count) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "folderChip";
       button.dataset.folderFilter = value;
-      button.textContent = label;
-      button.title = label;
+      const labelElement = document.createElement("span");
+      labelElement.className = "folderChipLabel";
+      labelElement.textContent = label;
+      const countElement = document.createElement("span");
+      countElement.className = "folderChipCount";
+      countElement.textContent = String(Number(count || 0));
+      button.append(labelElement, countElement);
+      button.title = label + "（" + countElement.textContent + "件）";
       button.classList.toggle("isActive", activeFolderId === value);
       return button;
     }
@@ -116,6 +147,7 @@ function getConceptMemoFoldersScript() {
       const manageButton = document.getElementById("toggleFolderManagerButton");
       const editorSelect = document.getElementById("memoFolderSelect");
       const folders = getMemoFolders();
+      const folderCounts = getMemoFolderCounts();
 
       if (
         activeFolderId !== "__all__" &&
@@ -127,12 +159,22 @@ function getConceptMemoFoldersScript() {
 
       if (quickList) {
         quickList.innerHTML = "";
-        quickList.appendChild(createFolderFilterButton("__all__", "すべて"));
+        quickList.appendChild(
+          createFolderFilterButton("__all__", "すべて", folderCounts.total),
+        );
         folders.slice(0, 3).forEach((folder) => {
-          quickList.appendChild(createFolderFilterButton(folder.id, folder.name));
+          quickList.appendChild(
+            createFolderFilterButton(
+              folder.id,
+              folder.name,
+              folderCounts.byFolder.get(folder.id) || 0,
+            ),
+          );
         });
         if (folders.length <= 3) {
-          quickList.appendChild(createFolderFilterButton("", "未分類"));
+          quickList.appendChild(
+            createFolderFilterButton("", "未分類", folderCounts.unclassified),
+          );
         }
       }
 
@@ -143,9 +185,11 @@ function getConceptMemoFoldersScript() {
           extraFolders.map((folder) =>
             '<option value="' + escapeHtml(folder.id) + '"' +
             (activeFolderId === folder.id ? ' selected' : '') + '>' +
-            escapeHtml(folder.name) + '</option>',
+            escapeHtml(folder.name) + '（' +
+            String(folderCounts.byFolder.get(folder.id) || 0) + '）</option>',
           ).join("") +
-          '<option value=""' + (activeFolderId === "" ? ' selected' : '') + '>未分類</option>';
+          '<option value=""' + (activeFolderId === "" ? ' selected' : '') +
+          '>未分類（' + String(folderCounts.unclassified) + '）</option>';
       }
 
       if (manager) manager.hidden = !isFolderManagerOpen;

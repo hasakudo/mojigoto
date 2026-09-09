@@ -239,9 +239,9 @@ function getConceptMemoStyles() {
 
     .folderChip {
       max-width: 125px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       padding: 3px 8px;
       border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
       border-radius: 999px;
@@ -249,6 +249,26 @@ function getConceptMemoStyles() {
       background: var(--vscode-button-secondaryBackground);
       cursor: pointer;
       font-size: 12px;
+    }
+
+    .folderChipLabel {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folderChipCount {
+      flex: 0 0 auto;
+      min-width: 15px;
+      padding: 0 4px;
+      border-radius: 999px;
+      color: var(--vscode-badge-foreground);
+      background: var(--vscode-badge-background);
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+      box-sizing: border-box;
     }
 
     .folderChip.isActive {
