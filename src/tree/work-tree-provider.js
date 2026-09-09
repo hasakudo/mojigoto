@@ -34,19 +34,67 @@ const {
 
 const GENRE_EMPTY_FILTER = "__empty__";
 const WORK_STATUS_NOT_HOLD_COMPLETE_FILTER = "__not_hold_complete__";
-const WAREHOUSE_EXCEL_EXTENSIONS = new Set([
-  ".xls",
-  ".xlsx",
-  ".xlsm",
-  ".xlsb",
-  ".xlt",
-  ".xltx",
-  ".xltm",
-]);
+const WAREHOUSE_FILE_PRESENTATIONS = [
+  {
+    extensions: new Set([
+      ".xls",
+      ".xlsx",
+      ".xlsm",
+      ".xlsb",
+      ".xlt",
+      ".xltx",
+      ".xltm",
+    ]),
+    iconId: "table",
+    typeLabel: "Excelファイル",
+  },
+  {
+    extensions: new Set([".csv", ".tsv"]),
+    iconId: "table",
+    typeLabel: "表データファイル",
+  },
+  {
+    extensions: new Set([".doc", ".docx", ".docm", ".dot", ".dotx", ".dotm", ".rtf"]),
+    iconId: "book",
+    typeLabel: "Word文書",
+  },
+  {
+    extensions: new Set([".pdf"]),
+    iconId: "file-pdf",
+    typeLabel: "PDFファイル",
+  },
+  {
+    extensions: new Set([".html", ".htm", ".xhtml"]),
+    iconId: "file-code",
+    typeLabel: "HTMLファイル",
+  },
+  {
+    extensions: new Set([
+      ".avif",
+      ".bmp",
+      ".gif",
+      ".heic",
+      ".heif",
+      ".ico",
+      ".jpeg",
+      ".jpg",
+      ".png",
+      ".svg",
+      ".tif",
+      ".tiff",
+      ".webp",
+    ]),
+    iconId: "file-media",
+    typeLabel: "画像ファイル",
+  },
+];
 
-function isWarehouseExcelFile(fileName) {
-  return WAREHOUSE_EXCEL_EXTENSIONS.has(
-    path.extname(String(fileName || "")).toLowerCase(),
+function getWarehouseFilePresentation(fileName) {
+  const extension = path.extname(String(fileName || "")).toLowerCase();
+  return (
+    WAREHOUSE_FILE_PRESENTATIONS.find((item) =>
+      item.extensions.has(extension),
+    ) || { iconId: "file", typeLabel: "ファイル" }
   );
 }
 
@@ -566,7 +614,7 @@ class MojigotoWorkTreeProvider {
             isDirectory = fs.statSync(fsPath).isDirectory();
           } catch {}
         }
-        const isExcelFile = !isDirectory && isWarehouseExcelFile(entry.name);
+        const filePresentation = getWarehouseFilePresentation(entry.name);
 
         return new MojigotoTreeItem(
           entry.name,
@@ -577,9 +625,11 @@ class MojigotoWorkTreeProvider {
             kind: isDirectory ? "warehouseFolder" : "warehouseFile",
             contextValue: isDirectory ? "warehouseFolder" : "warehouseFile",
             fsPath,
-            iconId: isDirectory ? "folder" : isExcelFile ? "table" : "file",
+            iconId: isDirectory ? "folder" : filePresentation.iconId,
             parent: parentItem,
-            tooltip: isExcelFile ? `Excelファイル\n${fsPath}` : fsPath,
+            tooltip: isDirectory
+              ? fsPath
+              : `${filePresentation.typeLabel}\n${fsPath}`,
             command: isDirectory
               ? undefined
               : {
