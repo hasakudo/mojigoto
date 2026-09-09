@@ -263,9 +263,10 @@ function getConceptMemoStyles() {
       min-width: 15px;
       padding: 0 4px;
       border-radius: 999px;
-      color: var(--vscode-badge-foreground);
-      background: var(--vscode-badge-background);
+      color: var(--vscode-button-foreground, #ffffff);
+      background: var(--vscode-button-background, #0e639c);
       font-size: 10px;
+      font-weight: 600;
       line-height: 16px;
       text-align: center;
       box-sizing: border-box;
