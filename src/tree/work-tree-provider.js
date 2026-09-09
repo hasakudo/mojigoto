@@ -34,6 +34,21 @@ const {
 
 const GENRE_EMPTY_FILTER = "__empty__";
 const WORK_STATUS_NOT_HOLD_COMPLETE_FILTER = "__not_hold_complete__";
+const WAREHOUSE_EXCEL_EXTENSIONS = new Set([
+  ".xls",
+  ".xlsx",
+  ".xlsm",
+  ".xlsb",
+  ".xlt",
+  ".xltx",
+  ".xltm",
+]);
+
+function isWarehouseExcelFile(fileName) {
+  return WAREHOUSE_EXCEL_EXTENSIONS.has(
+    path.extname(String(fileName || "")).toLowerCase(),
+  );
+}
 
 function normalizeComparablePath(value) {
   const normalized = path.normalize(String(value || "").trim());
@@ -551,6 +566,7 @@ class MojigotoWorkTreeProvider {
             isDirectory = fs.statSync(fsPath).isDirectory();
           } catch {}
         }
+        const isExcelFile = !isDirectory && isWarehouseExcelFile(entry.name);
 
         return new MojigotoTreeItem(
           entry.name,
@@ -561,9 +577,9 @@ class MojigotoWorkTreeProvider {
             kind: isDirectory ? "warehouseFolder" : "warehouseFile",
             contextValue: isDirectory ? "warehouseFolder" : "warehouseFile",
             fsPath,
-            iconId: isDirectory ? "folder" : "file",
+            iconId: isDirectory ? "folder" : isExcelFile ? "table" : "file",
             parent: parentItem,
-            tooltip: fsPath,
+            tooltip: isExcelFile ? `Excelファイル\n${fsPath}` : fsPath,
             command: isDirectory
               ? undefined
               : {
