@@ -13,6 +13,7 @@ function getNoteTocScript() {
       showGroups: true,
       showDividers: true,
       showItems: true,
+      showDividerValues: true,
     };
 
     function loadNoteTocState() {
@@ -25,6 +26,7 @@ function getNoteTocScript() {
           showGroups: saved.showGroups !== false,
           showDividers: saved.showDividers !== false,
           showItems: saved.showItems !== false,
+          showDividerValues: saved.showDividerValues !== false,
         };
       } catch {}
     }
@@ -59,11 +61,17 @@ function getNoteTocScript() {
           if (isDivider && !noteTocState.showDividers) return;
           if (!isDivider && !noteTocState.showItems) return;
 
+          const dividerLabel = String(item?.label || "").trim();
+          const dividerValue = String(item?.value || "").trim();
+          const dividerTocLabel = noteTocState.showDividerValues && dividerValue
+            ? (dividerLabel ? dividerLabel + "：" + dividerValue : dividerValue)
+            : dividerLabel;
+
           entries.push({
             level: isDivider ? "divider" : "item",
             navId: "item:" + item.id,
             label: truncateNoteTocLabel(
-              isDivider ? item.label : item.heading,
+              isDivider ? dividerTocLabel : item.heading,
               (isDivider ? "区分 " : "項目 ") + (itemIndex + 1),
             ),
           });
@@ -94,6 +102,8 @@ function getNoteTocScript() {
         const key = "show" + suffix;
         if (checkbox) checkbox.checked = Boolean(noteTocState[key]);
       });
+      const showDividerValues = document.getElementById("noteTocShowDividerValues");
+      if (showDividerValues) showDividerValues.checked = noteTocState.showDividerValues;
 
       const entries = getNoteTocEntries();
       list.innerHTML = "";
@@ -160,6 +170,11 @@ function getNoteTocScript() {
           saveNoteTocState();
           renderNoteToc();
         });
+      });
+      document.getElementById("noteTocShowDividerValues")?.addEventListener("change", (event) => {
+        noteTocState.showDividerValues = Boolean(event.target.checked);
+        saveNoteTocState();
+        renderNoteToc();
       });
     }
 

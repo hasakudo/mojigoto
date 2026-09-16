@@ -800,7 +800,7 @@ function getConceptMemoListScript() {
           '</div>' +
           statusRowHtml +
           '<div class="memoMetaRow">' +
-            '<span class="muted">' + escapeHtml(typeLabel) + '</span>' +
+            '<span class="memoTypeLabel memoTypeLabel-' + escapeHtml(String(memo?.type || "text")) + '">' + escapeHtml(typeLabel) + '</span>' +
             (folderName ? '<span class="memoFolderBadge">' + escapeHtml(folderName) + '</span>' : '') +
             todoMeta +
             updatedAtHtml +

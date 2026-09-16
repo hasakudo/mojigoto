@@ -447,6 +447,8 @@ function getConceptMemoEditorScript() {
       const pinButton = document.getElementById("pinButton");
       const archiveButton = document.getElementById("archiveButton");
       const dashboardButton = document.getElementById("dashboardButton");
+      const sourceAutoSyncControl = document.getElementById("sourceAutoSyncControl");
+      const sourceAutoSyncToggle = document.getElementById("sourceAutoSyncToggle");
       const memo = getSelectedMemo();
 
       if (!memo) {
@@ -466,6 +468,7 @@ function getConceptMemoEditorScript() {
           dashboardButton.textContent = "ダッシュボード";
           dashboardButton.title = "Dashboardの表示";
         }
+        if (sourceAutoSyncControl) sourceAutoSyncControl.style.display = "none";
         return;
       }
 
@@ -480,6 +483,7 @@ function getConceptMemoEditorScript() {
       const metaText = document.getElementById("metaText");
       const filePathView = document.getElementById("filePathView");
       const sourceSummary = getSourceSummaryFull(memo);
+      const hasNoteItemSource = String(memo?.source?.kind || "") === "noteItem";
 
       [pinButton, archiveButton, dashboardButton].forEach((button) => {
         if (button) button.disabled = false;
@@ -509,6 +513,14 @@ function getConceptMemoEditorScript() {
         );
       }
 
+      if (sourceAutoSyncControl) {
+        sourceAutoSyncControl.style.display = hasNoteItemSource ? "" : "none";
+      }
+      if (sourceAutoSyncToggle) {
+        sourceAutoSyncToggle.checked = Boolean(memo?.source?.autoSyncToNoteItem);
+        sourceAutoSyncToggle.disabled = !canApplyToNoteItem(memo);
+      }
+
       if (memoTitle) memoTitle.value = memo.title || "";
       if (memoType) memoType.value = memo.type || "text";
       if (memoBody) memoBody.value = memo.body || "";
@@ -524,20 +536,27 @@ function getConceptMemoEditorScript() {
       renderTodoChecklist(memo);
 
       if (metaText) {
-        const baseMeta =
-          "種別: " + getMemoTypeLabel(memo.type || "text") +
-          " / 更新: " + formatJstDateTime(memo.updatedAt || "");
+        const baseMetaHtml =
+          '<span class="memoMetaLabel">種別:</span> ' +
+          '<span class="memoMetaValue">' +
+          escapeHtml(getMemoTypeLabel(memo.type || "text")) +
+          "</span>" +
+          '<span class="memoMetaSeparator"> / </span>' +
+          '<span class="memoMetaLabel">更新:</span> ' +
+          '<span class="memoMetaValue">' +
+          escapeHtml(formatJstDateTime(memo.updatedAt || "")) +
+          "</span>";
 
         const sourceStatusBadgeHtml = getSourceStatusBadgeHtml(memo);
 
         metaText.innerHTML = sourceSummary
-          ? escapeHtml(baseMeta) +
+          ? baseMetaHtml +
             "<br>" +
             '<span class="' + getSourceSummaryClassName(memo) + '">' +
             escapeHtml(sourceSummary) +
             "</span>" +
             sourceStatusBadgeHtml
-          : escapeHtml(baseMeta);
+          : baseMetaHtml;
       }
 
       if (filePathView) {
@@ -896,6 +915,7 @@ function getConceptMemoEditorScript() {
       const dashboardButton = document.getElementById("dashboardButton");
       const closeButton = document.getElementById("closeButton");
       const copyMemoButton = document.getElementById("copyMemoButton");
+      const sourceAutoSyncToggle = document.getElementById("sourceAutoSyncToggle");
 
       if (createMemoButton) {
         createMemoButton.addEventListener("click", () => {
@@ -961,6 +981,10 @@ function getConceptMemoEditorScript() {
           toggleSelectedMemoArchived();
         });
       }
+
+      sourceAutoSyncToggle?.addEventListener("change", () => {
+        setSelectedMemoAutoSyncToNoteItem(sourceAutoSyncToggle.checked);
+      });
 
       if (dashboardButton) {
         dashboardButton.addEventListener("click", () => {
@@ -1080,6 +1104,47 @@ function getConceptMemoEditorScript() {
           itemId,
         },
       });
+    }
+
+    function setSelectedMemoAutoSyncToNoteItem(enabled) {
+      const memo = getSelectedMemo();
+      const source = memo?.source || {};
+      if (!memo || String(source.kind || "") !== "noteItem") return;
+
+      const firstOptIn = Boolean(enabled) &&
+        !Boolean(currentState.data.autoSyncToNoteItemDefault);
+      if (firstOptIn) {
+        currentState.data.autoSyncToNoteItemDefault = true;
+      }
+
+      currentState.data.memos = currentState.data.memos.map((entry) => {
+        const entrySource = entry?.source || {};
+        if (String(entrySource.kind || "") !== "noteItem") return entry;
+        const isSelected = String(entry.id || "") === String(memo.id || "");
+        const shouldApplyInitialDefault = firstOptIn &&
+          typeof entrySource.autoSyncToNoteItem !== "boolean";
+        if (!isSelected && !shouldApplyInitialDefault) return entry;
+        return {
+          ...entry,
+          updatedAt: new Date().toISOString(),
+          source: {
+            ...entrySource,
+            autoSyncToNoteItem: isSelected ? Boolean(enabled) : true,
+          },
+        };
+      });
+      currentState.data.updatedAt = new Date().toISOString();
+      setDirty(true);
+      renderEditor();
+      renderMemoList();
+      showToast(
+        enabled
+          ? (firstOptIn
+              ? "自動反映をONにしました。今後作成する出典付きメモも初期値がONになります。"
+              : "この構想メモの自動反映をONにしました。")
+          : "この構想メモの自動反映をOFFにしました。",
+        { duration: firstOptIn ? 3200 : 1800 },
+      );
     }
 
     async function copySelectedMemoBody() {

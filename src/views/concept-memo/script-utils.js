@@ -302,6 +302,7 @@ function getConceptMemoUtilsScript() {
           commonTodoItems: Array.isArray(state?.data?.commonTodoItems)
             ? state.data.commonTodoItems
             : [],
+          autoSyncToNoteItemDefault: Boolean(state?.data?.autoSyncToNoteItemDefault),
         },
       };
     }

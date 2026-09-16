@@ -6,8 +6,13 @@ function registerStatsCommands(context, options) {
     logOnSave,
     exportStatsCsv,
     exportMergedManuscript,
+    sendInitialProgressToWebhook,
     getRefreshTargets,
   } = options;
+
+  let sheetsWasEnabled = Boolean(
+    vscode.workspace.getConfiguration("mojigoto").get("sheetsEnabled", false),
+  );
 
   const refreshTargets =
     typeof getRefreshTargets === "function"
@@ -50,11 +55,36 @@ function registerStatsCommands(context, options) {
       },
     ),
 
-    vscode.workspace.onDidChangeConfiguration((e) => {
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
       const changed = refreshTargets.some((key) => e.affectsConfiguration(key));
       if (!changed) return;
 
+      const sheetsChanged = e.affectsConfiguration("mojigoto.sheetsEnabled");
+      const sheetsIsEnabled = Boolean(
+        vscode.workspace.getConfiguration("mojigoto").get("sheetsEnabled", false),
+      );
+      const shouldSendInitialProgress =
+        sheetsChanged && !sheetsWasEnabled && sheetsIsEnabled;
+      sheetsWasEnabled = sheetsIsEnabled;
+
       panelController.refresh();
+
+      if (
+        shouldSendInitialProgress &&
+        typeof sendInitialProgressToWebhook === "function"
+      ) {
+        try {
+          const result = await sendInitialProgressToWebhook(context);
+          vscode.window.showInformationMessage(
+            `もじごと: Sheetsへ作品の初期情報を送信しました（総文字数 ${Number(result?.total || 0).toLocaleString("ja-JP")}文字）`,
+          );
+          panelController.refresh();
+        } catch (error) {
+          vscode.window.showWarningMessage(
+            `もじごと: Sheetsへの初期情報送信に失敗しました: ${String(error?.message || error)}`,
+          );
+        }
+      }
     }),
   );
 }

@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const path = require("path");
 const fs = require("fs");
 
@@ -471,6 +472,7 @@ async function openNoteCopyWebview(context, treeProvider, options) {
       retainContextWhenHidden: true,
     },
   );
+  setWebviewPanelThemeIcon(panel, "copy");
 
   copyPanels.set(panelKey, panel);
   panel.webview.html = getNoteCopyWebviewHtml(note);

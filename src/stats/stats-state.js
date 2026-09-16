@@ -68,7 +68,10 @@ function buildRecentDailyRows(daily, endDateKey, count = 7) {
   for (const date of recordedDates) {
     const row = daily?.[date];
     const totalSaved = Number(row?.totalSaved || 0);
-    const deltaTotal = previousRecordedTotal == null
+    const hasExplicitBaseline =
+      typeof row?.baselineTotal === "number" &&
+      Number.isFinite(row.baselineTotal);
+    const deltaTotal = hasExplicitBaseline || previousRecordedTotal == null
       ? Number(row?.deltaTotal || 0)
       : totalSaved - previousRecordedTotal;
     derivedRows.set(date, { totalSaved, deltaTotal });

@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const fs = require("fs/promises");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 const { createNewNote, saveNoteFile } = require("../data/note-store");
@@ -779,6 +780,7 @@ async function openNoteImportWebview(context, treeProvider, options = {}) {
       retainContextWhenHidden: true,
     },
   );
+  setWebviewPanelThemeIcon(panel, "go-to-file");
 
   openImportPanels.set(key, panel);
 

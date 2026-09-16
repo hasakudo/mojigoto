@@ -3,7 +3,10 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const { sanitizeFolderName } = require("../core/path-utils");
-const { getCurrentWorkDisplayName } = require("../work/work-settings");
+const {
+  getCurrentWorkDisplayName,
+  getCurrentWorkFolderName,
+} = require("../work/work-settings");
 
 function getExportFieldDefaults() {
   const config = vscode.workspace.getConfiguration("mojigoto");
@@ -63,42 +66,17 @@ function getEffectiveExportOptions(settings) {
 
 function getWorkNameForExport(context) {
   const displayName = String(getCurrentWorkDisplayName(context) || "").trim();
-  if (displayName) {
-    return sanitizeFolderName(displayName);
-  }
-
-  const cfg = vscode.workspace.getConfiguration("mojigoto");
-  const mode = String(cfg.get("mode", "single") || "single");
-
-  if (mode === "multi") {
-    const saved = String(
-      context?.globalState?.get("mojigoto.currentWorkName", "") || "",
-    ).trim();
-    if (saved) return sanitizeFolderName(saved);
-    return "multi-unknown";
-  }
-
-  const wf = vscode.workspace.workspaceFolders?.[0];
-  if (wf?.name) return sanitizeFolderName(wf.name);
-
-  const manuscriptRoot = String(cfg.get("manuscriptRoot", "") || "").trim();
-  if (manuscriptRoot) {
-    return sanitizeFolderName(path.basename(path.dirname(manuscriptRoot)));
-  }
-
-  return "single-unknown";
+  const stableWorkName = String(getCurrentWorkFolderName(context) || "").trim();
+  return getWorkNameForExportFromValue(displayName, stableWorkName);
 }
 
 function getWorkNameForExportFromValue(workTitle = "", workName = "") {
+  const cfg = vscode.workspace.getConfiguration("mojigoto");
+  const nameMode = String(cfg.get("exportWorkFolderNameMode", "folderName") || "folderName");
   const title = String(workTitle || "").trim();
-  if (title) {
-    return sanitizeFolderName(title);
-  }
-
   const name = String(workName || "").trim();
-  if (name) {
-    return sanitizeFolderName(name);
-  }
+  const selected = nameMode === "title" ? title || name : name || title;
+  if (selected) return sanitizeFolderName(selected);
 
   return "single-unknown";
 }

@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("../views/shared/webview-panel-icon");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -3352,6 +3353,7 @@ function openMergedManuscriptBrowserPanel(
         retainContextWhenHidden: true,
       },
     );
+    setWebviewPanelThemeIcon(panel, "export");
 
     mergedManuscriptBrowserPanelRef = panel;
     mergedManuscriptBrowserPanelResolve = resolve;

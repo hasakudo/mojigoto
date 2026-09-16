@@ -47,12 +47,26 @@ function getViewStateScript() {
       }
     }
 
+    function findVerticalScrollContainer(startEl) {
+      let current = startEl?.parentElement || null;
+
+      while (current && current !== document.body) {
+        const overflowY = window.getComputedStyle(current).overflowY;
+        if (["auto", "scroll", "overlay"].includes(overflowY)) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+
+      return document.scrollingElement || document.documentElement;
+    }
+
     function getEditorScrollEl() {
-      return groupsRoot?.parentElement || groupsRoot;
+      return findVerticalScrollContainer(groupsRoot);
     }
 
     function getPreviewScrollEl() {
-      return previewRoot?.parentElement || previewRoot;
+      return findVerticalScrollContainer(previewRoot);
     }
 
     function saveScrollPositions() {
@@ -141,6 +155,124 @@ function getViewStateScript() {
       isPreviewOnly = !isPreviewOnly;
       savePreviewOnly();
       applyPreviewOnly();
+    }
+
+    function syncActiveEditingItemStyles() {
+      const activeId = String(activeEditingItemId || "");
+
+      groupsRoot?.querySelectorAll(".itemCard[data-item-id]").forEach((cardEl) => {
+        cardEl.classList.toggle(
+          "isActiveEditingItem",
+          Boolean(activeId) && cardEl.dataset.itemId === activeId,
+        );
+      });
+
+      previewRoot?.querySelectorAll("[data-preview-item-id]").forEach((itemEl) => {
+        itemEl.classList.toggle(
+          "isActiveEditingItem",
+          Boolean(activeId) && itemEl.dataset.previewItemId === activeId,
+        );
+      });
+
+      [noteBoardRoot, previewBoardRoot].forEach((boardRootEl) => {
+        boardRootEl?.querySelectorAll(".noteBoardCard[data-board-item-id]").forEach((cardEl) => {
+          cardEl.classList.toggle(
+            "isActiveEditingItem",
+            Boolean(activeId) && cardEl.dataset.boardItemId === activeId,
+          );
+        });
+      });
+    }
+
+    function setActiveEditingItem(itemId) {
+      const nextId = String(itemId || "");
+      if (!nextId || activeEditingItemId === nextId) return;
+
+      activeEditingItemId = nextId;
+      syncActiveEditingItemStyles();
+    }
+
+    function captureEditorPosition(itemId = "") {
+      const editorScrollEl = getEditorScrollEl();
+      const targetItemId = String(itemId || activeEditingItemId || "");
+      const itemEl = targetItemId
+        ? groupsRoot?.querySelector(
+            \`.itemCard[data-item-id="\${CSS.escape(targetItemId)}"]\`,
+          )
+        : null;
+
+      let itemViewportOffset = null;
+      if (editorScrollEl && itemEl) {
+        itemViewportOffset =
+          itemEl.getBoundingClientRect().top -
+          editorScrollEl.getBoundingClientRect().top;
+      }
+
+      const position = {
+        itemId: targetItemId,
+        scrollTop: Number(editorScrollEl?.scrollTop || 0),
+        itemViewportOffset,
+      };
+
+      saveScrollPositions();
+      return position;
+    }
+
+    function restoreEditorPosition(position = {}) {
+      const itemId = String(position?.itemId || "");
+      const savedScrollTop =
+        typeof position?.scrollTop === "number"
+          ? position.scrollTop
+          : Number.NaN;
+      const savedItemOffset =
+        typeof position?.itemViewportOffset === "number"
+          ? position.itemViewportOffset
+          : Number.NaN;
+
+      if (itemId) {
+        setActiveEditingItem(itemId);
+      }
+
+      const apply = () => {
+        const editorScrollEl = getEditorScrollEl();
+        if (!editorScrollEl) return;
+
+        const maxScroll = Math.max(
+          0,
+          editorScrollEl.scrollHeight - editorScrollEl.clientHeight,
+        );
+        let nextScrollTop = Number.isFinite(savedScrollTop)
+          ? savedScrollTop
+          : editorScrollEl.scrollTop;
+
+        if (itemId && Number.isFinite(savedItemOffset)) {
+          const itemEl = groupsRoot?.querySelector(
+            \`.itemCard[data-item-id="\${CSS.escape(itemId)}"]\`,
+          );
+
+          if (itemEl) {
+            const currentItemOffset =
+              itemEl.getBoundingClientRect().top -
+              editorScrollEl.getBoundingClientRect().top;
+            nextScrollTop =
+              editorScrollEl.scrollTop + currentItemOffset - savedItemOffset;
+          }
+        }
+
+        editorScrollEl.scrollTop = Math.max(
+          0,
+          Math.min(nextScrollTop, maxScroll),
+        );
+        saveScrollPositions();
+      };
+
+      apply();
+      requestAnimationFrame(() => {
+        apply();
+        requestAnimationFrame(apply);
+      });
+      setTimeout(apply, 80);
+      setTimeout(apply, 180);
     }
 
     function persistWebviewState() {

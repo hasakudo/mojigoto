@@ -4,10 +4,16 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { handleRenamedWorkFolders } = require("../work/work-switch-service");
 const { isSingleMode, getWorkRoot } = require("../core/mojigoto-context");
-const { openSettingsWebview } = require("../views/settings-webview");
+const {
+  openSettingsWebview,
+  closeSettingsWebviewsUnderFolder,
+} = require("../views/settings-webview");
 const { createNewNote, moveNoteInOrder } = require("../data/note-store");
 const { exportTreeItem } = require("../export/export-service");
-const { openConceptMemoWebview } = require("../views/concept-memo-webview");
+const {
+  openConceptMemoWebview,
+  closeConceptMemoWebviewsUnderFolder,
+} = require("../views/concept-memo-webview");
 const { getCurrentWorkDisplayName } = require("../work/work-settings");
 const { getCurrentWorkName } = require("../core/mojigoto-context");
 const {
@@ -25,6 +31,7 @@ const {
 const {
   openNoteWebview,
   closeNoteWebviewByPath,
+  closeNoteWebviewsUnderFolder,
 } = require("../views/note-webview");
 const {
   exportViewBundle,
@@ -1351,11 +1358,25 @@ async function registerMojigotoTreeCommands(
           workName,
         };
 
+        const copyChoice = await vscode.window.showInformationMessage(
+          `もじごと: 作品「${workName}」を作成しました。ほかの作品から作品設定・プロット・資料をコピーしますか？`,
+          "他作品からコピー",
+          "コピーせず続ける",
+        );
+        if (copyChoice === "他作品からコピー") {
+          await vscode.commands.executeCommand(
+            "mojigoto.copyFromOtherWork",
+            createdWorkItem,
+          );
+        }
+
         await openSettingsWebview(context, treeProvider, createdWorkItem);
 
-        vscode.window.showInformationMessage(
-          `もじごと: 作品「${workName}」を作成しました。`,
-        );
+        if (copyChoice !== "他作品からコピー") {
+          vscode.window.showInformationMessage(
+            `もじごと: 作品「${workName}」を作成しました。`,
+          );
+        }
       } catch (e) {
         vscode.window.showErrorMessage(
           `もじごと: 新規作品の作成に失敗しました: ${String(e)}`,
@@ -1911,6 +1932,12 @@ async function registerMojigotoTreeCommands(
         await closeEditorsUnderFolder(item.fsPath);
 
         await movePathToSystemTrash(item.fsPath);
+
+        await Promise.all([
+          closeNoteWebviewsUnderFolder(item.fsPath),
+          closeConceptMemoWebviewsUnderFolder(item.fsPath),
+          closeSettingsWebviewsUnderFolder(item.fsPath),
+        ]);
 
         treeProvider?.refresh();
 

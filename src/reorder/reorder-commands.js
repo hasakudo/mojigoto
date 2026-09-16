@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("../views/shared/webview-panel-icon");
 const fs = require("fs");
 const path = require("path");
 
@@ -480,6 +481,7 @@ async function openReorderEditorImpl(context, deps = {}) {
       uiSettings: getReorderEditorUiSettings(),
     },
   );
+  setWebviewPanelThemeIcon(webviewPanel, "list-ordered");
   activeReorderPanel = webviewPanel;
 
   const settingsDisposable = vscode.workspace.onDidChangeConfiguration(

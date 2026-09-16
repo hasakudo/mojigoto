@@ -473,6 +473,59 @@ async function sendUnsyncedMojigotoEventsToWebhook(context) {
   return { sent };
 }
 
+async function sendInitialProgressToWebhook(context) {
+  if (!sheetsEnabled()) {
+    throw new Error("Sheets送信がOFFです（mojigoto.sheetsEnabled）");
+  }
+
+  const url = getWebhookUrl();
+  const secret = getWebhookSecret();
+  const projectName = getProjectName(context);
+  const projectKey = getWorkId(context);
+  const root = String(
+    vscode.workspace.getConfiguration("mojigoto").get("manuscriptRoot", "") ||
+      "",
+  ).trim();
+
+  if (!url || !secret || !projectName) {
+    throw new Error("webhookUrl / webhookSecret / projectName が未設定です");
+  }
+  if (!root || !fs.existsSync(root)) {
+    throw new Error("原稿フォルダが見つかりません（mojigoto.manuscriptRoot）");
+  }
+
+  const totalCount = await calcTotalCount(root);
+  const nowMs = Date.now();
+  const { dateJst } = nowJstParts(new Date(nowMs));
+  const daily = gsGet(context, keyDaily(context), {});
+  const localDailyValue = Number(daily?.[dateJst]?.deltaTotal || 0);
+  const dailyValue = Number.isFinite(localDailyValue) ? localDailyValue : 0;
+
+  const sent = await postJsonToUrl(url, {
+    type: "progress",
+    secret,
+    project: projectName,
+    projectKey,
+    date: dateJst,
+    total: totalCount,
+    daily: dailyValue,
+    updatedAt: nowMs,
+  });
+
+  if (!sent) {
+    throw new Error("Webhookから正常な応答を受信できませんでした");
+  }
+
+  return {
+    sent: true,
+    project: projectName,
+    projectKey,
+    date: dateJst,
+    total: totalCount,
+    daily: dailyValue,
+  };
+}
+
 async function calcTotalCount(root) {
   let sum = 0;
   for (const f of listTextFiles(root)) {
@@ -576,6 +629,7 @@ module.exports = {
   resetDiffForCurrentWork,
   logOnSave,
   sendUnsyncedMojigotoEventsToWebhook,
+  sendInitialProgressToWebhook,
   calcTotalCount,
   calcChapterTotal,
   getCurrentWorkGoal,

@@ -25,11 +25,13 @@ function slugify(input) {
   );
 }
 
-async function getUserTemplateDir(type) {
-  const ws = getWorkspaceRoot();
-  if (!ws) return "";
+async function getUserTemplateDir(type, options = {}) {
+  const scope = options?.scope === "work" ? "work" : "global";
+  const workDir = String(options?.workDir || "").trim();
+  const base = scope === "work" && workDir ? workDir : getWorkspaceRoot();
+  if (!base) return "";
   const dir = path.join(
-    ws,
+    base,
     ".mojigoto",
     "templates",
     type === "plot" ? "plot" : "reference",
@@ -38,13 +40,13 @@ async function getUserTemplateDir(type) {
   return dir;
 }
 
-async function saveUserGroupTemplate(note, group, templateName, saveMode) {
+async function saveUserGroupTemplate(note, group, templateName, saveMode, options = {}) {
   const templateNote = {
     ...note,
     groups: group ? [group] : [],
   };
 
-  return saveUserTemplate(templateNote, templateName, saveMode);
+  return saveUserTemplate(templateNote, templateName, saveMode, options);
 }
 
 function buildTemplatePayload(note, templateName, saveMode) {
@@ -111,9 +113,10 @@ function buildTemplatePayload(note, templateName, saveMode) {
   };
 }
 
-async function saveUserTemplate(note, templateName, saveMode) {
+async function saveUserTemplate(note, templateName, saveMode, options = {}) {
   const type = String(note?.type || "plot");
-  const dir = await getUserTemplateDir(type);
+  const scope = options?.scope === "work" ? "work" : "global";
+  const dir = await getUserTemplateDir(type, { ...options, scope });
   if (!dir) {
     throw new Error("テンプレート保存先を作成できませんでした。");
   }
@@ -135,6 +138,7 @@ async function saveUserTemplate(note, templateName, saveMode) {
   }
 
   const payload = buildTemplatePayload(note, templateName, saveMode);
+  payload.scope = scope;
   await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
 
   return {
@@ -143,10 +147,8 @@ async function saveUserTemplate(note, templateName, saveMode) {
   };
 }
 
-async function listUserTemplates(type) {
-  const dir = await getUserTemplateDir(type);
+async function listTemplatesInDir(type, dir, scope, idPrefix) {
   if (!dir) return [];
-  
   try {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     const files = entries.filter(
@@ -163,9 +165,10 @@ async function listUserTemplates(type) {
           label: String(
             parsed?.templateName || file.name.replace(/\.json$/i, ""),
           ),
-          description: "自作テンプレート",
-          templateId: `user:${file.name}`,
+          description: scope === "work" ? "自作テンプレート（この作品）" : "自作テンプレート（全体）",
+          templateId: `${idPrefix}${file.name}`,
           type,
+          scope,
           saveMode: String(parsed?.saveMode || ""),
           groups: Array.isArray(parsed?.groups) ? parsed.groups : [],
         });
@@ -185,11 +188,47 @@ async function listUserTemplates(type) {
   }
 }
 
-async function getUserTemplateById(type, templateId) {
-  if (!String(templateId || "").startsWith("user:")) return null;
+async function listUserTemplates(type, options = {}) {
+  const globalDir = await getUserTemplateDir(type, { scope: "global" });
+  const workDir = await getUserTemplateDir(type, {
+    scope: "work",
+    workDir: options?.workDir,
+  });
+  const globalTemplates = await listTemplatesInDir(
+    type,
+    globalDir,
+    "global",
+    "user:global:",
+  );
+  const sameDirectory = globalDir && workDir && path.resolve(globalDir) === path.resolve(workDir);
+  const workTemplates = sameDirectory
+    ? []
+    : await listTemplatesInDir(type, workDir, "work", "user:work:");
+  return [...workTemplates, ...globalTemplates].sort((a, b) =>
+    a.label.localeCompare(b.label, "ja", { numeric: true, sensitivity: "base" }),
+  );
+}
 
-  const fileName = String(templateId).slice("user:".length);
-  const dir = await getUserTemplateDir(type);
+function parseTemplateId(templateId) {
+  const value = String(templateId || "");
+  if (value.startsWith("user:work:")) {
+    return { scope: "work", fileName: value.slice("user:work:".length) };
+  }
+  if (value.startsWith("user:global:")) {
+    return { scope: "global", fileName: value.slice("user:global:".length) };
+  }
+  if (value.startsWith("user:")) {
+    return { scope: "global", fileName: value.slice("user:".length) };
+  }
+  return null;
+}
+
+async function getUserTemplateById(type, templateId, options = {}) {
+  const parsedId = parseTemplateId(templateId);
+  if (!parsedId) return null;
+  const fileName = parsedId.fileName;
+  if (!fileName || fileName.includes("/") || fileName.includes("\\")) return null;
+  const dir = await getUserTemplateDir(type, { ...options, scope: parsedId.scope });
   if (!dir) return null;
 
   const filePath = path.join(dir, fileName);
@@ -202,17 +241,15 @@ async function getUserTemplateById(type, templateId) {
   }
 }
 
-async function deleteUserTemplateById(type, templateId) {
-  if (!String(templateId || "").startsWith("user:")) {
-    return false;
-  }
-
-  const fileName = String(templateId).slice("user:".length);
+async function deleteUserTemplateById(type, templateId, options = {}) {
+  const parsedId = parseTemplateId(templateId);
+  if (!parsedId) return false;
+  const fileName = parsedId.fileName;
   if (!fileName || fileName.includes("/") || fileName.includes("\\")) {
     return false;
   }
 
-  const dir = await getUserTemplateDir(type);
+  const dir = await getUserTemplateDir(type, { ...options, scope: parsedId.scope });
   if (!dir) return false;
 
   const filePath = path.join(dir, fileName);

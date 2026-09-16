@@ -14,7 +14,10 @@ function renderHeader(state, esc) {
   return `
   <div class="statsHeader">
   <h1>Dashboard <span class="chip">${esc(state.exportedAtJst || "")}</span></h1>
-  <button id="btnRefresh">更新</button>
+  <div class="statsHeaderActions">
+    <button id="btnCorrectStats">記録を補正</button>
+    <button id="btnRefresh">更新</button>
+  </div>
   </div>`;
 }
 

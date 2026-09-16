@@ -132,7 +132,6 @@ function getConceptMemoLayoutScript() {
 
       // 狭幅に入った瞬間だけ表示モードを整える
       if (isNarrowLayout && !wasNarrow) {
-        isCommonTodoCollapsed = true;
         if (selectedMemoId) {
           isSidebarCollapsed = true;
         } else {

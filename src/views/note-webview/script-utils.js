@@ -148,7 +148,8 @@ function getUtilsScript() {
         kind: "entry",
         heading: "",
         headingRuby: "",
-        body: ""
+        body: "",
+        relatedReferences: [],
       };
     }
 
@@ -166,7 +167,8 @@ function getUtilsScript() {
         id: makeId("div"),
         kind: "divider",
         label: "",
-        value: ""
+        value: "",
+        relatedReferences: [],
       };
     }
 
@@ -303,6 +305,7 @@ function getUtilsScript() {
           kind: "divider",
           label: String(item.label || ""),
           value: String(item.value || ""),
+          relatedReferences: normalizeRelatedReferenceLinks(item.relatedReferences),
         };
       }
 
@@ -313,7 +316,25 @@ function getUtilsScript() {
         headingRuby: String(item.headingRuby || ""),
         body: String(item.body || ""),
         memo: normalizeItemMemo(item.memo),
+        relatedReferences: normalizeRelatedReferenceLinks(item.relatedReferences),
       };
+    }
+
+    function normalizeRelatedReferenceLinks(value) {
+      if (!Array.isArray(value)) return [];
+      return value
+        .map((link) => ({
+          noteType: link?.noteType === "plot" ? "plot" : "reference",
+          noteId: String(link?.noteId || ""),
+          noteFileName: String(link?.noteFileName || ""),
+          noteTitle: String(link?.noteTitle || ""),
+          groupId: String(link?.groupId || ""),
+          groupTitle: String(link?.groupTitle || ""),
+          itemId: String(link?.itemId || ""),
+          itemKind: link?.itemKind === "divider" ? "divider" : "entry",
+          itemLabel: String(link?.itemLabel || ""),
+        }))
+        .filter((link) => link.noteId && link.itemId);
     }
 
     function normalizeGroup(group) {

@@ -239,21 +239,6 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                     <span class="menuItemValue" id="memoFolderMenuValue">未分類</span>
                   </button>
 
-                  <button type="button" class="menuItemButton" id="copyMemoButton">
-                    本文をコピー
-                  </button>
-
-                  <button type="button" class="menuItemButton" id="openSourceNoteButton" style="display:none;">
-                    出典元：ノートを開く
-                  </button>
-
-                  <button type="button" class="menuItemButton" id="applyToNoteButton" style="display:none;">
-                    出典元：項目メモへ反映
-                  </button>
-
-                  <button type="button" class="menuItemButton" id="unlinkSourceButton" style="display:none;">
-                    出典元：リンクを解除
-                  </button>
                 </div>
 
                 <div id="memoTypeSubmenu" class="editorSubmenu" hidden>
@@ -336,6 +321,16 @@ function getConceptMemoWebviewHtml(webview, bootState) {
 
           <div class="box compactBox">
             <div class="muted" id="metaText"></div>
+            <label class="sourceAutoSyncControl" id="sourceAutoSyncControl" style="display:none;">
+              <input type="checkbox" id="sourceAutoSyncToggle">
+              <span>構想メモを出典元の項目メモへ自動反映</span>
+            </label>
+            <div class="memoMetaActions" id="memoMetaActions">
+              <button type="button" class="button secondary" id="openSourceNoteButton" style="display:none;">ノートを開く</button>
+              <button type="button" class="button secondary" id="applyToNoteButton" style="display:none;">項目メモへ反映</button>
+              <button type="button" class="button secondary" id="copyMemoButton">本文をコピー</button>
+              <button type="button" class="button secondary" id="unlinkSourceButton" style="display:none;">出典リンクを解除</button>
+            </div>
             <div class="muted workTitleLabel" id="filePathView" style="margin-top:6px;"></div>
           </div>
         </div>
@@ -371,6 +366,8 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     const vscode = acquireVsCodeApi();
     const bootState = ${bootJson};
     const persistedUiState = vscode.getState() || {};
+    const commonTodoCollapsedStorageKey = "mojigoto.conceptMemo.commonTodoCollapsed:" + String(bootState.filePath || bootState.workDir || "default");
+    const savedCommonTodoCollapsed = localStorage.getItem(commonTodoCollapsedStorageKey);
 
     const MEMO_TYPE_LABELS = {
       text: "通常メモ",
@@ -415,7 +412,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     let isOverviewCollapsed = Boolean(persistedUiState.isOverviewCollapsed);
     let isCommonTodoCollapsed =
       persistedUiState.isCommonTodoCollapsed === undefined
-        ? window.innerWidth <= 1100
+        ? (savedCommonTodoCollapsed === null ? window.innerWidth <= 1100 : savedCommonTodoCollapsed === "true")
         : Boolean(persistedUiState.isCommonTodoCollapsed);
     let toastTimer = null;
     let autoSaveAfterApplyToNote = Boolean(persistedUiState.autoSaveAfterApplyToNote);

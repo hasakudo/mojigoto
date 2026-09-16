@@ -56,6 +56,10 @@ function keyEventsLastLoggedAtByWorkName(workName) {
   return `mojigoto.stats.${normalizeStatsWorkScope(workName)}.eventsLastLoggedAt`;
 }
 
+function keyCorrectionBackupByWorkName(workName) {
+  return `mojigoto.stats.${normalizeStatsWorkScope(workName)}.correctionBackup`;
+}
+
 module.exports = {
   normalizeStatsWorkScope,
   getStatsWorkScope,
@@ -71,4 +75,5 @@ module.exports = {
   keyEventsLastSendAtByWorkName,
   keyEventsLastRemindAtByWorkName,
   keyEventsLastLoggedAtByWorkName,
+  keyCorrectionBackupByWorkName,
 };

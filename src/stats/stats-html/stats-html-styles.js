@@ -27,6 +27,15 @@ function makeStatsStyles() {
     .statsHeader {
       display:flex;
       justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .statsHeaderActions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
     h1{ font-size:16px; margin:0 0 12px; }
     .row{ display:flex; gap:12px; flex-wrap:wrap; margin:10px 0 16px; }

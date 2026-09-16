@@ -116,16 +116,13 @@ function getNavigationScript() {
         renderGroups();
         renderPreview();
 
-        requestAnimationFrame(() => {
+        const positionMemo = () => {
           const memoPanel = groupsRoot.querySelector(
             \`.itemMemoPanel[data-item-id="\${itemId}"]\`
           );
 
           if (memoPanel) {
-            memoPanel.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
+            scrollEditorElementIntoView(memoPanel, "center", "auto");
 
             const firstInput = memoPanel.querySelector(
               ".itemMemoBodyInput, .itemMemoTagsInput"
@@ -135,11 +132,15 @@ function getNavigationScript() {
           }
 
           const itemCard = groupsRoot.querySelector(\`[data-nav-id="item:\${itemId}"]\`);
-          itemCard?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
+          scrollEditorElementIntoView(itemCard, "center", "auto");
+        };
+
+        requestAnimationFrame(() => {
+          positionMemo();
+          requestAnimationFrame(positionMemo);
         });
+        setTimeout(positionMemo, 80);
+        setTimeout(positionMemo, 180);
       });
     }
 
@@ -424,13 +425,35 @@ function getNavigationScript() {
       return "";
     }
 
-    function scrollEditorElementIntoView(targetEl, align = "center") {
+    function scrollEditorElementIntoView(
+      targetEl,
+      align = "center",
+      behavior = "smooth",
+    ) {
       if (!targetEl) return;
 
-      targetEl.scrollIntoView({
-        behavior: "smooth",
-        block: align,
-      });
+      const scrollEl =
+        typeof getEditorScrollEl === "function"
+          ? getEditorScrollEl()
+          : null;
+
+      if (scrollEl) {
+        const scrollRect = scrollEl.getBoundingClientRect();
+        const targetRect = targetEl.getBoundingClientRect();
+        const relativeTop =
+          targetRect.top - scrollRect.top + scrollEl.scrollTop;
+        const nextTop =
+          align === "start"
+            ? relativeTop - 12
+            : relativeTop - scrollEl.clientHeight / 2 + targetRect.height / 2;
+
+        scrollEl.scrollTo({
+          top: Math.max(0, nextTop),
+          behavior,
+        });
+      } else {
+        targetEl.scrollIntoView({ behavior, block: align });
+      }
 
       targetEl.classList.add("editorJumpHighlight");
 
@@ -484,14 +507,11 @@ function getNavigationScript() {
           openGroup(groupId);
         }
 
-        requestAnimationFrame(() => {
+        const positionItem = () => {
           const nextTarget = groupsRoot.querySelector(\`[data-item-id="\${itemId}"]\`);
           if (!nextTarget) return;
 
-          nextTarget.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
+          scrollEditorElementIntoView(nextTarget, "center", "auto");
 
           nextTarget.classList.remove("editorJumpHighlight");
           void nextTarget.offsetWidth;
@@ -503,7 +523,14 @@ function getNavigationScript() {
           if (typeof focusTarget.focus === "function") {
             focusTarget.focus({ preventScroll: true });
           }
+        };
+
+        requestAnimationFrame(() => {
+          positionItem();
+          requestAnimationFrame(positionItem);
         });
+        setTimeout(positionItem, 80);
+        setTimeout(positionItem, 180);
       });
     }
 

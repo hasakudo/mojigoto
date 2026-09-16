@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 const {
   hideCustomGenreOptions,
@@ -1150,6 +1151,7 @@ async function openInitialSetupWebview(context, initialState, onFinish) {
       retainContextWhenHidden: false,
     },
   );
+  setWebviewPanelThemeIcon(panel, "tools");
 
   panel.webview.html = getSetupWebviewHtml(panel.webview, initialState);
 

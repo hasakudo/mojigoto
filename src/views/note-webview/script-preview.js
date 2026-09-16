@@ -214,6 +214,11 @@ function getPreviewScript() {
 
       const groupsHtml = visibleGroups.map((group) => {
         const groupTitle = esc(group.title || "");
+        const groupRelatedCount = (Array.isArray(group?.items) ? group.items : [])
+          .reduce((total, item) => total + (Array.isArray(item?.relatedReferences) ? item.relatedReferences.length : 0), 0);
+        const groupRelatedMarker = groupRelatedCount
+          ? '<span class="previewRelatedMarker" title="関連ノート ' + groupRelatedCount + '件">🔗' + groupRelatedCount + '</span>'
+          : "";
         const isCollapsed = collapsedGroupIds.has(group.id);
 
         const visibleItems = getVisibleItemsForGroup(group);
@@ -223,7 +228,7 @@ function getPreviewScript() {
             <section class="previewGroup">
               <div class="previewGroupHead">
                 <h3 class="previewGroupTitle" data-nav-id="group:\${group.id}">
-                  \${groupTitle || "無題大分類"}
+                  \${groupTitle || "無題大分類"} \${groupRelatedMarker}
                 </h3>
                 <button
                   class="secondary previewGroupToggle"
@@ -248,12 +253,16 @@ function getPreviewScript() {
             const label = esc(item.label || "");
             const value = esc(item.value || "");
             const dividerText = (label || "区分") + (value ? "（" + value + "）" : "");
+            const relatedCount = Array.isArray(item?.relatedReferences) ? item.relatedReferences.length : 0;
+            const relatedMarker = relatedCount
+              ? '<span class="previewRelatedMarker" title="関連ノート ' + relatedCount + '件">🔗' + relatedCount + '</span>'
+              : "";
 
           return \`
-            <section class="previewDivider">
+            <section class="previewDivider" data-preview-item-id="\${item.id}">
               <div class="previewItemHead">
                 <span class="previewDividerText" data-nav-id="item:\${item.id}">
-                  \${dividerText}
+                  \${dividerText} \${relatedMarker}
                 </span>
 
                 <div class="previewItemActions" data-preview-nojump="true">
@@ -311,12 +320,17 @@ function getPreviewScript() {
               (Array.isArray(item.memo.tags) && item.memo.tags.length)
             )
           );
+          const relatedCount = Array.isArray(item?.relatedReferences) ? item.relatedReferences.length : 0;
+          const relatedMarker = relatedCount
+            ? '<span class="previewRelatedMarker" title="関連ノート ' + relatedCount + '件">🔗' + relatedCount + '</span>'
+            : "";
 
           return \`
-            <section class="previewItem">
+            <section class="previewItem" data-preview-item-id="\${item.id}">
               <div class="previewItemHead">
                 <h4 data-nav-id="item:\${item.id}">
                   \${headingHtml}
+                  \${relatedMarker}
                   \${
                     hasMemo
                       ? \`
@@ -381,7 +395,7 @@ function getPreviewScript() {
           <section class="previewGroup">
             <div class="previewGroupHead">
               <h3 class="previewGroupTitle" data-nav-id="group:\${group.id}">
-                \${groupTitle || "無題大分類"}
+                \${groupTitle || "無題大分類"} \${groupRelatedMarker}
               </h3>
               <button
                 class="secondary previewGroupToggle"
@@ -406,6 +420,7 @@ function getPreviewScript() {
           \${allGroupsHtml}
         </div>
       \`;
+      syncActiveEditingItemStyles();
     }
 
     previewRoot.onclick = (event) => {

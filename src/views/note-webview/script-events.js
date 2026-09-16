@@ -107,6 +107,18 @@ function getEventsScript() {
 
     // Escape
     if (event.key === "Escape") {
+      if (isAddressBookOpen) {
+        event.preventDefault();
+        setAddressBookOpen(false);
+        return;
+      }
+
+      if (typeof referenceSearchState !== "undefined" && referenceSearchState.open) {
+        event.preventDefault();
+        setReferenceSearchOpen(false);
+        return;
+      }
+
       if (isBoardOpen) {
         event.preventDefault();
         closeBoard();
@@ -167,6 +179,19 @@ function getEventsScript() {
       markDirty();
       renderPreview();
     });
+  }
+
+  function registerActiveEditingItemEvents() {
+    const updateActiveItemFromEvent = (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const itemCard = target?.closest(".itemCard[data-item-id]");
+      if (!itemCard) return;
+
+      setActiveEditingItem(itemCard.dataset.itemId || "");
+    };
+
+    groupsRoot?.addEventListener("focusin", updateActiveItemFromEvent);
+    groupsRoot?.addEventListener("pointerdown", updateActiveItemFromEvent);
   }
 
   function registerSearchEvents() {
@@ -358,6 +383,12 @@ function getEventsScript() {
       return;
     }
 
+    if (action === "toggleAddressBook") {
+      setMoreMenuOpen(false);
+      setAddressBookOpen(true);
+      return;
+    }
+
     if (action === "exportNote") {
       vscode.postMessage({
         type: "saveAndExport",
@@ -479,6 +510,14 @@ function getEventsScript() {
       const msg = event.data;
       if (!msg) return;
 
+      if (typeof handleReferenceSearchMessage === "function" && handleReferenceSearchMessage(msg)) {
+        return;
+      }
+
+      if (typeof handleAddressBookMessage === "function" && handleAddressBookMessage(msg)) {
+        return;
+      }
+
       if (msg.type === "webviewUiSettingsChanged") {
         const scale = Number(msg.payload?.fontScale || 1);
         document.body.style.setProperty(
@@ -548,6 +587,9 @@ function getEventsScript() {
         }
 
         titleInput.value = state.title || "";
+        if (isAddressBookOpen) {
+          renderAddressBook();
+        }
         renderGroups();
         updateDirtyUi();
         applyPreviewOnly();
@@ -575,6 +617,11 @@ function getEventsScript() {
         if (!itemId) return;
 
         openItemMemoById(groupId, itemId);
+        return;
+      }
+
+      if (msg.type === "restoreEditorPosition") {
+        restoreEditorPosition(msg.payload || {});
         return;
       }
 
@@ -681,6 +728,7 @@ function getEventsScript() {
 
   function registerDomEvents() {
     registerTitleEvents();
+    registerActiveEditingItemEvents();
     registerSearchEvents();
     registerToolbarEvents();
     registerPreviewEvents();

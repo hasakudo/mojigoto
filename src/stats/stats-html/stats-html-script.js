@@ -774,6 +774,10 @@ function makeStatsScript() {
         vscode.postMessage({ type: "refresh" });
       });
 
+      document.getElementById("btnCorrectStats")?.addEventListener("click", () => {
+        vscode.postMessage({ type: "correctStats" });
+      });
+
       document.getElementById("btnOpenExportLauncher")?.addEventListener("click", () => {
         vscode.postMessage({ type: "openExportLauncher" });
       });

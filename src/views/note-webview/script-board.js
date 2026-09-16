@@ -1404,6 +1404,7 @@ function getBoardScript() {
         .join("");
 
       restoreBoardScrollState(scrollSnapshot, rootEl);
+      syncActiveEditingItemStyles();
     }
 
     function renderBoard() {

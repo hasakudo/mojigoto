@@ -8,6 +8,12 @@ const {
   getSettingsPathForWork,
   listWorkDirectories,
 } = require("../core/mojigoto-paths");
+const { makeId } = require("../core/path-utils");
+
+function normalizeWorkIds(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((id) => String(id || "").trim()).filter(Boolean))];
+}
 
 async function ensureDir(dirPath) {
   if (!dirPath) return;
@@ -177,6 +183,8 @@ async function restoreGenreOptions(context, values) {
 function createDefaultSettings(item) {
   return {
     schemaVersion: 1,
+    workId: "",
+    relatedWorkIds: [],
     folderName: item?.workName || "",
     title: item?.workName || "",
     penName: "",
@@ -227,6 +235,10 @@ async function writeSettingsFile(targetPath, data) {
   );
   const payload = {
     schemaVersion: 1,
+    workId: String(data.workId || makeId("work")).trim(),
+    relatedWorkIds: normalizeWorkIds(data.relatedWorkIds).filter(
+      (id) => id !== String(data.workId || "").trim(),
+    ),
     folderName: String(data.folderName || "").trim(),
     title: String(data.title || "").trim(),
     penName: normalizePenName(data.penName),

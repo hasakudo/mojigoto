@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 const { getGuideSections } = require("../guide/guide-sections");
 
@@ -25,6 +26,7 @@ function openGuideWebview(context, initialSectionId = "") {
       retainContextWhenHidden: true,
     },
   );
+  setWebviewPanelThemeIcon(guidePanel, "book");
 
   guidePanel.onDidDispose(() => {
     guidePanel = null;

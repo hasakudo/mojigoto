@@ -52,6 +52,7 @@ function createDefaultEntry() {
     headingRuby: "",
     body: "",
     memo: createDefaultItemMemo(),
+    relatedReferences: [],
   };
 }
 
@@ -61,6 +62,7 @@ function createDefaultDivider() {
     kind: "divider",
     label: "",
     value: "",
+    relatedReferences: [],
   };
 }
 
@@ -75,13 +77,54 @@ function createDefaultGroup() {
 
 function createDefaultNote(type, title = "") {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: makeId(type),
     type,
     title: String(title || "").trim(),
     order: null,
     groups: [createDefaultGroup()],
+    addressBook: {
+      characters: [],
+      firstPerson: {},
+      calls: {},
+    },
     updatedAt: "",
+  };
+}
+
+function normalizeAddressBook(value) {
+  const characters = [];
+  const seen = new Set();
+  for (const character of Array.isArray(value?.characters) ? value.characters : []) {
+    const id = String(character?.id || makeId("person")).trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const sourceKind = ["group", "divider", "item"].includes(character?.sourceKind)
+      ? character.sourceKind
+      : "item";
+    characters.push({
+      id,
+      sourceKind,
+      sourceId: String(character?.sourceId || "").trim(),
+      label: String(character?.label || "").trim(),
+    });
+  }
+
+  const normalizeMap = (source) => {
+    const result = {};
+    if (!source || typeof source !== "object" || Array.isArray(source)) return result;
+    for (const [key, entry] of Object.entries(source)) {
+      const normalizedKey = String(key || "").trim();
+      const text = String(entry || "").trim();
+      if (normalizedKey && text) result[normalizedKey] = text;
+    }
+    return result;
+  };
+
+  return {
+    characters,
+    firstPerson: normalizeMap(value?.firstPerson),
+    calls: normalizeMap(value?.calls),
   };
 }
 
@@ -151,12 +194,13 @@ async function readNoteFile(filePath, fallbackType = "plot") {
   const parsed = JSON.parse(raw);
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: String(parsed?.id || makeId(fallbackType)),
     type: String(parsed?.type || fallbackType),
     title: String(parsed?.title || ""),
     order: normalizeNoteOrder(parsed?.order),
     groups: normalizeGroupsFromLegacy(parsed),
+    addressBook: normalizeAddressBook(parsed?.addressBook),
     updatedAt: String(parsed?.updatedAt || ""),
   };
 }
@@ -225,7 +269,9 @@ async function createNewNote(type, item, title, templateId = "blank") {
     : existingNotes.length
       ? null
       : 0;
-  const template = await getTemplateById(type, templateId);
+  const template = await getTemplateById(type, templateId, {
+    workDir: item?.fsPath || item?.workDir || "",
+  });
 
   if (template) {
     note.groups = cloneTemplateGroups(template.groups);
@@ -250,6 +296,7 @@ function normalizeItem(item) {
       kind: "divider",
       label: String(item?.label || ""),
       value: String(item?.value || ""),
+      relatedReferences: normalizeRelatedReferences(item?.relatedReferences),
     };
   }
 
@@ -260,7 +307,33 @@ function normalizeItem(item) {
     headingRuby: String(item?.headingRuby || ""),
     body: String(item?.body || ""),
     memo: normalizeItemMemo(item?.memo),
+    relatedReferences: normalizeRelatedReferences(item?.relatedReferences),
   };
+}
+
+function normalizeRelatedReferences(value) {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set();
+  return value
+    .map((link) => ({
+      noteType: String(link?.noteType || "reference") === "plot" ? "plot" : "reference",
+      noteId: String(link?.noteId || "").trim(),
+      noteFileName: String(link?.noteFileName || "").trim(),
+      noteTitle: String(link?.noteTitle || "").trim(),
+      groupId: String(link?.groupId || "").trim(),
+      groupTitle: String(link?.groupTitle || "").trim(),
+      itemId: String(link?.itemId || "").trim(),
+      itemKind: String(link?.itemKind || "entry") === "divider" ? "divider" : "entry",
+      itemLabel: String(link?.itemLabel || "").trim(),
+    }))
+    .filter((link) => {
+      if (!link.noteId || !link.itemId) return false;
+      const key = `${link.noteId}:${link.groupId}:${link.itemId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function normalizeItemMemo(memo) {
@@ -330,7 +403,7 @@ function cloneTemplateGroups(templateGroups) {
 
 async function saveNoteFile(filePath, data) {
   const payload = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: String(data?.id || makeId(data?.type || "note")),
     type: String(data?.type || "plot"),
     title: String(data?.title || "").trim(),
@@ -339,11 +412,146 @@ async function saveNoteFile(filePath, data) {
       Array.isArray(data?.groups) && data.groups.length
         ? data.groups.map((group) => normalizeGroup(group))
         : [createDefaultGroup()],
+    addressBook: normalizeAddressBook(data?.addressBook),
     updatedAt: new Date().toISOString(),
   };
 
   await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
   return payload;
+}
+
+function normalizeReferenceSearchText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase("ja");
+}
+
+function makeReferencePreview(value, terms, maxLength = 220) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const normalized = normalizeReferenceSearchText(text);
+  const positions = terms
+    .map((term) => normalized.indexOf(term))
+    .filter((position) => position >= 0);
+  const firstMatch = positions.length ? Math.min(...positions) : 0;
+  const start = Math.max(0, firstMatch - 55);
+  const excerpt = Array.from(text).slice(start, start + maxLength).join("");
+  return `${start > 0 ? "…" : ""}${excerpt}${Array.from(text).length > start + maxLength ? "…" : ""}`;
+}
+
+async function searchNotesByType(item, noteType, query, options = {}) {
+  const normalizedNoteType = noteType === "plot" ? "plot" : "reference";
+  const terms = normalizeReferenceSearchText(query)
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!terms.length) return [];
+
+  const limit = Math.min(200, Math.max(1, Number(options.limit || 80)));
+  const files = await listNoteFiles(normalizedNoteType, item);
+  const results = [];
+  const excludeNoteId = String(options.excludeNoteId || "").trim();
+  const excludeFilePath = String(options.excludeFilePath || "").trim();
+
+  for (const file of files) {
+    if (
+      excludeFilePath &&
+      path.normalize(file.fsPath).toLowerCase() ===
+        path.normalize(excludeFilePath).toLowerCase()
+    ) {
+      continue;
+    }
+
+    let note;
+    try {
+      note = await readNoteFile(file.fsPath, normalizedNoteType);
+    } catch {
+      continue;
+    }
+
+    if (excludeNoteId && String(note?.id || "") === excludeNoteId) continue;
+
+    const noteTitle = String(note?.title || "").trim() || file.name.replace(/\.json$/i, "");
+    for (const group of Array.isArray(note?.groups) ? note.groups : []) {
+      const groupTitle = String(group?.title || "").trim();
+      for (const entry of Array.isArray(group?.items) ? group.items : []) {
+        const itemKind = entry?.kind === "divider" ? "divider" : "entry";
+        const dividerLabel = String(entry?.label || "").trim();
+        const dividerValue = String(entry?.value || "").trim();
+        const itemLabel = String(
+          itemKind === "divider" ? (dividerValue || dividerLabel) : entry?.heading,
+        ).trim();
+        const detail = String(itemKind === "divider" ? entry?.value : entry?.body);
+        const haystack = normalizeReferenceSearchText(
+          [noteTitle, groupTitle, dividerLabel, itemLabel, detail].join("\n"),
+        );
+        if (!terms.every((term) => haystack.includes(term))) continue;
+
+        results.push({
+          noteType: normalizedNoteType,
+          noteId: String(note?.id || ""),
+          noteFileName: file.name,
+          noteTitle,
+          groupId: String(group?.id || ""),
+          groupTitle,
+          itemId: String(entry?.id || ""),
+          itemKind,
+          itemLabel,
+          preview: makeReferencePreview(
+            itemKind === "divider" && dividerValue && dividerLabel
+              ? `${dividerLabel}: ${dividerValue}`
+              : detail || itemLabel,
+            terms,
+          ),
+        });
+        if (results.length >= limit) return results;
+      }
+    }
+  }
+
+  return results;
+}
+
+async function searchReferenceNotes(item, query, options = {}) {
+  return searchNotesByType(item, "reference", query, options);
+}
+
+async function resolveRelatedNoteTarget(item, descriptor) {
+  const noteType = descriptor?.noteType === "plot" ? "plot" : "reference";
+  const noteId = String(descriptor?.noteId || "").trim();
+  const noteFileName = String(descriptor?.noteFileName || "").trim();
+  const itemId = String(descriptor?.itemId || "").trim();
+  if ((!noteId && !noteFileName) || !itemId) return null;
+
+  const files = await listNoteFiles(noteType, item);
+  for (const file of files) {
+    let note;
+    try {
+      note = await readNoteFile(file.fsPath, noteType);
+    } catch {
+      continue;
+    }
+    if (String(note?.id || "") !== noteId && file.name !== noteFileName) continue;
+
+    for (const group of Array.isArray(note?.groups) ? note.groups : []) {
+      const targetItem = (Array.isArray(group?.items) ? group.items : []).find(
+        (entry) => String(entry?.id || "") === itemId,
+      );
+      if (targetItem) {
+        return { filePath: file.fsPath, note, group, item: targetItem };
+      }
+    }
+    return null;
+  }
+
+  return null;
+}
+
+async function resolveReferenceTarget(item, descriptor) {
+  return resolveRelatedNoteTarget(item, {
+    ...descriptor,
+    noteType: "reference",
+  });
 }
 
 async function moveNoteInOrder(type, item, filePath, direction) {
@@ -413,15 +621,35 @@ async function applyConceptMemoToNoteItem(input) {
     nextLinkedIds.push(memoId);
   }
 
-  item.memo = {
+  const nextMemo = {
     ...currentMemo,
     type: String(input?.memoType || "text") === "list" ? "list" : "text",
     body: String(input?.memoBody || ""),
-    updatedAt: new Date().toISOString(),
     tags: Array.isArray(input?.memoTags)
       ? input.memoTags.map((tag) => String(tag || "").trim()).filter(Boolean)
       : [],
     linkedConceptMemoIds: nextLinkedIds,
+  };
+
+  const unchanged =
+    currentMemo.type === nextMemo.type &&
+    currentMemo.body === nextMemo.body &&
+    JSON.stringify(currentMemo.tags) === JSON.stringify(nextMemo.tags) &&
+    JSON.stringify(currentMemo.linkedConceptMemoIds) ===
+      JSON.stringify(nextMemo.linkedConceptMemoIds);
+
+  if (unchanged) {
+    return {
+      note,
+      groupId,
+      itemId,
+      updated: false,
+    };
+  }
+
+  item.memo = {
+    ...nextMemo,
+    updatedAt: new Date().toISOString(),
   };
 
   const saved = await saveNoteFile(notePath, {
@@ -433,7 +661,37 @@ async function applyConceptMemoToNoteItem(input) {
     note: saved,
     groupId,
     itemId,
+    updated: true,
   };
+}
+
+async function setItemMemoAutoSync(input = {}) {
+  const notePath = String(input?.notePath || "").trim();
+  const groupId = String(input?.groupId || "").trim();
+  const itemId = String(input?.itemId || "").trim();
+  if (!notePath || !groupId || !itemId) {
+    throw new Error("自動反映先の項目情報が不足しています。");
+  }
+
+  const note = await readNoteFile(notePath, String(input?.noteType || "plot"));
+  const groups = Array.isArray(note?.groups) ? note.groups : [];
+  const group = groups.find((entry) => String(entry?.id || "") === groupId);
+  const item = (Array.isArray(group?.items) ? group.items : []).find(
+    (entry) => String(entry?.id || "") === itemId,
+  );
+  if (!item || String(item?.kind || "entry") !== "entry") {
+    throw new Error("自動反映先の項目が見つかりません。");
+  }
+
+  item.memo = {
+    ...(item.memo && typeof item.memo === "object"
+      ? normalizeItemMemo(item.memo)
+      : createDefaultItemMemo()),
+    autoSyncToConceptMemo: Boolean(input?.enabled),
+  };
+
+  const saved = await saveNoteFile(notePath, { ...note, groups });
+  return { note: saved, groupId, itemId, enabled: Boolean(input?.enabled) };
 }
 
 async function deleteNoteFile(filePath) {
@@ -462,4 +720,11 @@ module.exports = {
   moveNoteInOrder,
   deleteNoteFile,
   applyConceptMemoToNoteItem,
+  setItemMemoAutoSync,
+  searchReferenceNotes,
+  searchNotesByType,
+  resolveReferenceTarget,
+  resolveRelatedNoteTarget,
+  normalizeRelatedReferences,
+  normalizeAddressBook,
 };

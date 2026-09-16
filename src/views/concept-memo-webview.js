@@ -21,6 +21,7 @@ const {
   getConceptMemoWebviewHtml,
 } = require("./concept-memo/concept-memo-html");
 const { resolveActualNotePath } = require("../core/mojigoto-paths");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 
 const openConceptMemoPanels = new Map();
 
@@ -127,6 +128,8 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
     },
   } = options;
 
+  setWebviewPanelThemeIcon(panel, "lightbulb");
+
   const conceptMemoFilePathKey = path.normalize(filePath);
 
   openConceptMemoPanels.set(filePath, panel);
@@ -192,7 +195,60 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
         ? message.payload.folders
         : [],
       commonTodoItems: [],
+      autoSyncToNoteItemDefault: Boolean(
+        message?.payload?.autoSyncToNoteItemDefault,
+      ),
     };
+  }
+
+  async function syncEnabledConceptMemosToNoteItems(data) {
+    const updatedNotePaths = new Set();
+    const errors = [];
+    for (const memo of Array.isArray(data?.memos) ? data.memos : []) {
+      const source = memo?.source || {};
+      if (
+        String(source.kind || "") !== "noteItem" ||
+        !source.autoSyncToNoteItem ||
+        String(source.status || "active") === "missing"
+      ) {
+        continue;
+      }
+
+      try {
+        const resolvedNotePath = resolveActualNotePath(
+          String(source.notePath || ""),
+          workDir,
+          String(source.noteType || "plot"),
+        );
+        const isList = String(memo?.type || "text") === "list";
+        const result = await applyConceptMemoToNoteItem({
+          memoId: String(memo?.id || ""),
+          notePath: resolvedNotePath,
+          noteType: String(source.noteType || "plot"),
+          groupId: String(source.groupId || ""),
+          itemId: String(source.itemId || ""),
+          memoBody: isList
+            ? (Array.isArray(memo?.listItems) ? memo.listItems : [])
+                .map((item) => String(item?.text || "").trim())
+                .filter(Boolean)
+                .join("\n")
+            : String(memo?.body || ""),
+          memoType: isList ? "list" : "text",
+          memoTags: Array.isArray(memo?.tags) ? memo.tags : [],
+        });
+        if (result?.updated) updatedNotePaths.add(resolvedNotePath);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    if (updatedNotePaths.size) {
+      const { notifyNoteUpdated } = require("./note-webview");
+      await Promise.all(
+        [...updatedNotePaths].map((notePath) => notifyNoteUpdated(notePath)),
+      );
+    }
+    return errors;
   }
 
   async function persistConceptMemos(message, notifyWebview = true) {
@@ -210,10 +266,19 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
           writeCommonTodoItems(nextCommonTodoItems),
         ]);
 
-        return {
+        const nextData = {
           ...savedConceptMemos,
           commonTodoItems: savedCommonTodoItems,
         };
+        const syncErrors = await syncEnabledConceptMemosToNoteItems(nextData);
+        if (syncErrors.length) {
+          panel.webview.postMessage({
+            type: "showToast",
+            message: `出典元へ反映できなかったメモが${syncErrors.length}件あります。`,
+            isError: true,
+          });
+        }
+        return nextData;
       });
     currentData = await saveQueue;
     await notifyCommonTodoUpdated(panel);
@@ -673,11 +738,30 @@ async function notifyCommonTodoUpdated(excludedPanel = null) {
   );
 }
 
+async function closeConceptMemoWebviewsUnderFolder(folderPath) {
+  if (!folderPath) return 0;
+  const root = path.resolve(folderPath);
+  const panels = new Set(openConceptMemoPanels.values());
+  let closed = 0;
+  for (const panel of panels) {
+    const candidate = String(
+      panel?.__mojigotoConceptMemoWorkDir || panel?.__mojigotoConceptMemoFilePath || "",
+    ).trim();
+    if (!candidate) continue;
+    const relative = path.relative(root, path.resolve(candidate));
+    if (relative !== "" && (relative.startsWith("..") || path.isAbsolute(relative))) continue;
+    panel.dispose();
+    closed += 1;
+  }
+  return closed;
+}
+
 module.exports = {
   getConceptMemoPanelTitle,
   resolveConceptMemoFilePath,
   openConceptMemoWebview,
   notifyConceptMemoUpdated,
   notifyCommonTodoUpdated,
+  closeConceptMemoWebviewsUnderFolder,
   createConceptMemoSerializer,
 };

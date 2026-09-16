@@ -64,6 +64,7 @@ const {
 const {
   logOnSave,
   sendUnsyncedMojigotoEventsToWebhook,
+  sendInitialProgressToWebhook,
   ensureProjectNameFilled,
 } = require("./src/stats/stats-service");
 const {
@@ -117,6 +118,9 @@ const {
 const {
   updateWritingMemoPathsForRenameEvent,
 } = require("./src/writing-memo/writing-memo-tracker");
+const {
+  registerWorkCopyCommand,
+} = require("./src/work/work-copy");
 
 let scheduleRecalc = () => {};
 let previewStateRef = null;
@@ -137,6 +141,7 @@ function activate(context) {
   context.subscriptions.push(workTreeView);
 
   registerTreeRefreshWatchers(context, treeProvider);
+  registerWorkCopyCommand(context, treeProvider);
 
   (async () => {
     await registerMojigotoTreeCommands(context, treeProvider, workTreeView);
@@ -234,6 +239,7 @@ function activate(context) {
     exportStatsCsv,
     exportMergedManuscript,
     sendUnsyncedMojigotoEventsToWebhook,
+    sendInitialProgressToWebhook,
     readHighlightGroups,
     getPreferredHighlightEditor,
     toggleHighlightsEnabled: () =>
@@ -323,6 +329,7 @@ function activate(context) {
     logOnSave,
     exportStatsCsv,
     exportMergedManuscript,
+    sendInitialProgressToWebhook,
   });
 
   const countsStatusController = createCountsStatusController(context, {

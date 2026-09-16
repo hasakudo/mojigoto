@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const path = require("path");
 const {
   readSettingsFile,
   writeSettingsFile,
@@ -14,6 +15,11 @@ const {
 } = require("../data/settings-store");
 const { exportTreeItem } = require("../export/export-service");
 const { getNonce, escapeHtml } = require("../core/path-utils");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
+const {
+  getRelatedWorkOptions,
+  syncRelatedWorks,
+} = require("../work/related-works");
 
 const settingsPanels = new Map();
 
@@ -47,6 +53,9 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     : [];
   const penNameOptions = Array.isArray(meta?.penNameOptions)
     ? meta.penNameOptions
+    : [];
+  const relatedWorkOptions = Array.isArray(meta?.relatedWorkOptions)
+    ? meta.relatedWorkOptions
     : [];
   const nonce = getNonce();
   const config = vscode.workspace.getConfiguration("mojigoto");
@@ -84,7 +93,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       color: var(--vscode-editor-foreground);
       background: var(--vscode-editor-background);
       margin: 0;
-      padding: 20px 20px 86px;
+      padding: 14px 18px 78px;
       font-size: calc(13px * var(--mojigoto-content-font-scale));
     }
 
@@ -96,7 +105,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     .settingsLayout {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
-      gap: 24px;
+      gap: 18px;
       align-items: start;
     }
 
@@ -165,7 +174,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     .grid {
       display: grid;
       grid-template-columns: 180px minmax(0, 1fr);
-      gap: 12px 16px;
+      gap: 10px 14px;
       align-items: start;
     }
 
@@ -194,13 +203,13 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     textarea {
-      min-height: 180px;
+      min-height: 140px;
       resize: vertical;
       line-height: 1.6;
     }
 
     #memo {
-      min-height: 140px;
+      min-height: 110px;
     }
 
     .hint {
@@ -337,7 +346,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 0 0 18px;
+      margin: 0 0 12px;
     }
 
     .headerRow h1 {
@@ -469,6 +478,85 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       white-space: nowrap;
     }
 
+    .compactPairs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 16px;
+    }
+
+    .compactSectionLabel {
+      padding-top: 3px;
+      font-weight: 600;
+    }
+
+    .compactField {
+      min-width: 0;
+    }
+
+    .compactField > label {
+      display: block;
+      padding: 0 0 5px;
+    }
+
+    .relatedWorksBox {
+      display: grid;
+      gap: 7px;
+    }
+
+    .relatedWorkChips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 26px;
+      align-items: center;
+    }
+
+    .relatedWorkChip {
+      padding: 3px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
+    }
+
+    .relatedWorkEmpty {
+      opacity: 0.65;
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
+    }
+
+    .relatedWorksPicker {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      background: var(--vscode-input-background);
+    }
+
+    .relatedWorksPicker > summary {
+      padding: 7px 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .relatedWorkOptions {
+      display: grid;
+      max-height: 180px;
+      overflow-y: auto;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+
+    .relatedWorkOption {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 9px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    .relatedWorkOption + .relatedWorkOption {
+      border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
+    }
+
     @media (max-width: 720px) {
       .grid {
         grid-template-columns: 1fr;
@@ -486,6 +574,14 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       .actions {
         padding-right: 14px;
         padding-left: 14px;
+      }
+
+      .compactPairs {
+        grid-template-columns: 1fr;
+      }
+
+      .compactSectionLabel {
+        padding-top: 0;
       }
     }
 
@@ -533,44 +629,47 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           </div>
 
           <div class="hint">
-            チェックで複数選択できます。「自由入力」の候補だけ削除できます。作品で使用中の場合は作品設定を残して候補欄のみ非表示にします。
+            チェックで複数選択できます。<br>「自由入力」の候補だけ削除できます。作品で使用中の場合は作品設定を残して候補欄のみ非表示にします。
           </div>
         </div>
       </div>
 
-      <label for="status">状態</label>
-      <div>
-        <select id="status">
-          ${WORK_STATUS_OPTIONS.map((item) => {
-            const selected =
-              String(settings.status || "") === item.value ? " selected" : "";
-            return `<option value="${escapeHtml(item.value)}"${selected}>${escapeHtml(item.label)}</option>`;
-          }).join("")}
-        </select>
-        <div class="hint">作品ツリーの作品一覧を絞り込むときに使います。</div>
-      </div>
-
-      <label for="targetChars">目標文字数</label>
-      <div>
-        <input id="targetChars" type="number" min="0" step="100" value="${escapeHtml(settings.targetChars)}" />
-      </div>
-
-      <label for="deadline">締切</label>
-      <div>
-        <input id="deadline" type="date" value="${escapeHtml(settings.deadline)}" />
-        <div class="metaRow">
-          <div class="metaBox" id="deadlineDisplay">未設定</div>
-          <div class="metaBox" id="deadlineDiff"></div>
+      <div class="compactSectionLabel">作品備考</div>
+      <div class="compactPairs">
+        <div class="compactField">
+          <label for="status">状態</label>
+          <select id="status">
+            ${WORK_STATUS_OPTIONS.map((item) => {
+              const selected =
+                String(settings.status || "") === item.value ? " selected" : "";
+              return `<option value="${escapeHtml(item.value)}"${selected}>${escapeHtml(item.label)}</option>`;
+            }).join("")}
+          </select>
+          <div class="hint">作品一覧の絞り込みに使います。</div>
         </div>
-      </div>
 
-      <label for="penName">ペンネーム</label>
-      <div>
-        <input id="penName" type="text" list="penNameOptions" value="${escapeHtml(settings.penName || "")}" placeholder="ペンネームを入力または選択" />
-        <datalist id="penNameOptions">
-          ${penNameOptions.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}
-        </datalist>
-        <div class="hint">保存したペンネームは、ほかの作品でも候補から選べます。</div>
+        <div class="compactField">
+          <label for="penName">ペンネーム</label>
+          <input id="penName" type="text" list="penNameOptions" value="${escapeHtml(settings.penName || "")}" placeholder="ペンネームを入力または選択" />
+          <datalist id="penNameOptions">
+            ${penNameOptions.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}
+          </datalist>
+          <div class="hint">ほかの作品でも候補から選べます。</div>
+        </div>
+
+        <div class="compactField">
+          <label for="targetChars">目標文字数</label>
+          <input id="targetChars" type="number" min="0" step="100" value="${escapeHtml(settings.targetChars)}" />
+        </div>
+
+        <div class="compactField">
+          <label for="deadline">締切</label>
+          <input id="deadline" type="date" value="${escapeHtml(settings.deadline)}" />
+          <div class="metaRow">
+            <div class="metaBox" id="deadlineDisplay">未設定</div>
+            <div class="metaBox" id="deadlineDiff"></div>
+          </div>
+        </div>
       </div>
 
       <label for="summary">あらすじ</label>
@@ -580,6 +679,18 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           <div class="metaBox" id="summaryCount">0文字</div>
         </div>
       </div>
+
+      ${meta.mode === "multi" ? `
+      <label>関連作品名</label>
+      <div class="relatedWorksBox">
+        <div id="relatedWorkChips" class="relatedWorkChips"></div>
+        <details class="relatedWorksPicker">
+          <summary>関連作品を選択</summary>
+          <div id="relatedWorkOptions" class="relatedWorkOptions"></div>
+        </details>
+        <div class="hint">保存すると相手の作品設定にも相互表示されます。</div>
+      </div>
+      ` : ""}
 
       <label for="memo">メモ</label>
       <div>
@@ -635,6 +746,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     const initial = ${JSON.stringify(settings)};
     const exportDefaults = ${JSON.stringify(exportDefaults)};
     let currentUiSettings = ${JSON.stringify(getSettingsUiSettings())};
+    const relatedWorkOptions = ${JSON.stringify(relatedWorkOptions)};
+    let selectedRelatedWorkIds = Array.isArray(initial.relatedWorkIds)
+      ? [...new Set(initial.relatedWorkIds.map((id) => String(id || "")).filter(Boolean))]
+      : [];
+    let relatedWorksChanged = false;
 
     let availableGenreOptions = ${JSON.stringify(genreOptions)};
     const defaultGenreOptionKeys = new Set(
@@ -700,6 +816,49 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     function updateSummaryCount() {
       const count = countChars(summaryInput.value);
       document.getElementById("summaryCount").textContent = \`\${count}文字\`;
+    }
+
+    function renderRelatedWorks() {
+      const chips = document.getElementById("relatedWorkChips");
+      const optionsRoot = document.getElementById("relatedWorkOptions");
+      if (!chips || !optionsRoot) return;
+
+      const selectedOptions = relatedWorkOptions.filter((work) =>
+        selectedRelatedWorkIds.includes(String(work.id || "")),
+      );
+      chips.innerHTML = selectedOptions.length
+        ? selectedOptions
+            .map((work) => '<span class="relatedWorkChip">' + escapeHtml(work.title || work.folderName) + '</span>')
+            .join("")
+        : '<span class="relatedWorkEmpty">関連作品は未設定です</span>';
+
+      optionsRoot.innerHTML = relatedWorkOptions.length
+        ? relatedWorkOptions
+            .map((work) => {
+              const id = String(work.id || "");
+              const checked = selectedRelatedWorkIds.includes(id) ? " checked" : "";
+              const folder = work.folderName && work.folderName !== work.title
+                ? ' <span class="hint">（' + escapeHtml(work.folderName) + '）</span>'
+                : "";
+              return '<label class="relatedWorkOption"><input type="checkbox" data-related-work-id="' +
+                escapeHtml(id) + '"' + checked + '> <span>' + escapeHtml(work.title || work.folderName) + folder + '</span></label>';
+            })
+            .join("")
+        : '<div class="relatedWorkEmpty" style="padding:8px 10px">関連付けできる他作品がありません</div>';
+
+      optionsRoot.querySelectorAll("[data-related-work-id]").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          const id = String(checkbox.getAttribute("data-related-work-id") || "");
+          if (checkbox.checked) {
+            selectedRelatedWorkIds = [...new Set([...selectedRelatedWorkIds, id])];
+          } else {
+            selectedRelatedWorkIds = selectedRelatedWorkIds.filter((value) => value !== id);
+          }
+          relatedWorksChanged = true;
+          markDirty();
+          renderRelatedWorks();
+        });
+      });
     }
 
     function formatDeadlineJP(value) {
@@ -907,6 +1066,8 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         deadline: document.getElementById("deadline").value,
         penName: document.getElementById("penName").value,
         summary: document.getElementById("summary").value,
+        relatedWorkIds: selectedRelatedWorkIds,
+        relatedWorksChanged,
         memo: memoInput.value,
 
         exportOptions: {
@@ -1124,6 +1285,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     selectedGenres = normalizeGenres(selectedGenres);
     renderGenreChips();
     renderGenreOptions();
+    renderRelatedWorks();
 
     updateSummaryCount();
     updateDeadlineDisplay();
@@ -1157,6 +1319,9 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
       if (msg.type === "saved") {
         clearDirty(msg.revision);
+        if (Number(msg.revision) >= changeRevision) {
+          relatedWorksChanged = false;
+        }
         setStatus(msg.autoSave ? "自動保存しました。" : "保存しました。");
       } else if (msg.type === "genreOptionsRemoved") {
         const hidden = normalizeGenres(msg.hidden || []);
@@ -1189,6 +1354,13 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 async function openSettingsWebview(context, treeProvider, item) {
   const target = await resolveSettingsTarget(item);
   const panelKey = getSettingsPanelKey(target, item);
+  const currentWork = target.mode === "multi"
+    ? {
+        fsPath: item?.fsPath || "",
+        name: item?.workName || "",
+        title: item?.label || item?.workName || "",
+      }
+    : null;
 
   const existing = settingsPanels.get(panelKey);
   if (existing) {
@@ -1198,11 +1370,15 @@ async function openSettingsWebview(context, treeProvider, item) {
       latest.genres || latest.genre,
       context,
     );
+    const relatedWorkOptions = target.mode === "multi"
+      ? await getRelatedWorkOptions(currentWork)
+      : [];
 
     existing.webview.html = getSettingsWebviewHtml(existing.webview, latest, {
       ...target,
       genreOptions,
       penNameOptions: getPenNameOptions(context, latest.penName),
+      relatedWorkOptions,
     });
     existing.reveal(vscode.ViewColumn.One);
     return;
@@ -1219,8 +1395,10 @@ async function openSettingsWebview(context, treeProvider, item) {
       retainContextWhenHidden: true,
     },
   );
+  setWebviewPanelThemeIcon(panel, "settings-gear");
 
   settingsPanels.set(panelKey, panel);
+  panel.__mojigotoSettingsWorkDir = String(currentWork?.fsPath || "").trim();
 
   let settingsAutoSaveTimer = null;
   let settingsSaveQueue = Promise.resolve();
@@ -1263,11 +1441,15 @@ async function openSettingsWebview(context, treeProvider, item) {
     initial.genres || initial.genre,
     context,
   );
+  const relatedWorkOptions = target.mode === "multi"
+    ? await getRelatedWorkOptions(currentWork)
+    : [];
 
   panel.webview.html = getSettingsWebviewHtml(panel.webview, initial, {
     ...target,
     genreOptions,
     penNameOptions: getPenNameOptions(context, initial.penName),
+    relatedWorkOptions,
   });
 
   async function persistSettings(message, notifyWebview = true) {
@@ -1277,11 +1459,30 @@ async function openSettingsWebview(context, treeProvider, item) {
     settingsSaveQueue = settingsSaveQueue
       .catch(() => undefined)
       .then(async () => {
+        const latestOnDisk = await readSettingsFile(
+          target.readPath || target.path,
+          item,
+        );
+        const payload = message?.payload || {};
+        const relationsChanged = Boolean(payload.relatedWorksChanged);
         const saved = await writeSettingsFile(target.path, {
-          ...initial,
-          ...(message?.payload || {}),
+          ...latestOnDisk,
+          ...payload,
+          workId: latestOnDisk.workId || initial.workId,
+          relatedWorkIds: relationsChanged
+            ? payload.relatedWorkIds
+            : latestOnDisk.relatedWorkIds,
           folderName: initial.folderName || item?.workName || "",
         });
+
+        if (target.mode === "multi" && relationsChanged) {
+          const relationState = await syncRelatedWorks(
+            currentWork,
+            saved.relatedWorkIds,
+          );
+          saved.workId = relationState.workId || saved.workId;
+          saved.relatedWorkIds = relationState.relatedWorkIds;
+        }
 
         initial = saved;
         await rememberPenName(context, saved.penName);
@@ -1420,6 +1621,23 @@ async function openSettingsWebview(context, treeProvider, item) {
   );
 }
 
+async function closeSettingsWebviewsUnderFolder(folderPath) {
+  if (!folderPath) return 0;
+  const root = path.resolve(folderPath);
+  let closed = 0;
+  for (const panel of new Set(settingsPanels.values())) {
+    const candidate = String(panel?.__mojigotoSettingsWorkDir || "").trim();
+    if (!candidate) continue;
+    const relative = path.relative(root, path.resolve(candidate));
+    if (relative !== "" && (relative.startsWith("..") || path.isAbsolute(relative))) continue;
+    panel.dispose();
+    closed += 1;
+  }
+  return closed;
+}
+
 module.exports = {
   openSettingsWebview,
+  getSettingsWebviewHtml,
+  closeSettingsWebviewsUnderFolder,
 };

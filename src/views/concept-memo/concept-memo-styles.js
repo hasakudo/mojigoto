@@ -123,7 +123,7 @@ function getConceptMemoStyles() {
       padding-right: 3px;
     }
 
-    @media (max-width: 1300px) {
+    @media (max-width: 1500px) {
       .app {
         grid-template-columns: 350px minmax(0, 1fr);
       }
@@ -410,7 +410,7 @@ function getConceptMemoStyles() {
       display: flex;
       align-items: stretch;
       gap: 8px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       margin-left: auto;
     }
 
@@ -429,6 +429,7 @@ function getConceptMemoStyles() {
       justify-content: center;
       align-items: center;
       line-height: 1.1;
+      white-space: nowrap;
     }
 
     .shortcutHint {
@@ -605,6 +606,81 @@ function getConceptMemoStyles() {
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }
+
+    #metaText {
+      color: var(--vscode-foreground);
+      opacity: 1;
+      line-height: 1.65;
+      word-break: break-word;
+    }
+
+    .memoMetaLabel {
+      font-weight: 700;
+    }
+
+    .memoMetaValue {
+      font-weight: 500;
+    }
+
+    .memoMetaSeparator {
+      opacity: 0.72;
+    }
+
+    .memoTypeLabel {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 1px 7px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.4;
+      white-space: nowrap;
+      background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+      color: var(--vscode-foreground);
+    }
+
+    .memoTypeLabel-list {
+      border-color: color-mix(in srgb, var(--vscode-charts-blue) 60%, var(--vscode-panel-border));
+      color: var(--vscode-charts-blue, var(--vscode-foreground));
+    }
+
+    .memoTypeLabel-todo {
+      border-color: color-mix(in srgb, var(--vscode-charts-purple) 68%, var(--vscode-panel-border));
+      background: color-mix(in srgb, var(--vscode-charts-purple) 16%, var(--vscode-editorWidget-background, var(--vscode-input-background)));
+      color: var(--vscode-foreground);
+    }
+
+    .sourceAutoSyncControl {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 10px;
+      padding: 6px 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .sourceAutoSyncControl input {
+      margin: 0;
+    }
+
+    .memoMetaActions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .memoMetaActions .button {
+      min-height: 30px;
+      padding: 4px 8px;
+      white-space: nowrap;
     }
 
     .memoUpdatedAt {
@@ -1216,11 +1292,20 @@ function getConceptMemoStyles() {
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
+      opacity: 1;
+      font-weight: 600;
+      line-height: 1.55;
+    }
+
+    .sourceSummaryText {
+      color: currentColor;
+      opacity: 1;
+      font-weight: 600;
     }
 
     .sourceSummaryText.isInactive {
       text-decoration: line-through;
-      opacity: 0.72;
+      opacity: 0.82;
     }
 
     .sourceStatusBadge {

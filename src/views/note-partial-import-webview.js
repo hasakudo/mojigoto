@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const fs = require("fs/promises");
 const { readNoteFile } = require("../data/note-store");
 const { parseMarkdownImport } = require("../import/note-markdown-import");
@@ -2205,6 +2206,7 @@ async function openNotePartialImportWebview(
       retainContextWhenHidden: true,
     },
   );
+  setWebviewPanelThemeIcon(panel, "go-to-file");
 
   openPartialImportPanels.set(key, panel);
 

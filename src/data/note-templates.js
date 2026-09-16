@@ -77,7 +77,7 @@ function getTemplatesByType(type) {
   return type === "plot" ? PLOT_TEMPLATES : REFERENCE_TEMPLATES;
 }
 
-async function getTemplateItems(type) {
+async function getTemplateItems(type, options = {}) {
   const builtIn = getTemplatesByType(type).map((tpl) => ({
     label: tpl.label,
     description: "内蔵テンプレート",
@@ -86,14 +86,14 @@ async function getTemplateItems(type) {
     groups: Array.isArray(tpl.groups) ? tpl.groups : [],
   }));
 
-  const userTemplates = await listUserTemplates(type);
+  const userTemplates = await listUserTemplates(type, options);
 
   return [...builtIn, ...userTemplates];
 }
 
-async function getTemplateById(type, templateId) {
+async function getTemplateById(type, templateId, options = {}) {
   if (String(templateId || "").startsWith("user:")) {
-    return await getUserTemplateById(type, templateId);
+    return await getUserTemplateById(type, templateId, options);
   }
 
   return getTemplatesByType(type).find((tpl) => tpl.id === templateId) || null;

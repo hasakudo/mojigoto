@@ -21,6 +21,7 @@ function createEmptyConceptMemos() {
     memos: [],
     folders: createDefaultConceptMemoFolders(),
     commonTodoItems: [],
+    autoSyncToNoteItemDefault: false,
   };
 }
 
@@ -48,6 +49,7 @@ function normalizeConceptMemos(data) {
     commonTodoItems: Array.isArray(data?.commonTodoItems)
       ? data.commonTodoItems
       : [],
+    autoSyncToNoteItemDefault: Boolean(data?.autoSyncToNoteItemDefault),
   };
 }
 
@@ -163,6 +165,12 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
         groupTitle: String(input?.groupTitle || ""),
         itemId: String(input?.itemId || ""),
         itemHeading: String(input?.heading || ""),
+        autoSyncToConceptMemo: Boolean(input?.autoSyncToConceptMemo),
+        ...(typeof current?.source?.autoSyncToNoteItem === "boolean"
+          ? { autoSyncToNoteItem: current.source.autoSyncToNoteItem }
+          : data?.autoSyncToNoteItemDefault
+            ? { autoSyncToNoteItem: true }
+            : {}),
         status: "active",
       },
     };
@@ -218,6 +226,10 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
       groupTitle: String(input?.groupTitle || ""),
       itemId: String(input?.itemId || ""),
       itemHeading: String(input?.heading || ""),
+      autoSyncToConceptMemo: Boolean(input?.autoSyncToConceptMemo),
+      ...(data?.autoSyncToNoteItemDefault
+        ? { autoSyncToNoteItem: true }
+        : {}),
       status: "active",
     },
   });
@@ -268,6 +280,47 @@ async function updateConceptMemoSourceStatus(filePath, memoId, status) {
     data: nextData,
     memo: memos[index],
   };
+}
+
+async function updateConceptMemoSourceAutoSync(filePath, input = {}) {
+  const data = await readConceptMemos(filePath);
+  const memos = Array.isArray(data.memos) ? [...data.memos] : [];
+  const enabled = Boolean(input?.autoSyncToConceptMemo);
+  const now = getNowIsoString();
+  let updatedCount = 0;
+
+  for (let index = 0; index < memos.length; index++) {
+    const memo = memos[index] || {};
+    if (!isSameNoteItemSource(memo, input)) {
+      continue;
+    }
+
+    const source = memo.source || {};
+    if (Boolean(source.autoSyncToConceptMemo) === enabled) {
+      continue;
+    }
+
+    memos[index] = {
+      ...memo,
+      updatedAt: now,
+      source: {
+        ...source,
+        autoSyncToConceptMemo: enabled,
+      },
+    };
+    updatedCount++;
+  }
+
+  if (!updatedCount) {
+    return { updated: 0, data };
+  }
+
+  const nextData = await writeConceptMemos(filePath, {
+    ...data,
+    memos,
+  });
+
+  return { updated: updatedCount, data: nextData };
 }
 
 async function markConceptMemosMissingByNotePath(filePath, notePath) {
@@ -325,5 +378,6 @@ module.exports = {
   createConceptMemoDraft,
   createConceptMemoFromNoteItem,
   updateConceptMemoSourceStatus,
+  updateConceptMemoSourceAutoSync,
   markConceptMemosMissingByNotePath,
 };

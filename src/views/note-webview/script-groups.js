@@ -799,7 +799,7 @@ function getGroupsScript() {
 
           if (kind === "divider") {
             return \`
-              <section class="itemCard dividerCard" data-nav-id="item:\${item.id}">
+              <section class="itemCard dividerCard" data-nav-id="item:\${item.id}" data-item-id="\${item.id}">
                 <div class="row">
                   <label class="label">区分 \${itemIndex + 1}</label>
                   <input type="text" class="dividerLabelInput" data-field="dividerLabel" data-group-id="\${group.id}" data-item-id="\${item.id}" value="\${esc(item.label || "")}">
@@ -852,9 +852,18 @@ function getGroupsScript() {
                     data-action="jumpItemToPreview"
                     data-nav-id="item:\${item.id}"
                     title="この区分のプレビュー位置へ移動"
+                    aria-label="この区分のプレビュー位置へ移動"
                   >
-                    プレビュー
+                    ↗
                   </button>
+                  <button
+                    class="secondary relatedNoteButton"
+                    type="button"
+                    data-reference-action="search-for-item"
+                    data-group-id="\${group.id}"
+                    data-item-id="\${item.id}"
+                    title="関連ノートを検索・管理"
+                  >関連\${getRelatedReferences(item).length ? \`（\${getRelatedReferences(item).length}）\` : ""}</button>
                   <button
                     class="danger"
                     type="button"
@@ -865,6 +874,7 @@ function getGroupsScript() {
                     削除
                   </button>
                 </div>
+                \${renderRelatedReferenceSummary(item, group.id)}
                 \${
                   movePickerOpen
                     ? \`
@@ -1002,7 +1012,7 @@ function getGroupsScript() {
           );
 
           return \`
-            <section class="itemCard" data-nav-id="item:\${item.id}">
+            <section class="itemCard" data-nav-id="item:\${item.id}" data-item-id="\${item.id}">
               <div class="row rowItemHeading">
                 <label class="label">
                   項目 \${itemIndex + 1}
@@ -1079,8 +1089,9 @@ function getGroupsScript() {
                   data-action="jumpItemToPreview"
                   data-nav-id="item:\${item.id}"
                   title="この項目のプレビュー位置へ移動"
+                  aria-label="この項目のプレビュー位置へ移動"
                 >
-                  プレビュー
+                  ↗
                 </button>
                 <button
                   class="secondary"
@@ -1100,6 +1111,14 @@ function getGroupsScript() {
                 >
                   ＋区分
                 </button>
+                <button
+                  class="secondary relatedNoteButton"
+                  type="button"
+                  data-reference-action="search-for-item"
+                  data-group-id="\${group.id}"
+                  data-item-id="\${item.id}"
+                  title="関連ノートを検索・管理"
+                >関連\${getRelatedReferences(item).length ? \`（\${getRelatedReferences(item).length}）\` : ""}</button>
                 \${itemMoreMenuHtml}
                 <button
                   class="danger"
@@ -1111,6 +1130,7 @@ function getGroupsScript() {
                   削除
                 </button>
               </div>
+              \${renderRelatedReferenceSummary(item, group.id)}
               \${
                 isItemMemoOpen
                   ? \`
@@ -1416,8 +1436,9 @@ function getGroupsScript() {
               data-action="jumpGroupToPreview"
               data-nav-id="group:\${group.id}"
               title="この大分類のプレビュー位置へ移動"
+              aria-label="この大分類のプレビュー位置へ移動"
             >
-              プレビュー
+              ↗
             </button>
             <div class="groupImagePopupWrap">
               <button
@@ -1503,6 +1524,7 @@ function getGroupsScript() {
 
       updateAllImagesButtonLabel();
       renderNoteToc();
+      syncActiveEditingItemStyles();
 
       groupsRoot.querySelectorAll("[data-field]").forEach((el) => {
         el.addEventListener("input", (event) => {
@@ -1628,7 +1650,7 @@ function getGroupsScript() {
 
           markDirty();
           renderPreview();
-          if (["itemHeading", "dividerLabel"].includes(field)) {
+          if (["itemHeading", "dividerLabel", "dividerValue"].includes(field)) {
             renderNoteToc();
           }
         });
@@ -2066,6 +2088,7 @@ function getGroupsScript() {
                 memoBody: String(item?.memo?.body || ""),
                 memoType: String(item?.memo?.type || "text"),
                 memoTags: Array.isArray(item?.memo?.tags) ? item.memo.tags : [],
+                autoSyncToConceptMemo: Boolean(item?.memo?.autoSyncToConceptMemo),
               },
             });
           });
@@ -2102,7 +2125,9 @@ function getGroupsScript() {
                 groupTitle: String(group?.title || ""),
                 itemId,
                 heading: String(item?.heading || ""),
-                conceptMemoIds: linkedIds,
+              conceptMemoIds: linkedIds,
+              autoSyncToConceptMemo: Boolean(item?.memo?.autoSyncToConceptMemo),
+              editorPosition: captureEditorPosition(itemId),
               },
             });
           });
@@ -2122,7 +2147,8 @@ function getGroupsScript() {
               notePath: String(state?.filePath || ""),
               groupId,
               itemId,
-              source: "itemMemo"
+              source: "itemMemo",
+              editorPosition: captureEditorPosition(itemId),
             },
           });
         });
@@ -2137,6 +2163,7 @@ function getGroupsScript() {
 
             const groupId = btn.dataset.groupId || "";
             const itemId = btn.dataset.itemId || "";
+            const editorPosition = captureEditorPosition(itemId);
 
             openItemMoreMenuId = "";
             renderGroups();
@@ -2150,6 +2177,7 @@ function getGroupsScript() {
                 noteTitle: String(titleInput?.value || state?.title || ""),
                 groupId,
                 itemId,
+                editorPosition,
               },
             });
           });

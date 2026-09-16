@@ -18,6 +18,7 @@ const { notifyConceptMemoUpdated } = require("./concept-memo-webview");
 const {
   createConceptMemoFromNoteItem,
   updateConceptMemoSourceStatus,
+  updateConceptMemoSourceAutoSync,
   markConceptMemosMissingByNotePath,
 } = require("../data/concept-memo-store");
 const {
@@ -26,7 +27,12 @@ const {
   listUserTemplates,
   deleteUserTemplateById,
 } = require("../data/user-note-templates");
-const { readNoteFile, saveNoteFile } = require("../data/note-store");
+const {
+  readNoteFile,
+  saveNoteFile,
+  searchNotesByType,
+  resolveRelatedNoteTarget,
+} = require("../data/note-store");
 const {
   getInputAssistToolbarCss,
   getInputAssistToolbarHtml,
@@ -50,7 +56,20 @@ const { getUiPanelsScript } = require("./note-webview/script-ui-panels");
 const { getNavigationScript } = require("./note-webview/script-navigation");
 const { getBoardScript } = require("./note-webview/script-board");
 const { getNoteTocScript } = require("./note-webview/script-toc");
+const {
+  getReferenceLinksScript,
+} = require("./note-webview/script-reference-links");
+const {
+  getAddressBookScript,
+} = require("./note-webview/script-address-book");
 const { getNonce, escapeHtml } = require("../core/path-utils");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
+const {
+  loadWorkAddressBook,
+  saveWorkAddressBook,
+  buildAddressBookExport,
+} = require("../data/address-book-store");
+const { resolveExportDirForTarget } = require("../export/export-utils");
 
 function escapeScriptJson(value) {
   return JSON.stringify(value)
@@ -64,6 +83,33 @@ function escapeScriptJson(value) {
 function getPanelTitle(note) {
   const kind = note.type === "plot" ? "プロット" : "資料";
   return note.title ? `${kind}: ${note.title}` : kind;
+}
+
+async function pickTemplateScope(workDir) {
+  if (isSingleMode() || !workDir) {
+    return "work";
+  }
+
+  const picked = await vscode.window.showQuickPick(
+    [
+      {
+        label: "この作品に保存",
+        description: "現在の作品だけで使用します",
+        scope: "work",
+      },
+      {
+        label: "全体で保存",
+        description: "ほかの作品からも使用できます",
+        scope: "global",
+      },
+    ],
+    {
+      title: "もじごと: テンプレートの保存範囲",
+      placeHolder: "テンプレートを使用できる範囲を選んでください",
+      ignoreFocusOut: true,
+    },
+  );
+  return picked?.scope || "";
 }
 
 function getWebviewUiSettings() {
@@ -159,6 +205,9 @@ ${getInputAssistToolbarCss()}
             <button class="menuItem" type="button" data-menu-action="toggleCopyPanel">
               他ノートからコピー
               <span class="kbdHint">Alt+Shift+N</span>
+            </button>
+            <button class="menuItem" type="button" data-menu-action="toggleAddressBook">
+              呼び名一覧
             </button>
             
             <div class="menuDivider"></div>
@@ -296,9 +345,89 @@ ${getInputAssistToolbarCss()}
           <label><input type="checkbox" id="noteTocShowGroups" checked> 大分類</label>
           <label><input type="checkbox" id="noteTocShowDividers" checked> 区分</label>
           <label><input type="checkbox" id="noteTocShowItems" checked> 項目</label>
+          <label><input type="checkbox" id="noteTocShowDividerValues" checked> 区分の補足</label>
         </div>
         <nav id="noteTocList" class="noteTocList" aria-label="ノート目次"></nav>
       </div>
+    </aside>
+
+    <aside id="addressBookPanel" class="addressBookPanel" hidden>
+      <div class="addressBookDialog">
+        <div class="addressBookHead">
+          <div>
+            <div class="addressBookTitle">呼び名一覧</div>
+            <div class="panelHint">対角セルは一人称、交差セルは相手への呼び方です。</div>
+          </div>
+          <button class="secondary" type="button" id="closeAddressBookBtn">閉じる</button>
+        </div>
+        <div class="addressBookCandidateArea">
+          <div class="addressBookCandidateSearch">
+            <input id="addressCandidateSearch" type="search" placeholder="人物名・ノート名・分類名を検索" autocomplete="off">
+            <select id="addressCandidateSelect" aria-label="追加する人物"></select>
+            <button class="secondary" type="button" id="addressAddBtn">人物を追加</button>
+          </div>
+          <div class="addressCandidateFilters" role="group" aria-label="人物候補の絞り込み">
+            <span>ノート:</span>
+            <label><input type="checkbox" id="addressSourceReference" checked> 資料</label>
+            <label><input type="checkbox" id="addressSourcePlot"> プロット</label>
+            <span>種類:</span>
+            <label><input type="checkbox" id="addressKindGroup" checked> 大分類</label>
+            <label><input type="checkbox" id="addressKindDivider" checked> 区分</label>
+            <label><input type="checkbox" id="addressKindItem" checked> 項目</label>
+            <label class="addressDividerNameChoice">区分の名前:
+              <select id="addressDividerNameSource">
+                <option value="value">補足</option>
+                <option value="label">区分名</option>
+              </select>
+            </label>
+            <span id="addressCandidateCount" class="panelMeta"></span>
+          </div>
+        </div>
+        <div class="addressBookToolbar">
+          <span id="addressCount" class="panelMeta"></span>
+          <span id="addressStatus" class="panelMeta">保存済み</span>
+          <button class="secondary" type="button" id="addressExportHtmlBtn">HTML書き出し</button>
+          <button class="secondary" type="button" id="addressExportCsvBtn">CSV書き出し</button>
+        </div>
+        <div class="addressBookFilters">
+          <label>表示する行
+            <select id="addressFocusSelect"></select>
+          </label>
+          <details class="addressVisibilityPicker">
+            <summary>表示する人物を絞る</summary>
+            <div id="addressVisibleOptions" class="addressVisibleOptions"></div>
+            <button class="secondary addressShowAllBtn" type="button" id="addressShowAllBtn">すべて表示</button>
+          </details>
+          <details class="addressTermManager">
+            <summary>呼び名候補を整理</summary>
+            <div id="addressTermManagerList" class="addressTermManagerList"></div>
+          </details>
+        </div>
+        <div id="addressMatrixRoot" class="addressMatrixRoot"></div>
+        <div id="addressTermPicker" class="addressTermPicker" hidden></div>
+        <div class="addressBookHint">入力済みの呼び方は、ほかのセルでも候補から選択できます。</div>
+      </div>
+    </aside>
+
+    <aside id="referenceSearchPanel" class="referenceSearchPanel" hidden>
+      <div class="referenceSearchHead">
+        <div>
+          <div class="referenceSearchTitle">ノートを検索・関連付け</div>
+          <div id="referenceSearchSource" class="referenceSearchSource"></div>
+        </div>
+        <button class="secondary" type="button" id="closeReferenceSearchBtn">閉じる</button>
+      </div>
+      <div class="referenceSearchTypeTabs" role="group" aria-label="検索するノート種別">
+        <button class="secondary" type="button" data-reference-search-type="reference">資料</button>
+        <button class="secondary" type="button" data-reference-search-type="plot">プロット</button>
+      </div>
+      <div class="referenceSearchControls">
+        <input id="referenceSearchInput" type="search" placeholder="ノートから語句や名前を検索" autocomplete="off" />
+        <button class="secondary" type="button" id="clearReferenceSearchBtn">クリア</button>
+      </div>
+      <div id="referenceSearchStatus" class="referenceSearchStatus"></div>
+      <div id="referenceSearchResults" class="referenceSearchResults"></div>
+      <div class="referenceSearchHint">このパネルを開いたままノートを編集できます。</div>
     </aside>
 
     <div id="noteBoardPanel" class="noteBoardPanel" hidden>
@@ -412,6 +541,28 @@ ${getInputAssistToolbarCss()}
     const closeTemplatePanelBtn = document.getElementById("closeTemplatePanelBtn");
     const templateListRoot = document.getElementById("templateList");
     const templatePanelMessageEl = document.getElementById("templatePanelMessage");
+    const addressBookPanel = document.getElementById("addressBookPanel");
+    const closeAddressBookBtn = document.getElementById("closeAddressBookBtn");
+    const addressCandidateSearch = document.getElementById("addressCandidateSearch");
+    const addressCandidateSelect = document.getElementById("addressCandidateSelect");
+    const addressAddBtn = document.getElementById("addressAddBtn");
+    const addressSourceReference = document.getElementById("addressSourceReference");
+    const addressSourcePlot = document.getElementById("addressSourcePlot");
+    const addressKindGroup = document.getElementById("addressKindGroup");
+    const addressKindDivider = document.getElementById("addressKindDivider");
+    const addressKindItem = document.getElementById("addressKindItem");
+    const addressDividerNameSource = document.getElementById("addressDividerNameSource");
+    const addressCandidateCount = document.getElementById("addressCandidateCount");
+    const addressFocusSelect = document.getElementById("addressFocusSelect");
+    const addressVisibleOptionsEl = document.getElementById("addressVisibleOptions");
+    const addressShowAllBtn = document.getElementById("addressShowAllBtn");
+    const addressMatrixRoot = document.getElementById("addressMatrixRoot");
+    const addressTermManagerList = document.getElementById("addressTermManagerList");
+    const addressTermPicker = document.getElementById("addressTermPicker");
+    const addressCountEl = document.getElementById("addressCount");
+    const addressStatusEl = document.getElementById("addressStatus");
+    const addressExportHtmlBtn = document.getElementById("addressExportHtmlBtn");
+    const addressExportCsvBtn = document.getElementById("addressExportCsvBtn");
 
     const searchPanelEl = document.getElementById("searchPanel");
     const noteSearchInput = document.getElementById("noteSearchInput");
@@ -494,6 +645,7 @@ ${getInputAssistToolbarCss()}
     let dirty = false;
     let changeRevision = 0;
     let collapsedGroupIds = new Set();
+    let activeEditingItemId = "";
     let isMoreMenuOpen = false;
     
     let isTemplatePanelOpen = false;
@@ -523,6 +675,8 @@ ${getInputAssistToolbarCss()}
     let hasShownMenuHint = false;
     let searchQuery = "";
     let isSearchOpen = false;
+    let isAddressBookOpen = false;
+    let addressVisibleIds = new Set();
 
     let movePickerState = {
       groupId: "",
@@ -592,6 +746,8 @@ ${getInputAssistToolbarCss()}
     ${getViewStateScript()}
     ${getUiPanelsScript()}
     ${getNoteTocScript()}
+    ${getReferenceLinksScript()}
+    ${getAddressBookScript()}
 
     // panels
     ${getTemplatePanelScript()}
@@ -742,8 +898,13 @@ ${getInputAssistToolbarCss()}
       setTimeout(rerender, 180);
     }
 
-    getEditorScrollEl()?.addEventListener("scroll", saveScrollPositions);
-    getPreviewScrollEl()?.addEventListener("scroll", saveScrollPositions);
+    [
+      document.querySelector(".editorPane"),
+      document.querySelector(".previewPane"),
+      document.querySelector(".layout"),
+    ].forEach((scrollEl) => {
+      scrollEl?.addEventListener("scroll", saveScrollPositions);
+    });
 
     // addons
     ${getInputAssistToolbarScript({
@@ -784,6 +945,8 @@ ${getInputAssistToolbarCss()}
 
     registerNoteEvents();
     bindNoteTocEvents();
+    registerReferenceLinkEvents();
+    registerAddressBookEvents();
 
     const noteInputAssist = createInputAssistController();
 
@@ -849,6 +1012,26 @@ async function closeNoteWebviewByPath(filePath) {
   } catch {
     return false;
   }
+}
+
+function isSameOrChildPanelPath(candidatePath, folderPath) {
+  if (!candidatePath || !folderPath) return false;
+  const relative = path.relative(path.resolve(folderPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function closeNoteWebviewsUnderFolder(folderPath) {
+  const panels = new Set(openNotePanelsByPath.values());
+  let closed = 0;
+  for (const panel of panels) {
+    const candidatePath = String(
+      panel?.__mojigotoWorkDir || panel?.__mojigotoFilePath || "",
+    ).trim();
+    if (!isSameOrChildPanelPath(candidatePath, folderPath)) continue;
+    panel.dispose();
+    closed += 1;
+  }
+  return closed;
 }
 
 async function notifyNoteUpdated(filePath) {
@@ -1115,6 +1298,11 @@ function attachNotePanel(context, treeProvider, panel, options) {
     workTitle = "",
     note,
   } = options;
+
+  setWebviewPanelThemeIcon(
+    panel,
+    String(type || note?.type || "plot") === "plot" ? "list-tree" : "references",
+  );
 
   const normalizedFilePath = path.normalize(filePath);
 
@@ -1640,6 +1828,7 @@ function attachNotePanel(context, treeProvider, panel, options) {
               memoBody: String(memo.body || ""),
               memoType: String(memo.type || "text"),
               memoTags: Array.isArray(memo.tags) ? memo.tags : [],
+              autoSyncToConceptMemo: true,
             },
           );
           const conceptMemoId = String(synced?.memo?.id || "").trim();
@@ -1736,6 +1925,117 @@ function attachNotePanel(context, treeProvider, panel, options) {
           return;
         }
 
+        if (message?.type === "requestAddressBook") {
+          const result = await loadWorkAddressBook(resolveWorkDirForCurrentNote());
+          panel.webview.postMessage({
+            type: "addressBookLoaded",
+            book: result.book,
+            candidates: result.candidates,
+          });
+          return;
+        }
+
+        if (message?.type === "saveAddressBook") {
+          const saved = await saveWorkAddressBook(
+            resolveWorkDirForCurrentNote(),
+            message.payload || {},
+          );
+          panel.webview.postMessage({ type: "addressBookSaved", book: saved });
+          return;
+        }
+
+        if (message?.type === "exportAddressBook") {
+          const format = message?.format === "csv" ? "csv" : "html";
+          const saved = await saveWorkAddressBook(
+            resolveWorkDirForCurrentNote(),
+            message.payload || {},
+          );
+          const workLabel = resolveWorkTitle(panel, context) || "作品";
+          const defaultBase = safeAssetName(`${workLabel}-呼び名一覧`, "呼び名一覧");
+          const currentWorkDir = resolveWorkDirForCurrentNote();
+          const workName = String(panel.__mojigotoWorkName || "").trim() || (currentWorkDir ? path.basename(currentWorkDir) : "");
+          const baseDir = await resolveExportDirForTarget(
+            context,
+            { workTitle: workLabel, workName },
+            "ノート書き出し",
+          );
+          if (!baseDir) return;
+          const uri = await vscode.window.showSaveDialog({
+            title: `もじごと: 呼び名一覧を${format.toUpperCase()}で書き出し`,
+            defaultUri: baseDir
+              ? vscode.Uri.file(path.join(baseDir, `${defaultBase}.${format}`))
+              : undefined,
+            filters: format === "csv"
+              ? { CSV: ["csv"] }
+              : { HTML: ["html", "htm"] },
+          });
+          if (!uri) return;
+          await fsp.writeFile(
+            uri.fsPath,
+            buildAddressBookExport(saved, format, workLabel),
+            "utf8",
+          );
+          panel.webview.postMessage({ type: "addressBookExported", format });
+          return;
+        }
+
+        if (message?.type === "searchReferences" || message?.type === "searchRelatedNotes") {
+          const requestId = Number(message.requestId || 0);
+          try {
+            const results = await searchNotesByType(
+              { fsPath: resolveWorkDirForCurrentNote() },
+              message.noteType === "plot" ? "plot" : "reference",
+              String(message.query || ""),
+              {
+                excludeNoteId: String(note?.id || ""),
+                excludeFilePath: filePath,
+              },
+            );
+            panel.webview.postMessage({
+              type: "referenceSearchResults",
+              requestId,
+              results,
+            });
+          } catch (error) {
+            panel.webview.postMessage({
+              type: "referenceSearchResults",
+              requestId,
+              results: [],
+            });
+            panel.webview.postMessage({
+              type: "error",
+              message: `ノートの検索に失敗しました: ${String(error?.message || error)}`,
+            });
+          }
+          return;
+        }
+
+        if (message?.type === "openReferenceTarget" || message?.type === "openRelatedNoteTarget") {
+          const target = await resolveRelatedNoteTarget(
+            { fsPath: resolveWorkDirForCurrentNote() },
+            message.target,
+          );
+          if (!target) {
+            panel.webview.postMessage({
+              type: "error",
+              message: "関連するノートが見つかりません。削除または変更された可能性があります。",
+            });
+            return;
+          }
+
+          await openNoteWebview(context, treeProvider, {
+            filePath: target.filePath,
+            type: target.note?.type === "plot" ? "plot" : "reference",
+            workDir: resolveWorkDirForCurrentNote(),
+            workName,
+            workTitle: resolveWorkTitle(panel, context),
+            focusGroupId: String(target.group?.id || ""),
+            focusItemId: String(target.item?.id || ""),
+            viewColumn: vscode.ViewColumn.Beside,
+          });
+          return;
+        }
+
         if (message?.type === "scheduleAutoSave") {
           if (noteAutoSaveTimer) clearTimeout(noteAutoSaveTimer);
           const uiSettings = getWebviewUiSettings();
@@ -1828,7 +2128,8 @@ function attachNotePanel(context, treeProvider, panel, options) {
         }
 
         if (message?.type === "requestTemplateList") {
-          const items = await getTemplateItems(type);
+          const currentWorkDir = resolveWorkDirForCurrentNote();
+          const items = await getTemplateItems(type, { workDir: currentWorkDir });
           panel.webview.postMessage({
             type: "templateList",
             items,
@@ -1897,7 +2198,20 @@ function attachNotePanel(context, treeProvider, panel, options) {
             return;
           }
 
-          await saveUserTemplate(currentNote, templateName, picked.mode);
+          const currentWorkDir = resolveWorkDirForCurrentNote();
+          const templateScope = await pickTemplateScope(currentWorkDir);
+          if (!templateScope) {
+            panel.webview.postMessage({
+              type: "info",
+              message: "テンプレート保存をキャンセルしました。",
+            });
+            return;
+          }
+
+          await saveUserTemplate(currentNote, templateName, picked.mode, {
+            scope: templateScope,
+            workDir: currentWorkDir,
+          });
 
           vscode.window.showInformationMessage(
             `もじごと: テンプレート「${templateName}」を保存しました。`,
@@ -2006,11 +2320,25 @@ function attachNotePanel(context, treeProvider, panel, options) {
             return;
           }
 
+          const currentWorkDir = resolveWorkDirForCurrentNote();
+          const templateScope = await pickTemplateScope(currentWorkDir);
+          if (!templateScope) {
+            panel.webview.postMessage({
+              type: "info",
+              message: "テンプレート保存をキャンセルしました。",
+            });
+            return;
+          }
+
           await saveUserGroupTemplate(
             currentNote,
             targetGroup,
             templateName,
             picked.mode,
+            {
+              scope: templateScope,
+              workDir: currentWorkDir,
+            },
           );
 
           vscode.window.showInformationMessage(
@@ -2030,7 +2358,8 @@ function attachNotePanel(context, treeProvider, panel, options) {
             return;
           }
 
-          const templates = await listUserTemplates(type);
+          const currentWorkDir = resolveWorkDirForCurrentNote();
+          const templates = await listUserTemplates(type, { workDir: currentWorkDir });
           const target = templates.find((tpl) => tpl.templateId === templateId);
           const label = target?.label || "このテンプレート";
 
@@ -2048,7 +2377,9 @@ function attachNotePanel(context, treeProvider, panel, options) {
             return;
           }
 
-          const deleted = await deleteUserTemplateById(type, templateId);
+          const deleted = await deleteUserTemplateById(type, templateId, {
+            workDir: currentWorkDir,
+          });
           if (!deleted) {
             panel.webview.postMessage({
               type: "error",
@@ -2577,6 +2908,8 @@ function attachNotePanel(context, treeProvider, panel, options) {
           const conceptMemoFilePath =
             resolveConceptMemoFilePath(currentWorkDir);
 
+          await updateConceptMemoSourceAutoSync(conceptMemoFilePath, payload);
+
           const linkedIds = Array.isArray(payload?.conceptMemoIds)
             ? payload.conceptMemoIds
                 .map((id) => String(id || "").trim())
@@ -2618,10 +2951,16 @@ function attachNotePanel(context, treeProvider, panel, options) {
             viewColumn: vscode.ViewColumn.Beside,
           });
 
+          panel.webview.postMessage({
+            type: "restoreEditorPosition",
+            payload: payload?.editorPosition || {},
+          });
+
           return;
         }
 
         if (message?.type === "openConceptMemoForCopy") {
+          const payload = message?.payload || {};
           const currentWorkDir = resolveWorkDirForCurrentNote();
           const conceptMemoFilePath =
             resolveConceptMemoFilePath(currentWorkDir);
@@ -2645,6 +2984,11 @@ function attachNotePanel(context, treeProvider, panel, options) {
             type: "info",
             message:
               "構想メモを開きました。コピーしたい通常メモまたはリストメモを選んでください。",
+          });
+
+          panel.webview.postMessage({
+            type: "restoreEditorPosition",
+            payload: payload?.editorPosition || {},
           });
 
           return;
@@ -2746,6 +3090,7 @@ async function openNoteWebview(context, treeProvider, options) {
     focusGroupId = "",
     focusItemId = "",
     openItemMemo = false,
+    viewColumn,
   } = options;
 
   const postFocusMessage = (panel) => {
@@ -2764,7 +3109,7 @@ async function openNoteWebview(context, treeProvider, options) {
 
   const existing = openNotePanels.get(filePath);
   if (existing) {
-    existing.reveal(undefined, false);
+    existing.reveal(viewColumn, false);
     postFocusMessage(existing);
     return existing;
   }
@@ -2789,7 +3134,7 @@ async function openNoteWebview(context, treeProvider, options) {
   const panel = vscode.window.createWebviewPanel(
     "mojigoto.noteEditor",
     getPanelTitle(note),
-    getPreferredNoteViewColumn(),
+    viewColumn || getPreferredNoteViewColumn(),
     {
       enableScripts: true,
       retainContextWhenHidden: true,
@@ -2906,8 +3251,10 @@ function registerNoteWebviewCommands(context) {
 }
 
 module.exports = {
+  getNoteWebviewHtml,
   openNoteWebview,
   closeNoteWebviewByPath,
+  closeNoteWebviewsUnderFolder,
   notifyNoteUpdated,
   createNoteSerializer,
   registerNoteWebviewCommands,

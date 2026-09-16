@@ -21,6 +21,7 @@ function getConceptMemoStateScript() {
 
       localStorage.setItem(getSortFieldStorageKey(), sortField || "updated");
       localStorage.setItem(getSortDirectionStorageKey(), sortDirection || "desc");
+      localStorage.setItem(commonTodoCollapsedStorageKey, String(Boolean(isCommonTodoCollapsed)));
     }
 
     function persistWebviewState() {
@@ -60,6 +61,7 @@ function getConceptMemoStateScript() {
             memos: currentState.data.memos,
             folders: currentState.data.folders,
             commonTodoItems: currentState.data.commonTodoItems,
+            autoSyncToNoteItemDefault: Boolean(currentState.data.autoSyncToNoteItemDefault),
             silentToast: true,
           },
           revision: changeRevision,
@@ -121,6 +123,7 @@ function getConceptMemoStateScript() {
           memos: currentState.data.memos,
           folders: currentState.data.folders,
           commonTodoItems: currentState.data.commonTodoItems,
+          autoSyncToNoteItemDefault: Boolean(currentState.data.autoSyncToNoteItemDefault),
           silentToast,
           successMessage,
         },

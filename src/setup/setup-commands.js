@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const path = require("path");
 
 const { openInitialSetupWebview } = require("../views/setup-webview");
 const { openGuideWebview } = require("../views/guide-webview");
@@ -10,6 +11,7 @@ const {
   applyInitialSetup,
   buildInitialSetupState,
 } = require("./setup-service");
+const { listWorkDirectories } = require("../core/mojigoto-paths");
 
 function needsInitialSetup() {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
@@ -38,7 +40,32 @@ async function openInitialSetup(context, createWorkNow = false) {
   const initialState = await buildInitialSetupState(createWorkNow, context);
 
   await openInitialSetupWebview(context, initialState, async (payload) => {
-    return await applyInitialSetup(context, payload);
+    const result = await applyInitialSetup(context, payload);
+
+    if (
+      result?.mode === "multi" &&
+      result?.createdWork &&
+      !payload?.migrateSingleToMulti &&
+      listWorkDirectories().length > 1
+    ) {
+      const choice = await vscode.window.showInformationMessage(
+        `もじごと: 作品「${result.workTitle || result.workName}」へ、ほかの作品からデータをコピーしますか？`,
+        "他作品からコピー",
+        "コピーしない",
+      );
+      if (choice === "他作品からコピー") {
+        await vscode.commands.executeCommand("mojigoto.copyFromOtherWork", {
+          kind: "work",
+          fsPath: path.join(
+            String(payload?.workRoot || ""),
+            String(result.workName || ""),
+          ),
+          workName: result.workName,
+        });
+      }
+    }
+
+    return result;
   });
 }
 

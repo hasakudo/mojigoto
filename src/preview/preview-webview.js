@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("../views/shared/webview-panel-icon");
 const { escapeHtml } = require("../core/path-utils");
 
 function ensurePreviewState(state) {
@@ -209,6 +210,7 @@ function notifyWebviewServerState(state, payload = {}) {
 function attachPreviewWebviewHandlers(context, state, options = {}) {
   ensurePreviewState(state);
   if (!state.panel) return;
+  setWebviewPanelThemeIcon(state.panel, "preview");
 
   const {
     isDebug = false,

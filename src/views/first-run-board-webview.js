@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -18,6 +19,7 @@ async function openFirstRunBoardWebview(context, handlers = {}) {
       retainContextWhenHidden: false,
     },
   );
+  setWebviewPanelThemeIcon(panel, "info");
 
   panel.webview.html = getFirstRunBoardHtml(panel.webview);
 

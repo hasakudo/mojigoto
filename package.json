@@ -2,13 +2,14 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
   },
   "main": "./extension.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "vsix:list": "vsce ls --tree",
     "vsix:package": "vsce package"
   },
@@ -336,6 +337,21 @@
           "category": "もじごと:書き出し",
           "order": 50
         },
+        "mojigoto.exportWorkFolderNameMode": {
+          "type": "string",
+          "default": "folderName",
+          "enum": [
+            "folderName",
+            "title"
+          ],
+          "markdownEnumDescriptions": [
+            "作品フォルダ名を使用します。作品名を変更しても書き出し先が変わりません。",
+            "作品設定の作品名を使用します。作品名を変更すると別の書き出しフォルダになります。"
+          ],
+          "markdownDescription": "Export Root 内に作成する作品別フォルダの名前を選択します。安定した保存先にするには「作品フォルダ名」を推奨します。",
+          "category": "もじごと:書き出し",
+          "order": 51
+        },
         "mojigoto.mergedManuscriptJoinMode": {
           "type": "string",
           "default": "headingAware",
@@ -351,7 +367,7 @@
           ],
           "markdownDescription": "原稿結合書き出し時のファイル間改行ルール",
           "category": "もじごと:書き出し",
-          "order": 51
+          "order": 52
         },
         "mojigoto.verticalPunctuationLayout": {
           "type": "string",
@@ -366,63 +382,63 @@
           ],
           "markdownDescription": "縦書きHTML書き出し時の句読点・閉じ括弧の配置方法を切り替えます。",
           "category": "もじごと:書き出し",
-          "order": 52
+          "order": 53
         },
         "mojigoto.useTypographyAdjustments": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "縦書きプレビューと原稿書き出しで、ぶら下げ・追い込みなどの自動体裁調整を使用します。OFFでは本文の並びを優先し、自動調整を行いません。",
           "category": "もじごと:書き出し",
-          "order": 53
+          "order": 54
         },
         "mojigoto.exportIncludeFolderName": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しにフォルダ名を含めます。",
           "category": "もじごと:書き出し",
-          "order": 54
+          "order": 55
         },
         "mojigoto.exportIncludeGenre": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しにジャンルを含めます。",
           "category": "もじごと:書き出し",
-          "order": 55
+          "order": 56
         },
         "mojigoto.exportIncludeTargetChars": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しに目標文字数を含めます。",
           "category": "もじごと:書き出し",
-          "order": 56
+          "order": 57
         },
         "mojigoto.exportIncludeDeadline": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しに締切日を含めます。",
           "category": "もじごと:書き出し",
-          "order": 57
+          "order": 58
         },
         "mojigoto.exportIncludePenName": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しにペンネームを含めます。",
           "category": "もじごと:書き出し",
-          "order": 58
+          "order": 59
         },
         "mojigoto.exportIncludeMemo": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しにメモを含めます。",
           "category": "もじごと:書き出し",
-          "order": 59
+          "order": 60
         },
         "mojigoto.exportIncludeUpdatedAt": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しに更新日時を含めます。単一書き出しのみ",
           "category": "もじごと:書き出し",
-          "order": 60
+          "order": 61
         },
         "mojigoto.sheetsEnabled": {
           "type": "boolean",
@@ -672,6 +688,12 @@
         "command": "mojigoto.treeCreateWork",
         "title": "作品を新規作成",
         "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.copyFromOtherWork",
+        "title": "他作品からデータをコピー",
+        "category": "もじごと",
+        "enablement": "config.mojigoto.mode == multi"
       },
       {
         "command": "mojigoto.excludeWorkFromList",
@@ -1044,6 +1066,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "mojigoto.copyFromOtherWork",
+          "when": "view == mojigoto.workTree && (viewItem == work || viewItem == workCurrent) && config.mojigoto.mode == multi",
+          "group": "navigation@6"
+        },
         {
           "command": "mojigoto.changeWorkStatus",
           "when": "view == mojigoto.workTree && (viewItem == work || viewItem == workCurrent)",
