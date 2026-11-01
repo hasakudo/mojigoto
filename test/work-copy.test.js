@@ -41,6 +41,11 @@ const {
 const { getSettingsWebviewHtml } = require("../src/views/settings-webview");
 const { getNoteWebviewHtml } = require("../src/views/note-webview");
 const { getConceptMemoWebviewHtml } = require("../src/views/concept-memo/concept-memo-html");
+const {
+  buildWorkQuickPickItems,
+  getHtml: getAddressBookWebviewHtml,
+} = require("../src/views/address-book-webview");
+const { MOJIGOTO_ICONS } = require("../src/ui/mojigoto-icons");
 const { makeStatsHtml } = require("../src/stats/stats-html");
 const {
   saveUserTemplate,
@@ -56,16 +61,27 @@ const {
 const {
   searchNotesByType,
   readNoteFile,
+  saveNoteFile,
   setItemMemoAutoSync,
   applyConceptMemoToNoteItem,
 } = require("../src/data/note-store");
 const {
   readConceptMemos,
   writeConceptMemos,
+  createConceptMemoDraft,
   createConceptMemoFromNoteItem,
+  normalizeConceptMemos,
   updateConceptMemoSourceAutoSync,
 } = require("../src/data/concept-memo-store");
 const { getWorkNameForExportFromValue } = require("../src/export/export-utils");
+const {
+  formatSettingsTxt,
+  formatSettingsHtml,
+} = require("../src/export/export-service");
+const {
+  readSettingsFile,
+  writeSettingsFile,
+} = require("../src/data/settings-store");
 const {
   supportsWebviewPanelThemeIcon,
 } = require("../src/views/shared/webview-panel-icon");
@@ -81,6 +97,7 @@ test("作品設定HTMLに関連作品と2列入力欄を描画する", () => {
     {},
     {
       title: "第一作",
+      subtitle: "シリーズ共通題",
       folderName: "first",
       genres: [],
       relatedWorkIds: ["work-second"],
@@ -96,6 +113,19 @@ test("作品設定HTMLに関連作品と2列入力欄を描画する", () => {
     },
   );
   assert.match(html, /class="compactPairs"/);
+  assert.match(html, /id="subtitle"[^>]*value="シリーズ共通題"/);
+  assert.match(html, /フォルダ: first/);
+  assert.match(html, /id="includeSubtitle"/);
+  assert.match(html, /class="settingsStickyHeader"/);
+  assert.match(html, /class="genreControlGrid"/);
+  assert.match(html, /@container \(max-width: 680px\)/);
+  assert.match(html, /\.genreControlGrid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(220px, 0\.9fr\) minmax\(260px, 1\.1fr\)/);
+  assert.match(html, /\.genreOptionsMenu\s*\{[\s\S]*?position:\s*relative/);
+  assert.match(html, /\.genreOptionList\s*\{[\s\S]*?position:\s*absolute/);
+  assert.match(html, /top:\s*calc\(100% \+ 4px\)/);
+  assert.ok(
+    html.indexOf('class="settingsStickyHeader"') < html.indexOf('class="settingsLayout"'),
+  );
   assert.match(html, /class="compactSectionLabel">作品備考/);
   assert.match(html, /関連作品名/);
   assert.ok(html.indexOf('id="summary"') < html.indexOf("関連作品名"));
@@ -103,6 +133,26 @@ test("作品設定HTMLに関連作品と2列入力欄を描画する", () => {
   const script = html.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1];
   assert.ok(script);
   assert.doesNotThrow(() => new vm.Script(script));
+});
+
+test("補助タイトルを保存し、設定に応じて書き出す", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "mojigoto-subtitle-"));
+  const filePath = path.join(root, "work.json");
+  const saved = await writeSettingsFile(filePath, {
+    folderName: "folder",
+    title: "作品名",
+    subtitle: "シリーズ名",
+    exportOptions: { includeSubtitle: true },
+  });
+  const loaded = await readSettingsFile(filePath, { workName: "folder" });
+  assert.equal(saved.subtitle, "シリーズ名");
+  assert.equal(loaded.subtitle, "シリーズ名");
+  assert.match(formatSettingsTxt(loaded), /補助タイトル: シリーズ名/);
+  assert.match(formatSettingsHtml(loaded), /<dt>補助タイトル<\/dt><dd>シリーズ名<\/dd>/);
+
+  loaded.exportOptions.includeSubtitle = false;
+  assert.doesNotMatch(formatSettingsTxt(loaded), /補助タイトル/);
+  assert.doesNotMatch(formatSettingsHtml(loaded), /補助タイトル/);
 });
 
 test("ノート画面に呼び名一覧を描画し、生成スクリプトが有効", () => {
@@ -124,6 +174,10 @@ test("ノート画面に呼び名一覧を描画し、生成スクリプトが�
   assert.match(html, /id="addressDividerNameSource"/);
   assert.match(html, /id="addressTermManagerList"/);
   assert.match(html, /id="addressTermPicker"/);
+  assert.match(html, /id="addressPreviewBtn"/);
+  assert.match(html, /id="addressPreviewPanel"/);
+  assert.match(html, /id="addressPreviewRoot"/);
+  assert.match(html, /絞り込みに関係なく/);
   assert.match(html, /id="noteTocShowDividerValues"/);
   assert.match(html, /呼ぶ人/);
   const script = html.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1];
@@ -142,6 +196,33 @@ test("ノート画面に呼び名一覧を描画し、生成スクリプトが�
   assert.doesNotThrow(() => new vm.Script(script));
 });
 
+test("原稿から開ける独立した呼び名一覧を描画する", () => {
+  const html = getAddressBookWebviewHtml("テスト作品");
+  assert.match(html, /テスト作品 — 呼び名一覧/);
+  assert.match(html, /id="addressMatrixRoot"/);
+  assert.match(html, /id="addressPreviewBtn"/);
+  assert.match(html, /id="addressPreviewPanel"/);
+  assert.match(html, /addressPreviewMatrix/);
+  assert.match(html, /requestAddressBook/);
+  const generatedScript = html.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(generatedScript);
+  assert.doesNotThrow(() => new vm.Script(generatedScript));
+  const manifest = require("../package.json");
+  assert.ok(manifest.contributes.commands.some((entry) => entry.command === "mojigoto.openAddressBook"));
+  assert.ok(manifest.contributes.keybindings.some((entry) => entry.command === "mojigoto.openAddressBook" && entry.key === "ctrl+alt+n"));
+});
+
+test("呼び名一覧の作品選択へ表示名とフォルダ名を渡す", () => {
+  const work = { name: "work-a", title: "作品A", fsPath: "C:/works/work-a" };
+  const items = buildWorkQuickPickItems([work]);
+  assert.deepEqual(items, [{
+    label: "作品A",
+    description: "フォルダ: work-a",
+    detail: "C:/works/work-a",
+    work,
+  }]);
+});
+
 test("書き出し作品フォルダ名を設定に応じて選択する", () => {
   testExportWorkFolderMode = "folderName";
   assert.equal(getWorkNameForExportFromValue("変更後の作品名", "stable-folder"), "stable-folder");
@@ -154,9 +235,10 @@ test("主なWebViewパネルへテーマ追従アイコンを割り当てる", a
   assert.equal(supportsWebviewPanelThemeIcon("1.109.9"), false);
   assert.equal(supportsWebviewPanelThemeIcon("1.110.0"), true);
   const expectations = [
-    ["src/views/note-webview.js", '"list-tree"', '"references"'],
-    ["src/views/settings-webview.js", 'setWebviewPanelThemeIcon(panel, "settings-gear")'],
-    ["src/views/concept-memo-webview.js", 'setWebviewPanelThemeIcon(panel, "lightbulb")'],
+    ["src/views/note-webview.js", "MOJIGOTO_ICONS.plot", "MOJIGOTO_ICONS.reference"],
+    ["src/views/settings-webview.js", "MOJIGOTO_ICONS.settings"],
+    ["src/views/concept-memo-webview.js", "MOJIGOTO_ICONS.conceptMemo"],
+    ["src/views/address-book-webview.js", "MOJIGOTO_ICONS.addressBook"],
     ["src/stats/stats-panel.js", 'setWebviewPanelThemeIcon(panelInstance, "dashboard")'],
     ["src/preview/preview-webview.js", 'setWebviewPanelThemeIcon(state.panel, "preview")'],
     ["src/reorder/reorder-commands.js", 'setWebviewPanelThemeIcon(webviewPanel, "list-ordered")'],
@@ -170,6 +252,59 @@ test("主なWebViewパネルへテーマ追従アイコンを割り当てる", a
     const source = await fs.readFile(path.join(__dirname, "..", relativePath), "utf8");
     for (const token of tokens) assert.ok(source.includes(token), `${relativePath}: ${token}`);
   }
+
+  assert.deepEqual(MOJIGOTO_ICONS, {
+    manuscript: "edit",
+    manuscriptFile: "file",
+    plot: "list-tree",
+    reference: "references",
+    conceptMemo: "lightbulb",
+    settings: "settings-gear",
+    addressBook: "account",
+  });
+
+  const treeSource = await fs.readFile(
+    path.join(__dirname, "..", "src/tree/work-tree-provider.js"),
+    "utf8",
+  );
+  for (const key of ["manuscript", "manuscriptFile", "plot", "reference", "conceptMemo", "settings"]) {
+    assert.match(treeSource, new RegExp(`MOJIGOTO_ICONS\\.${key}`));
+  }
+  assert.doesNotMatch(treeSource, /"☰ " \+ displayLabel/);
+});
+
+test("作品ツリーの状態とジャンルを複数条件で絞り込む", async () => {
+  const providerSource = await fs.readFile(
+    path.join(__dirname, "..", "src/tree/work-tree-provider.js"),
+    "utf8",
+  );
+  const commandSource = await fs.readFile(
+    path.join(__dirname, "..", "src/tree/work-tree-commands.js"),
+    "utf8",
+  );
+
+  assert.match(providerSource, /mojigoto\.workStatusFilters/);
+  assert.match(providerSource, /mojigoto\.workGenreFilters/);
+  assert.match(providerSource, /filters\.includes\(status \|\| WORK_STATUS_EMPTY_FILTER\)/);
+  assert.match(providerSource, /filters\.some\(\(filter\) =>/);
+  assert.match(providerSource, /status !== "hold" && status !== "complete"/);
+  const actionsSource = await fs.readFile(path.join(__dirname, "..", "src/tree/work-tree-metadata-actions.js"), "utf8");
+  assert.match(commandSource, /metadataActions.filterWorksByStatus/);
+  assert.match(commandSource, /metadataActions.filterWorksByGenre/);
+  assert.match(actionsSource, /canPickMany: true/);
+  assert.match(actionsSource, /picked\.map\(\(item\) => item\.value\)/);
+  assert.doesNotMatch(commandSource, /保留・完結以外/);
+});
+
+test("作品ツリーで二重になった原稿フォルダを警告表示して通知する", async () => {
+  const providerSource = await fs.readFile(
+    path.join(__dirname, "..", "src/tree/work-tree-provider.js"),
+    "utf8",
+  );
+  assert.match(providerSource, /_nestedManuscriptWarnings = new Set\(\)/);
+  assert.match(providerSource, /description: nestedManuscript \? "⚠ 二重" : ""/);
+  assert.match(providerSource, /showWarningMessage/);
+  assert.match(providerSource, /原稿フォルダが二重になっています/);
 });
 
 test("Dashboardから執筆記録の補正を開ける", async () => {
@@ -217,8 +352,24 @@ test("構想メモに出典操作と自動反映をメタデータ下へ描画�
   assert.match(html, /\.sourceSummaryRow\s*\{[\s\S]*?font-weight:\s*600/);
   assert.match(html, /構想メモを出典元の項目メモへ自動反映/);
   assert.match(html, /autoSyncToNoteItemDefault/);
-  assert.match(html, /firstOptIn/);
+  assert.match(html, /autoSyncToNoteItemOverride/);
+  assert.match(html, /conceptMemoAutoSyncDefault/);
+  assert.match(html, /function getFolderFilterRowCount/);
+  assert.match(html, /getFolderFilterRowCount\(quickList\) > 2/);
+  assert.match(html, /folders\.forEach\(\(folder\) =>/);
+  assert.match(html, /ResizeObserver/);
   assert.match(html, /id="copyMemoButton"/);
+  assert.match(html, /id="memoFolderOptions"/);
+  assert.match(html, /フォルダ（複数選択可）/);
+  assert.match(html, /id="folderOverflowOptions"/);
+  assert.match(html, /activeFolderIds/);
+  assert.match(html, /selectedFolderIds\.some\(\(folderId\) =>/);
+  assert.match(html, /id="memoTagFilterRow"/);
+  assert.match(html, /activeTagFilters/);
+  assert.match(html, /selectedTags\.some\(\(tag\) => tags\.includes\(tag\)\)/);
+  assert.ok(html.indexOf('id="memoSourceFilterRow"') < html.indexOf('id="clearQuickFilterButton"'));
+  assert.match(html, /id="clearQuickFilterButton">すべて解除/);
+  assert.match(html, /event\.composedPath\(\)/);
   assert.match(html, /commonTodoCollapsedStorageKey/);
   assert.match(html, /memoTypeLabel-todo/);
   assert.match(html, /memoTypeLabel-todo[\s\S]*vscode-charts-purple/);
@@ -236,6 +387,19 @@ test("構想メモに出典操作と自動反映をメタデータ下へ描画�
   assert.match(renderEditorScript, /sourceAutoSyncControl\.style\.display/);
   assert.doesNotMatch(bindButtonsScript, /sourceAutoSyncControl\.style\.display/);
   assert.doesNotThrow(() => new vm.Script(script));
+});
+
+test("VS Code側で構想メモの単一フォルダを複数形式へ移行する", () => {
+  const normalized = normalizeConceptMemos({
+    memos: [{ id: "legacy", folderId: "writing" }],
+    folders: [{ id: "writing", name: "執筆", order: 0 }],
+  });
+  assert.deepEqual(normalized.memos[0].folderIds, ["writing"]);
+  assert.equal(normalized.memos[0].folderId, "writing");
+
+  const memo = createConceptMemoDraft({ folderIds: ["writing", "review", "writing"] });
+  assert.deepEqual(memo.folderIds, ["writing", "review"]);
+  assert.equal(memo.folderId, "writing");
 });
 
 test("構想メモから項目メモへ本文とタグを同期し、初回ON後の新規リンクをONにする", async (t) => {
@@ -427,7 +591,18 @@ test("作品内の複数ノートから呼び名候補を集め、区分の補�
     "名前 葉月",
   );
   assert.equal(relatedResults[0].itemLabel, "葉月");
+  assert.equal(relatedResults[0].dividerLabel, "名前");
+  assert.equal(relatedResults[0].dividerValue, "葉月");
   assert.match(relatedResults[0].preview, /名前: 葉月/);
+
+  autoSyncNote.groups[0].items[0].relatedReferences = [{ ...relatedResults[0], itemLabel: relatedResults[0].dividerLabel }];
+  const sourcePath = path.join(workDir, ".mojigoto", "plots", "plot.json");
+  await saveNoteFile(sourcePath, autoSyncNote);
+  const savedLink = (await readNoteFile(sourcePath, "plot")).groups[0].items[0].relatedReferences[0];
+  assert.equal(savedLink.itemLabel, "名前");
+  assert.equal(savedLink.noteId, relatedResults[0].noteId);
+  assert.equal(savedLink.itemId, relatedResults[0].itemId);
+  assert.equal(savedLink.groupId, relatedResults[0].groupId);
 
   const saved = await saveWorkAddressBook(workDir, labelModeBook);
   const html = buildAddressBookExport(saved, "html", "テスト作品");

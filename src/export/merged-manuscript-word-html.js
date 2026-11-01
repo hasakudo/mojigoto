@@ -1,3 +1,4 @@
+const { safeFontFamily } = require("../preview/font-defaults");
 const {
   buildMergedManuscriptBlocks,
   resolveMergedManuscriptHtmlOptions,
@@ -108,7 +109,7 @@ function getMergedManuscriptWordHtmlStyle(options = {}) {
   return `
 body {
   margin: 0;
-  font-family: "${fontFamily}";
+  font-family: ${safeFontFamily(fontFamily)};
   line-height: 1.9;
   color: #222;
   background: #fff;

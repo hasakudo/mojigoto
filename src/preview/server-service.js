@@ -5,6 +5,9 @@ const cp = require("child_process");
 const net = require("net");
 const http = require("http");
 const https = require("https");
+const { getResolvedManuscriptRoot } = require("../core/mojigoto-context");
+
+const { safeFontFamily } = require("./font-defaults");
 
 const HOST = "127.0.0.1";
 
@@ -293,23 +296,10 @@ function killProcessByPortWin(port) {
 
 function resolveVerticalDevPath(context) {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
-  const mode = String(cfg.get("mode", "") || "").trim();
-
   const workRoot = String(cfg.get("workRoot", "") || "").trim();
   const mrSetting = String(cfg.get("manuscriptRoot", "") || "").trim();
 
-  let manuscriptRoot = "";
-
-  if (mode === "single") {
-    manuscriptRoot = mrSetting;
-  } else {
-    if (workRoot) manuscriptRoot = path.join(workRoot, "_WORK", "manuscript");
-    if (!manuscriptRoot && mrSetting) manuscriptRoot = mrSetting;
-    if (!manuscriptRoot) {
-      const wf = vscode.workspace.workspaceFolders?.[0];
-      if (wf) manuscriptRoot = path.join(wf.uri.fsPath, "_WORK", "manuscript");
-    }
-  }
+  const manuscriptRoot = getResolvedManuscriptRoot();
 
   const wf = vscode.workspace.workspaceFolders?.[0];
   const workspaceFsPath = wf?.uri?.fsPath || process.cwd();
@@ -463,6 +453,7 @@ async function startVerticalDevIfNeeded(context, state, options = {}) {
         ...process.env,
         HOST,
         PORT: "0",
+        MOJIGOTO_DEFAULT_FONT_FAMILY: safeFontFamily(vscode.workspace.getConfiguration("mojigoto").get("defaultManuscriptFontFamily")),
         MOJIGOTO_DEBUG: getDebugFlag(options) ? "1" : "0",
       },
     });

@@ -282,8 +282,24 @@ async function saveFileDisplayNames(manuscriptRoot, files) {
   return buildFileViewModel(folderPath, 1, manuscriptRoot);
 }
 
-async function saveFolderListOrder(rootDir, orderedFolders, startIndex = 1) {
+async function saveFolderListOrder(
+  rootDir,
+  orderedFolders,
+  startIndex = 1,
+  parentDir = rootDir,
+) {
   const entries = Array.isArray(orderedFolders) ? orderedFolders : [];
+  const resolvedRoot = path.resolve(rootDir);
+  const resolvedParent = path.resolve(parentDir || rootDir);
+  const parentRelative = path.relative(resolvedRoot, resolvedParent);
+
+  if (
+    parentRelative === '..'
+    || parentRelative.startsWith(`..${path.sep}`)
+    || path.isAbsolute(parentRelative)
+  ) {
+    return await buildFolderViewModel(rootDir);
+  }
 
   const targets = entries.filter((item) => {
     return (
@@ -291,7 +307,7 @@ async function saveFolderListOrder(rootDir, orderedFolders, startIndex = 1) {
       item.kind === "folder" &&
       item.path &&
       item.name &&
-      (Number(item.depth) === 1 || path.dirname(item.path) === rootDir)
+      path.resolve(path.dirname(item.path)) === resolvedParent
     );
   });
 

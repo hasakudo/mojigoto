@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
+const { getWarehousePath } = require("../core/export-root");
 const {
   isSingleMode,
   getResolvedManuscriptRoot,
@@ -17,6 +18,7 @@ const {
   getTrashDirForSingle,
   getTrashDirForWork,
   listTrashEntries,
+  countTrashEntries,
 } = require("../core/mojigoto-trash");
 const {
   getWorkStatusLabel,
@@ -31,9 +33,12 @@ const {
   readDisplayNamesSync,
   getDisplayNameFromData,
 } = require("../reorder/reorder-display-names");
+const { MOJIGOTO_ICONS } = require("../ui/mojigoto-icons");
 
 const GENRE_EMPTY_FILTER = "__empty__";
+const WORK_STATUS_EMPTY_FILTER = "__empty__";
 const WORK_STATUS_NOT_HOLD_COMPLETE_FILTER = "__not_hold_complete__";
+const MANUSCRIPT_FOLDER_NAMES = new Set(["manuscript", "原稿"]);
 const WAREHOUSE_FILE_PRESENTATIONS = [
   {
     extensions: new Set([
@@ -115,7 +120,9 @@ function readJsonFileSafe(filePath) {
 
 function getWarehouseRoot() {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
-  const exportRoot = String(cfg.get("exportRoot", "") || "").trim();
+  const exportRoot = getWarehousePath(
+    cfg, vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "",
+  );
   if (!exportRoot || !fs.existsSync(exportRoot)) return "";
   try {
     if (!fs.statSync(exportRoot).isDirectory()) return "";
@@ -123,16 +130,7 @@ function getWarehouseRoot() {
     return "";
   }
 
-  const mode = String(cfg.get("mode", "single") || "single").trim();
-  const expectedParent = mode === "multi"
-    ? getWorkRoot()
-    : path.dirname(getResolvedManuscriptRoot());
-  if (!expectedParent) return "";
-
-  return normalizeComparablePath(path.dirname(exportRoot)) ===
-    normalizeComparablePath(expectedParent)
-    ? exportRoot
-    : "";
+  return exportRoot;
 }
 
 function getWorkStatusFromDir(workDir) {
@@ -151,34 +149,57 @@ function getWorkStatusFromWorkEntry(work) {
   );
 }
 
-function normalizeWorkStatusFilter(value) {
-  const v = String(value || "").trim();
-  if (v === WORK_STATUS_NOT_HOLD_COMPLETE_FILTER) return v;
-  return normalizeWorkStatus(v);
+function normalizeWorkStatusFilters(value) {
+  const rawValues = Array.isArray(value) ? value : [value];
+  const available = new Set(
+    WORK_STATUS_OPTIONS.map((item) => item.value).filter(Boolean),
+  );
+  const values = [];
+
+  for (const rawValue of rawValues) {
+    const text = String(rawValue || "").trim();
+    const candidates = text === WORK_STATUS_NOT_HOLD_COMPLETE_FILTER
+      ? [
+          WORK_STATUS_EMPTY_FILTER,
+          ...[...available].filter((status) => status !== "hold" && status !== "complete"),
+        ]
+      : text === WORK_STATUS_EMPTY_FILTER
+        ? [WORK_STATUS_EMPTY_FILTER]
+        : [normalizeWorkStatus(text)];
+
+    for (const status of candidates) {
+      if (
+        status &&
+        (status === WORK_STATUS_EMPTY_FILTER || available.has(status)) &&
+        !values.includes(status)
+      ) {
+        values.push(status);
+      }
+    }
+  }
+
+  return values;
 }
 
 function getWorkStatusFilterLabel(value) {
-  const filter = normalizeWorkStatusFilter(value);
-  if (!filter) return "すべて";
-  if (filter === WORK_STATUS_NOT_HOLD_COMPLETE_FILTER) return "保留・完結以外";
-  return getWorkStatusLabel(filter);
+  const filters = normalizeWorkStatusFilters(value);
+  if (!filters.length) return "すべて";
+  return filters
+    .map((filter) => filter === WORK_STATUS_EMPTY_FILTER ? "未設定" : getWorkStatusLabel(filter))
+    .join("、");
 }
 
 function workMatchesStatusFilter(work, filterValue) {
-  const filter = normalizeWorkStatusFilter(filterValue);
-  if (!filter) return true;
+  const filters = normalizeWorkStatusFilters(filterValue);
+  if (!filters.length) return true;
 
   const status = getWorkStatusFromWorkEntry(work);
-
-  if (filter === WORK_STATUS_NOT_HOLD_COMPLETE_FILTER) {
-    return status !== "hold" && status !== "complete";
-  }
-
-  return status === filter;
+  return filters.includes(status || WORK_STATUS_EMPTY_FILTER);
 }
 
-function normalizeWorkGenreFilter(value) {
-  return String(value || "").trim();
+function normalizeWorkGenreFilters(value) {
+  const rawValues = Array.isArray(value) ? value : [value];
+  return [...new Set(rawValues.map((item) => String(item || "").trim()).filter(Boolean))];
 }
 
 function getWorkSettingsFromDir(workDir) {
@@ -212,23 +233,21 @@ function getWorkGenreDisplayFromWorkEntry(work) {
 }
 
 function getWorkGenreFilterLabel(value) {
-  const filter = normalizeWorkGenreFilter(value);
-  if (!filter) return "すべて";
-  if (filter === GENRE_EMPTY_FILTER) return "未設定";
-  return filter;
+  const filters = normalizeWorkGenreFilters(value);
+  if (!filters.length) return "すべて";
+  return filters
+    .map((filter) => filter === GENRE_EMPTY_FILTER ? "未設定" : filter)
+    .join("、");
 }
 
 function workMatchesGenreFilter(work, filterValue) {
-  const filter = normalizeWorkGenreFilter(filterValue);
-  if (!filter) return true;
+  const filters = normalizeWorkGenreFilters(filterValue);
+  if (!filters.length) return true;
 
   const genres = getWorkGenresFromWorkEntry(work);
-
-  if (filter === GENRE_EMPTY_FILTER) {
-    return genres.length === 0;
-  }
-
-  return genres.includes(filter);
+  return filters.some((filter) =>
+    filter === GENRE_EMPTY_FILTER ? genres.length === 0 : genres.includes(filter),
+  );
 }
 
 function collectWorkGenres(works = []) {
@@ -295,14 +314,26 @@ class MojigotoWorkTreeProvider {
     this.currentViewManuscriptItem = null;
     this.singleViewRootItem = null;
     this._itemCache = new Map();
+    this._nestedManuscriptWarnings = new Set();
 
-    this.workStatusFilter = String(
-      context.globalState.get("mojigoto.workStatusFilter", "") || "",
-    ).trim();
+    const savedStatusFilters = context.globalState.get("mojigoto.workStatusFilters");
+    const savedGenreFilters = context.globalState.get("mojigoto.workGenreFilters");
+    const legacyStatusFilter = context.globalState.get("mojigoto.workStatusFilter", "");
+    const legacyGenreFilter = context.globalState.get("mojigoto.workGenreFilter", "");
 
-    this.workGenreFilter = String(
-      context.globalState.get("mojigoto.workGenreFilter", "") || "",
-    ).trim();
+    this.workStatusFilters = normalizeWorkStatusFilters(
+      Array.isArray(savedStatusFilters) ? savedStatusFilters : legacyStatusFilter,
+    );
+    this.workGenreFilters = normalizeWorkGenreFilters(
+      Array.isArray(savedGenreFilters) ? savedGenreFilters : legacyGenreFilter,
+    );
+
+    if (!Array.isArray(savedStatusFilters) && legacyStatusFilter) {
+      void context.globalState.update("mojigoto.workStatusFilters", this.workStatusFilters);
+    }
+    if (!Array.isArray(savedGenreFilters) && legacyGenreFilter) {
+      void context.globalState.update("mojigoto.workGenreFilters", this.workGenreFilters);
+    }
   }
 
   refresh(element = undefined) {
@@ -310,7 +341,7 @@ class MojigotoWorkTreeProvider {
   }
 
   getWorkStatusFilter() {
-    return normalizeWorkStatusFilter(this.workStatusFilter);
+    return normalizeWorkStatusFilters(this.workStatusFilters);
   }
 
   getAllWorksForFilter() {
@@ -322,13 +353,14 @@ class MojigotoWorkTreeProvider {
   }
 
   async setWorkStatusFilter(value) {
-    this.workStatusFilter = normalizeWorkStatusFilter(value);
+    this.workStatusFilters = normalizeWorkStatusFilters(value);
 
     try {
       await this.context.globalState.update(
-        "mojigoto.workStatusFilter",
-        this.workStatusFilter,
+        "mojigoto.workStatusFilters",
+        this.workStatusFilters,
       );
+      await this.context.globalState.update("mojigoto.workStatusFilter", undefined);
     } catch {
       // noop
     }
@@ -337,17 +369,18 @@ class MojigotoWorkTreeProvider {
   }
 
   getWorkGenreFilter() {
-    return normalizeWorkGenreFilter(this.workGenreFilter);
+    return normalizeWorkGenreFilters(this.workGenreFilters);
   }
 
   async setWorkGenreFilter(value) {
-    this.workGenreFilter = normalizeWorkGenreFilter(value);
+    this.workGenreFilters = normalizeWorkGenreFilters(value);
 
     try {
       await this.context.globalState.update(
-        "mojigoto.workGenreFilter",
-        this.workGenreFilter,
+        "mojigoto.workGenreFilters",
+        this.workGenreFilters,
       );
+      await this.context.globalState.update("mojigoto.workGenreFilter", undefined);
     } catch {
       // noop
     }
@@ -365,7 +398,7 @@ class MojigotoWorkTreeProvider {
       {
         kind: "workGenreFilterAction",
         contextValue: "workGenreFilterAction",
-        iconId: filter ? "filter-filled" : "filter",
+        iconId: filter.length ? "filter-filled" : "filter",
         description: `${visibleWorks.length}/${works.length}`,
         tooltip: "作品一覧をジャンルで絞り込みます",
         command: {
@@ -386,7 +419,7 @@ class MojigotoWorkTreeProvider {
       {
         kind: "workStatusFilterAction",
         contextValue: "workStatusFilterAction",
-        iconId: filter ? "filter-filled" : "filter",
+        iconId: filter.length ? "filter-filled" : "filter",
         description: `${visibleWorks.length}/${works.length}`,
         tooltip: "作品一覧を状態で絞り込みます",
         command: {
@@ -398,6 +431,17 @@ class MojigotoWorkTreeProvider {
   }
 
   getTreeItem(element) {
+    if (element.kind === "trashRoot") {
+      return countTrashEntries(element).then((count) => {
+        element.description = `${count}件`;
+        element.tooltip = `ゴミ箱: ${count}件\nフォルダーも1件として数えます。`;
+        return element;
+      }).catch(() => {
+        element.description = "件数不明";
+        element.tooltip = "ゴミ箱の件数を取得できませんでした。";
+        return element;
+      });
+    }
     return element;
   }
 
@@ -538,6 +582,10 @@ class MojigotoWorkTreeProvider {
 
       for (const child of children) {
         if (!expandableKinds.has(child?.kind)) continue;
+        if (child.kind === "warehouseRoot" || child.kind === "warehouseFolder") {
+          const relative = path.relative(child.fsPath, normalizedTarget);
+          if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) continue;
+        }
         const found = await walk(child);
         if (found) return found;
       }
@@ -600,6 +648,11 @@ class MojigotoWorkTreeProvider {
 
     let entries = [];
     try {
+      // Junctions back to an ancestor must not cause unbounded tree traversal.
+      const realPath = normalizeComparablePath(fs.realpathSync(dirPath));
+      for (let ancestor = parentItem.parent; ancestor; ancestor = ancestor.parent) {
+        if (ancestor.fsPath && normalizeComparablePath(fs.realpathSync(ancestor.fsPath)) === realPath) return [];
+      }
       entries = fs.readdirSync(dirPath, { withFileTypes: true });
     } catch {
       return [];
@@ -666,7 +719,7 @@ class MojigotoWorkTreeProvider {
         workName,
         workDir,
         fsPath,
-        iconId: "edit",
+        iconId: MOJIGOTO_ICONS.conceptMemo,
         parent,
         tooltip: "構想メモを開く",
         command: {
@@ -769,7 +822,7 @@ class MojigotoWorkTreeProvider {
         kind: "manuscriptRoot",
         contextValue: "currentViewManuscriptRoot",
         fsPath: manuscriptRoot,
-        iconId: "files",
+        iconId: MOJIGOTO_ICONS.manuscript,
         parent,
       },
     );
@@ -784,14 +837,14 @@ class MojigotoWorkTreeProvider {
         {
           kind: "plotRoot",
           contextValue: "plotRoot",
-          iconId: "note",
+          iconId: MOJIGOTO_ICONS.plot,
           parent,
         },
       ),
       new MojigotoTreeItem("資料", vscode.TreeItemCollapsibleState.Collapsed, {
         kind: "referenceRoot",
         contextValue: "referenceRoot",
-        iconId: "repo",
+        iconId: MOJIGOTO_ICONS.reference,
         parent,
       }),
       this.createConceptMemosItem({
@@ -800,7 +853,7 @@ class MojigotoWorkTreeProvider {
       new MojigotoTreeItem("作品設定", vscode.TreeItemCollapsibleState.None, {
         kind: "settingsEntry",
         contextValue: "settingsEntry",
-        iconId: "gear",
+        iconId: MOJIGOTO_ICONS.settings,
         parent,
         command: {
           command: "mojigoto.treeOpenSettings",
@@ -917,8 +970,8 @@ class MojigotoWorkTreeProvider {
             contextValue: "empty",
             iconId: "info",
             description: [
-              statusFilter ? `状態: ${getWorkStatusFilterLabel(statusFilter)}` : "",
-              genreFilter
+              statusFilter.length ? `状態: ${getWorkStatusFilterLabel(statusFilter)}` : "",
+              genreFilter.length
                 ? `ジャンル: ${getWorkGenreFilterLabel(genreFilter)}`
                 : "",
             ]
@@ -1007,7 +1060,7 @@ class MojigotoWorkTreeProvider {
         fsPath: manuscriptRoot,
         workName: current.workName,
         workDir: current.workDir,
-        iconId: "files",
+        iconId: MOJIGOTO_ICONS.manuscript,
         parent: this.currentViewRootItem || null,
       },
     );
@@ -1026,7 +1079,7 @@ class MojigotoWorkTreeProvider {
             contextValue: "plotRoot",
             workName: current.workName,
             fsPath: current.workDir,
-            iconId: "note",
+            iconId: MOJIGOTO_ICONS.plot,
             parent: this.currentViewRootItem || null,
           },
         ),
@@ -1041,7 +1094,7 @@ class MojigotoWorkTreeProvider {
             contextValue: "referenceRoot",
             workName: current.workName,
             fsPath: current.workDir,
-            iconId: "repo",
+            iconId: MOJIGOTO_ICONS.reference,
             parent: this.currentViewRootItem || null,
           },
         ),
@@ -1062,7 +1115,7 @@ class MojigotoWorkTreeProvider {
           contextValue: "settingsEntry",
           workName: current.workName,
           fsPath: current.workDir,
-          iconId: "gear",
+          iconId: MOJIGOTO_ICONS.settings,
           parent: this.currentViewRootItem || null,
           command: {
             command: "mojigoto.treeOpenSettings",
@@ -1124,7 +1177,7 @@ class MojigotoWorkTreeProvider {
         fsPath: manuscriptRoot,
         workName: workItem.workName,
         workDir: workItem.fsPath,
-        iconId: "files",
+        iconId: MOJIGOTO_ICONS.manuscript,
         parent: workItem,
       }),
       new MojigotoTreeItem(
@@ -1135,7 +1188,7 @@ class MojigotoWorkTreeProvider {
           contextValue: "plotRoot",
           workName: workItem.workName,
           fsPath: workItem.fsPath,
-          iconId: "note",
+          iconId: MOJIGOTO_ICONS.plot,
         },
       ),
       new MojigotoTreeItem("資料", vscode.TreeItemCollapsibleState.Collapsed, {
@@ -1143,7 +1196,7 @@ class MojigotoWorkTreeProvider {
         contextValue: "referenceRoot",
         workName: workItem.workName,
         fsPath: workItem.fsPath,
-        iconId: "repo",
+        iconId: MOJIGOTO_ICONS.reference,
       }),
       this.createConceptMemosItem({
         parent: workItem,
@@ -1156,7 +1209,7 @@ class MojigotoWorkTreeProvider {
         contextValue: "settingsEntry",
         workName: workItem.workName,
         fsPath: workItem.fsPath,
-        iconId: "gear",
+        iconId: MOJIGOTO_ICONS.settings,
         command: {
           command: "mojigoto.treeOpenSettings",
           title: "作品設定を開く",
@@ -1208,8 +1261,23 @@ class MojigotoWorkTreeProvider {
       cursor = cursor.parent || null;
     }
     const displayNamesData = readDisplayNamesSync(displayNamesRoot);
+    const entries = listManuscriptChildren(manuscriptRoot);
+    const nestedManuscriptFolders = parentItem?.kind === "manuscriptRoot"
+      ? entries.filter((entry) =>
+          entry.type === "dir" && MANUSCRIPT_FOLDER_NAMES.has(String(entry.name || "").toLowerCase()),
+        )
+      : [];
 
-    return listManuscriptChildren(manuscriptRoot).map((entry) => {
+    for (const entry of nestedManuscriptFolders) {
+      const warningKey = normalizeComparablePath(entry.fsPath);
+      if (!warningKey || this._nestedManuscriptWarnings.has(warningKey)) continue;
+      this._nestedManuscriptWarnings.add(warningKey);
+      void vscode.window?.showWarningMessage?.(
+        `もじごと: 原稿フォルダが二重になっています（内側: 「${entry.name}」）。内容は表示できますが、内側の原稿を外側の原稿フォルダ直下へ移動し、空になった内側のフォルダを削除してください。`,
+      );
+    }
+
+    return entries.map((entry) => {
       const customDisplayName = getDisplayNameFromData(
         displayNamesData,
         displayNamesRoot,
@@ -1218,7 +1286,12 @@ class MojigotoWorkTreeProvider {
 
       if (entry.type === "dir") {
         const displayLabel = customDisplayName || getDisplayChapterLabel(entry.name);
-        const tooltip =
+        const nestedManuscript = nestedManuscriptFolders.some((item) =>
+          normalizeComparablePath(item.fsPath) === normalizeComparablePath(entry.fsPath),
+        );
+        const tooltip = nestedManuscript
+          ? `原稿フォルダが二重になっています。内側の原稿を外側へ移動してください。\n${entry.fsPath}`
+          :
           displayLabel !== entry.name
             ? `${displayLabel}\n実フォルダ名: ${entry.name}`
             : entry.name;
@@ -1233,6 +1306,7 @@ class MojigotoWorkTreeProvider {
             workName,
             workDir,
             iconId: "folder",
+            description: nestedManuscript ? "⚠ 二重" : "",
             parent: parentItem,
             tooltip,
           },
@@ -1245,7 +1319,7 @@ class MojigotoWorkTreeProvider {
         : entry.name;
 
       return this._upsertTreeItem(
-        "☰ " + displayLabel,
+        displayLabel,
         vscode.TreeItemCollapsibleState.None,
         {
           kind: "manuscriptFile",
@@ -1253,6 +1327,7 @@ class MojigotoWorkTreeProvider {
           fsPath: entry.fsPath,
           workName,
           workDir,
+          iconId: MOJIGOTO_ICONS.manuscriptFile,
           parent: parentItem,
           tooltip,
           command: {
@@ -1280,7 +1355,10 @@ class MojigotoWorkTreeProvider {
           workName: rootItem.workName || "",
           noteType: type,
           title: note.title,
-          iconId: type === "plot" ? "note" : "book",
+          iconId:
+            type === "plot"
+              ? MOJIGOTO_ICONS.plot
+              : MOJIGOTO_ICONS.reference,
           command: {
             command: "mojigoto.treeOpenNote",
             title: "ノートを開く",
@@ -1382,5 +1460,6 @@ class MojigotoWorkTreeProvider {
 module.exports = {
   MojigotoWorkTreeProvider,
   getWorkStatusFilterLabel,
+  WORK_STATUS_EMPTY_FILTER,
   WORK_STATUS_NOT_HOLD_COMPLETE_FILTER,
 };

@@ -16,7 +16,7 @@ const {
 
 const {
   collectWorkCandidates,
-  createJunction,
+  selectManuscriptRoot,
   getExcludeList,
   getManuscriptCandidates,
   getPickLimit,
@@ -60,6 +60,7 @@ function buildWorkJsonFromSingleSettings(
   );
 
   return {
+    ...src,
     schemaVersion: Number(src.schemaVersion || 1) || 1,
     folderName: normalizedFolderName,
     title: normalizedTitle,
@@ -136,7 +137,7 @@ async function movePathIfExists(fromPath, toPath) {
   if (!(await existsPath(fromPath))) return false;
 
   await ensureDir(path.dirname(toPath));
-  await rmForce(toPath);
+  if (await existsPath(toPath)) throw new Error(`移行先にデータが存在します。上書きせず停止しました: ${path.basename(toPath)}`);
   await fsp.rename(fromPath, toPath);
 
   return true;
@@ -173,12 +174,11 @@ async function migrateSingleToMultiWork(context, options = {}) {
   if (!source.hasAnySource) {
     throw new Error("移行対象の Single データが見つかりませんでした。");
   }
+  if (source.hasSettings && !source.settings) throw new Error("Singleの作品設定を読み込めませんでした。元のデータを保持して移行を中止しました。");
 
   const newWorkDir = path.join(workRoot, workName);
   const newWorkMojigotoDir = path.join(newWorkDir, ".mojigoto");
   const newWorkManuscriptDir = path.join(newWorkDir, "manuscript");
-  const newWorkPlotsDir = path.join(newWorkMojigotoDir, "plots");
-  const newWorkReferencesDir = path.join(newWorkMojigotoDir, "references");
   const newWorkSettingsPath = path.join(newWorkMojigotoDir, "work.json");
 
   const viewWorkDir = path.join(workRoot, "_WORK");
@@ -187,6 +187,11 @@ async function migrateSingleToMultiWork(context, options = {}) {
   if (await existsPath(newWorkDir)) {
     throw new Error(`移行先の作品フォルダがすでに存在します: ${workName}`);
   }
+  const commonTodoSource = path.join(source.mojigotoDir, "common-todos.json");
+  const commonTodoTarget = path.join(workRoot, ".mojigoto", "common-todos.json");
+  const moveCommonTodos = path.resolve(commonTodoSource).toLowerCase() !== path.resolve(commonTodoTarget).toLowerCase()
+    && await existsPath(commonTodoSource);
+  if (moveCommonTodos && await existsPath(commonTodoTarget)) throw new Error("移行先に共通TODOが存在します。両方の内容を保持して移行を中止しました。共通TODOの保存先を確認してください。");
 
   await ensureDir(newWorkDir);
   await ensureDir(newWorkMojigotoDir);
@@ -199,13 +204,15 @@ async function migrateSingleToMultiWork(context, options = {}) {
     await ensureDir(newWorkManuscriptDir);
   }
 
-  // plots / references
-  if (source.hasPlots) {
-    await movePathIfExists(source.plotsDir, newWorkPlotsDir);
+  // Work data belongs to the new work, including memo links and backup history.
+  // Workspace-wide common TODOs and templates keep their shared location.
+  const workDataNames = ["plots", "references", "concept-memos.json", "address-book.json",
+    "note-images", "backups", "trash", "notes-index.json", "work-metrics.json",
+    "web-writing-events.json", "manuscript-display-names.json"];
+  for (const name of workDataNames) {
+    await movePathIfExists(path.join(source.mojigotoDir, name), path.join(newWorkMojigotoDir, name));
   }
-  if (source.hasReferences) {
-    await movePathIfExists(source.referencesDir, newWorkReferencesDir);
-  }
+  if (moveCommonTodos) await movePathIfExists(commonTodoSource, commonTodoTarget);
 
   // settings.json -> work.json
   const workJson = buildWorkJsonFromSingleSettings(
@@ -224,12 +231,12 @@ async function migrateSingleToMultiWork(context, options = {}) {
     await rmForce(source.settingsPath);
   }
 
-  // 空になった旧 .mojigoto を整理
+  // Remove only an empty source; shared or unrecognized data must never be deleted.
   await cleanupDirIfEmpty(source.mojigotoDir);
+  const remainingSourceEntries = await existsPath(source.mojigotoDir) ? await fsp.readdir(source.mojigotoDir) : [];
 
   // View を新作品へ向ける
-  await rmForce(viewLinkPath);
-  await createJunction(viewLinkPath, newWorkManuscriptDir);
+  await selectManuscriptRoot(viewLinkPath, newWorkManuscriptDir);
 
   await setCurrentWorkName(context, workName);
 
@@ -238,6 +245,7 @@ async function migrateSingleToMultiWork(context, options = {}) {
     workDir: newWorkDir,
     manuscriptDir: newWorkManuscriptDir,
     settingsPath: newWorkSettingsPath,
+    remainingSourceEntries,
   };
 }
 
@@ -278,6 +286,8 @@ async function buildInitialSetupState(createWorkNow = true, context = null) {
 async function revealWorkTreeAfterSetup() {
   await vscode.commands.executeCommand("mojigoto.refreshWorkTree");
   await vscode.commands.executeCommand("mojigoto.refreshStats");
+  // The server may have started before setup with a different watch root.
+  await vscode.commands.executeCommand("mojigoto.serverRestart");
 
   try {
     await vscode.commands.executeCommand("mojigoto.refreshWorkStatus");
@@ -433,16 +443,10 @@ async function applyInitialSetup(context, payload) {
     const linkPath = path.join(workDir, "manuscript");
 
     await ensureDir(workDir);
-    await rmForce(linkPath);
 
     await cfg.update(
       "workRoot",
       workRoot,
-      vscode.ConfigurationTarget.Workspace,
-    );
-    await cfg.update(
-      "manuscriptRoot",
-      linkPath,
       vscode.ConfigurationTarget.Workspace,
     );
     await cfg.update("mode", "multi", vscode.ConfigurationTarget.Workspace);
@@ -469,18 +473,14 @@ async function applyInitialSetup(context, payload) {
         workRoot,
         vscode.ConfigurationTarget.Workspace,
       );
-      await cfg.update(
-        "manuscriptRoot",
-        path.join(workRoot, "_WORK", "manuscript"),
-        vscode.ConfigurationTarget.Workspace,
-      );
 
       vscode.window.showInformationMessage(
-        `もじごと: Single データを作品「${safeWorkName}」へ移行しました。`,
+        `もじごと: Single データを作品「${safeWorkName}」へ移行しました。作品用データは作品フォルダ内の .mojigoto を使います。${result.remainingSourceEntries.length ? "元の直下の .mojigoto は共通データ等を保持しているため残しています。削除しないでください。" : "空になった元の .mojigoto は整理しました。"}`,
       );
 
       await revealWorkTreeAfterSetup();
-      return;
+      await context.globalState.update("mojigoto.firstRunSetupDone", true);
+      return { mode, createdWork: true, workName: result.workName, workTitle, linkedToView: true };
     }
 
     if (createWorkNow) {
@@ -513,7 +513,7 @@ async function applyInitialSetup(context, payload) {
         memo: "",
       });
 
-      await createJunction(linkPath, newWorkManuscriptDir);
+      await selectManuscriptRoot(linkPath, newWorkManuscriptDir);
       await setCurrentWorkName(context, safeWorkName);
 
       createdWork = true;
@@ -521,7 +521,7 @@ async function applyInitialSetup(context, payload) {
       createdWorkName = safeWorkName;
       linkedToView = true;
     } else if (selectedExistingWork) {
-      await createJunction(linkPath, selectedExistingWork.manuPath);
+      await selectManuscriptRoot(linkPath, selectedExistingWork.manuPath);
       await setCurrentWorkName(
         context,
         selectedExistingWork.workName || selectedExistingWork.label,
@@ -533,12 +533,13 @@ async function applyInitialSetup(context, payload) {
       linkedToView = true;
     } else {
       await fsp.mkdir(linkPath, { recursive: true });
+      await cfg.update("manuscriptRoot", linkPath, vscode.ConfigurationTarget.Workspace);
       await setCurrentWorkName(context, "");
     }
 
     vscode.window.showInformationMessage(
       createWorkNow
-        ? "もじごと: 初回セットアップが完了しました。Multi モードを設定し、_WORK/manuscript と作品を作成しました。作品切り替えで View 対象を変更できます。"
+        ? "もじごと: 初回セットアップが完了しました。Multi モードの作品と原稿の参照先を設定しました。作品切り替えで View 対象を変更できます。"
         : selectedExistingWork
           ? `もじごと: 初回セットアップが完了しました。作品「${createdWorkTitle || createdWorkName}」へ切り替えました。`
           : "もじごと: 初回セットアップが完了しました。Multi モードを設定し、_WORK/manuscript を作成しました。既存作品には manuscript を用意してから作品切り替えを使ってください。",

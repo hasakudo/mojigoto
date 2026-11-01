@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#123f52">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://challenges.cloudflare.com; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>利用・解除申込 | もじごと</title>
+    <link rel="icon" href="../favicon.ico" sizes="any">
+    <script src="../theme-init.js?v=1.0.64"></script>
+    <link rel="stylesheet" href="../forms.css?v=1.0.2">
+    <link rel="stylesheet" href="../theme-palettes.css?v=1.0.0">
+  </head>
+  <body>
+    <header class="form-header"><a class="brand" href="../"><span class="brand-mark" aria-hidden="true">も</span><span>もじごと</span></a></header>
+    <main class="form-shell">
+      <article class="form-card">
+        <p class="eyebrow">BETA PRE-REGISTRATION</p>
+        <h1>もじごと Web 利用・解除申込</h1>
+        <p id="applicationLead" class="lead">開発中のクローズドベータに向けた事前参加申込です。<br>申込後すぐに利用可能になるものではありません。募集開始後、内容を確認して登録可否をメールでご案内します。</p>
+        <form class="public-form" data-public-form="application">
+          <label class="field"><span>申請の種類</span><select id="requestKind" name="requestKind" required><option value="join">利用を申し込む</option><option value="withdraw">利用解除を申し込む</option></select></label>
+          <label class="field"><span>名前（ニックネーム可）</span><input name="name" type="text" maxlength="50" autocomplete="name" required></label>
+          <label class="field"><span id="applicationEmailLabel">登録申請するメールアドレス</span><input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+          <label id="discoveryField" class="field"><span>もじごとをどこで知りましたか</span><select id="discovery" name="discovery" required><option value="">選択してください</option><option value="friend">知人</option><option value="social">SNS</option><option value="website">ホームページ</option><option value="other">そのほか</option></select></label>
+          <label class="field"><span>メッセージ <small class="optional">任意</small></span><textarea name="message" maxlength="2000"></textarea></label>
+          <label class="honeypot" aria-hidden="true">会社名<input name="company" type="text" tabindex="-1" autocomplete="off"></label>
+          <label class="consent"><input name="privacyConsent" type="checkbox" value="yes" required><span><a href="../terms/" target="_blank" rel="noopener">利用規約</a>と<a href="../privacy/" target="_blank" rel="noopener">プライバシーポリシー</a>を確認し、同意します。</span></label>
+          <div id="turnstileArea" class="turnstile-area" aria-label="スパム対策"></div>
+          <button id="submitButton" class="submit-button" type="submit" disabled>利用を申し込む</button>
+          <p id="formStatus" class="form-status" role="status" aria-live="polite" hidden></p>
+        </form>
+        <p id="applicationNote" class="form-note">Microsoft または Googleアカウントでログインが可能なメールアドレスを入力してください。</p>
+      </article>
+    </main>
+    <footer class="form-footer"><a href="../">もじごとへ戻る</a><a href="../contact/">お問い合わせ</a><a href="../terms/">利用規約</a><a href="../privacy/">プライバシーポリシー</a></footer>
+    <script type="module" src="../forms.mjs?v=1.0.3"></script>
+  </body>
+</html>

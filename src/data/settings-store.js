@@ -22,6 +22,7 @@ async function ensureDir(dirPath) {
 
 const WORK_STATUS_OPTIONS = [
   { value: "", label: "未設定" },
+  { value: "preparing", label: "準備中" },
   { value: "planning", label: "構想中" },
   { value: "draft", label: "執筆中" },
   { value: "revision", label: "改稿中" },
@@ -187,6 +188,7 @@ function createDefaultSettings(item) {
     relatedWorkIds: [],
     folderName: item?.workName || "",
     title: item?.workName || "",
+    subtitle: "",
     penName: "",
     genre: "",
     genres: [],
@@ -197,6 +199,7 @@ function createDefaultSettings(item) {
     memo: "",
     updatedAt: "",
     exportOptions: {
+      includeSubtitle: true,
       includeFolderName: false,
       includeGenre: true,
       includeTargetChars: true,
@@ -241,6 +244,7 @@ async function writeSettingsFile(targetPath, data) {
     ),
     folderName: String(data.folderName || "").trim(),
     title: String(data.title || "").trim(),
+    subtitle: String(data.subtitle || "").trim(),
     penName: normalizePenName(data.penName),
     genre: getGenreTextFromGenres(genres),
     genres,
@@ -251,6 +255,10 @@ async function writeSettingsFile(targetPath, data) {
     memo: String(data.memo || "").trim(),
     updatedAt: new Date().toISOString(),
     exportOptions: {
+      includeSubtitle:
+        typeof data.exportOptions?.includeSubtitle === "boolean"
+          ? data.exportOptions.includeSubtitle
+          : true,
       includeFolderName: !!data.exportOptions?.includeFolderName,
       includeGenre:
         typeof data.exportOptions?.includeGenre === "boolean"
@@ -277,6 +285,13 @@ async function syncExportOptionsToWorkspace(exportOptions) {
   const config = vscode.workspace.getConfiguration("mojigoto");
 
   await Promise.all([
+    config.update(
+      "exportIncludeSubtitle",
+      typeof exportOptions.includeSubtitle === "boolean"
+        ? exportOptions.includeSubtitle
+        : true,
+      vscode.ConfigurationTarget.Workspace,
+    ),
     config.update(
       "exportIncludeFolderName",
       !!exportOptions.includeFolderName,

@@ -30,6 +30,8 @@
     folderDirty: false,
     folderDragIndex: -1,
     folderViewMode: "arrow",
+    folderOrderParentPath: "",
+    selectedFilePaths: new Set(),
   };
 
   function escapeHtml(value) {
@@ -55,6 +57,7 @@
   const $modeArrowBtn = document.getElementById("modeArrowBtn");
   const $modeDragBtn = document.getElementById("modeDragBtn");
   const $saveFolderOrderBtn = document.getElementById("saveFolderOrderBtn");
+  const $moveSelectedFilesBtn = document.getElementById("moveSelectedFilesBtn");
   const $discardFolderOrderBtn = document.getElementById(
     "discardFolderOrderBtn",
   );
@@ -104,10 +107,37 @@
     return items.filter((item) => item?.kind === "folder");
   }
 
-  function isTopLevelFolder(item) {
-    if (!item || item.kind !== "folder") return false;
-    if (Number(item.depth) === 1) return true;
-    return !!state.rootDir && item.parentPath === state.rootDir;
+  function siblingFolders(item, items = state.folders) {
+    if (!item || item.kind !== "folder") return [];
+    return editableFolders(items).filter(
+      (candidate) => candidate.parentPath === item.parentPath,
+    );
+  }
+
+  function canReorderFolder(item) {
+    if (siblingFolders(item).length < 2) return false;
+    return !state.folderOrderParentPath
+      || item.parentPath === state.folderOrderParentPath;
+  }
+
+  function folderSubtree(item) {
+    const start = state.folders.indexOf(item);
+    if (start < 0) return [];
+    const depth = Number(item.depth || 0);
+    let end = start + 1;
+    while (
+      end < state.folders.length
+      && Number(state.folders[end]?.depth || 0) > depth
+    ) {
+      end += 1;
+    }
+    return state.folders.slice(start, end);
+  }
+
+  function siblingFolderIndexes(item) {
+    return siblingFolders(item)
+      .map((folder) => state.folders.indexOf(folder))
+      .filter((index) => index >= 0);
   }
 
   function getFolderBreadcrumb(folder) {
@@ -161,14 +191,16 @@
   function updateRenameButtons() {
     const disabled = hasPendingChanges();
     document
-      .querySelectorAll("[data-rename-entry], [data-insert-heading]")
+      .querySelectorAll("[data-rename-entry], [data-insert-heading], [data-move-entry]")
       .forEach((button) => {
         button.disabled = disabled;
         button.title = disabled
           ? "先に表示名・並び順の変更を保存または破棄してください"
           : button.hasAttribute("data-insert-heading")
             ? "このファイル1件の先頭へ見出しを挿入"
-            : "実名を個別に変更";
+             : button.hasAttribute("data-move-entry")
+               ? "このフォルダを別の階層へ移動"
+               : "実名を個別に変更";
       });
   }
 
@@ -252,7 +284,7 @@
 
   function onFolderDragStart(index, row) {
     const item = state.folders[index];
-    if (!isTopLevelFolder(item)) return;
+    if (!canReorderFolder(item)) return;
 
     state.folderDragIndex = index;
     row.classList.add("is-dragging");
@@ -269,7 +301,8 @@
 
   function onFolderDragOver(event, index, row) {
     const target = state.folders[index];
-    if (!isTopLevelFolder(target)) return;
+    const source = state.folders[state.folderDragIndex];
+    if (!canReorderFolder(target) || source?.parentPath !== target?.parentPath) return;
 
     event.preventDefault();
     row.classList.add("is-drag-over");
@@ -289,23 +322,20 @@
     const fromItem = state.folders[from];
     const toItem = state.folders[index];
 
-    if (!isTopLevelFolder(fromItem)) return;
-    if (!isTopLevelFolder(toItem)) return;
+    if (!canReorderFolder(fromItem)) return;
+    if (!canReorderFolder(toItem)) return;
+    if (fromItem.parentPath !== toItem.parentPath) return;
 
     moveFolder(from, index);
     state.folderDragIndex = -1;
   }
 
-  function getFirstFolderIndex() {
-    return state.folders.findIndex(isTopLevelFolder);
+  function getFirstFolderIndex(item) {
+    return siblingFolderIndexes(item)[0] ?? -1;
   }
 
-  function getLastFolderIndex() {
-    for (let i = state.folders.length - 1; i >= 0; i--) {
-      const item = state.folders[i];
-      if (isTopLevelFolder(item)) return i;
-    }
-    return -1;
+  function getLastFolderIndex(item) {
+    return siblingFolderIndexes(item).at(-1) ?? -1;
   }
 
   function moveFolder(from, to) {
@@ -314,22 +344,12 @@
     const fromItem = state.folders[from];
     const toItem = state.folders[to];
 
-    if (!isTopLevelFolder(fromItem)) return;
-    if (!isTopLevelFolder(toItem)) return;
+    if (!canReorderFolder(fromItem)) return;
+    if (!canReorderFolder(toItem)) return;
+    if (fromItem.parentPath !== toItem.parentPath) return;
 
-    const rootItems = state.folders.filter((item) => item?.kind === "root");
-    const groups = [];
-    let currentGroup = null;
-
-    for (const item of state.folders) {
-      if (item?.kind === "root") continue;
-      if (isTopLevelFolder(item)) {
-        currentGroup = [item];
-        groups.push(currentGroup);
-      } else if (currentGroup) {
-        currentGroup.push(item);
-      }
-    }
+    const siblings = siblingFolders(fromItem);
+    const groups = siblings.map((folder) => folderSubtree(folder));
 
     const fromGroupIndex = groups.findIndex((group) => group[0] === fromItem);
     const toGroupIndex = groups.findIndex((group) => group[0] === toItem);
@@ -338,7 +358,10 @@
     const [group] = groups.splice(fromGroupIndex, 1);
     groups.splice(toGroupIndex, 0, group);
 
-    state.folders = [...rootItems, ...groups.flat()];
+    const firstIndex = state.folders.indexOf(siblings[0]);
+    const replacedLength = groups.reduce((total, entries) => total + entries.length, 0);
+    state.folders.splice(firstIndex, replacedLength, ...groups.flat());
+    state.folderOrderParentPath = fromItem.parentPath;
     updateFolderDirty();
 
     console.log(
@@ -352,7 +375,7 @@
   function renderFolders() {
     $folderList.innerHTML = "";
 
-    const movableFolders = state.folders.filter(isTopLevelFolder);
+    const movableFolders = editableFolders().filter(canReorderFolder);
     const canReorderFolders = movableFolders.length >= 2;
 
     updateFolderModeUI();
@@ -368,7 +391,7 @@
       row.style.setProperty("--folder-depth", String(visualDepth));
       if (visualDepth > 0) row.classList.add("is-nested");
 
-      const canMove = canReorderFolders && isTopLevelFolder(folder);
+      const canMove = canReorderFolder(folder);
 
       if (canMove && state.folderViewMode === "drag") {
         row.classList.add("is-draggable");
@@ -418,6 +441,12 @@
               <div class="actual-name" title="${escapeHtml(folder.name)}">実フォルダ名: ${escapeHtml(folder.name)}</div>
               <button
                 type="button"
+                class="move-entry-button"
+                data-move-entry="folder"
+                data-entry-index="${index}"
+              >移動</button>
+              <button
+                type="button"
                 class="rename-entry-button"
                 data-rename-entry="folder"
                 data-entry-index="${index}"
@@ -462,43 +491,39 @@
           selectedFolderPath: state.selectedFolderPath,
         });
       });
+      row.querySelector('[data-move-entry="folder"]')?.addEventListener("click", () => {
+        vscode.postMessage({
+          type: "move-entries",
+          kind: "folder",
+          entryPath: folder.path,
+          selectedFolderPath: state.selectedFolderPath,
+        });
+      });
 
       if (canMove && state.folderViewMode === "arrow") {
         row.querySelectorAll("button[data-move]").forEach((btn) => {
           btn.addEventListener("click", () => {
             const kind = btn.getAttribute("data-move");
+            const siblingIndexes = siblingFolderIndexes(folder);
+            const siblingPosition = siblingIndexes.indexOf(index);
 
             if (kind === "top") {
-              const firstFolderIndex = getFirstFolderIndex();
+              const firstFolderIndex = getFirstFolderIndex(folder);
               if (firstFolderIndex >= 0) moveFolder(index, firstFolderIndex);
             }
 
             if (kind === "up") {
-              let target = -1;
-              for (let i = index - 1; i >= 0; i--) {
-                const item = state.folders[i];
-                if (isTopLevelFolder(item)) {
-                  target = i;
-                  break;
-                }
-              }
+              const target = siblingIndexes[siblingPosition - 1] ?? -1;
               if (target >= 0) moveFolder(index, target);
             }
 
             if (kind === "down") {
-              let target = -1;
-              for (let i = index + 1; i < state.folders.length; i++) {
-                const item = state.folders[i];
-                if (isTopLevelFolder(item)) {
-                  target = i;
-                  break;
-                }
-              }
+              const target = siblingIndexes[siblingPosition + 1] ?? -1;
               if (target >= 0) moveFolder(index, target);
             }
 
             if (kind === "bottom") {
-              const lastFolderIndex = getLastFolderIndex();
+              const lastFolderIndex = getLastFolderIndex(folder);
               if (lastFolderIndex >= 0) moveFolder(index, lastFolderIndex);
             }
           });
@@ -522,7 +547,7 @@
 
     updateRenameButtons();
 
-    const hasEditableFolders = movableFolders.length > 0;
+    const hasEditableFolders = editableFolders().length > 0;
 
     if ($saveFolderOrderBtn) {
       $saveFolderOrderBtn.hidden = !hasEditableFolders;
@@ -633,6 +658,10 @@
 
       row.innerHTML = `
       <div class="file-main-wrap">
+        <label class="file-select-control" title="一括移動する原稿を選択">
+          <input type="checkbox" data-select-file="${index}" ${state.selectedFilePaths.has(file.path) ? "checked" : ""}>
+          <span class="sr-only">${escapeHtml(file.originalName)}を選択</span>
+        </label>
         ${dragHandle}
         <div class="order-number" aria-label="並び順 ${index + 1}">${orderNumber}</div>
         <div class="file-main">
@@ -674,6 +703,11 @@
         $saveBtn.disabled = !state.dirty;
         $discardBtn.disabled = !state.dirty;
         renderFolders();
+      });
+      row.querySelector("[data-select-file]")?.addEventListener("change", (event) => {
+        if (event.target.checked) state.selectedFilePaths.add(file.path);
+        else state.selectedFilePaths.delete(file.path);
+        if ($moveSelectedFilesBtn) $moveSelectedFilesBtn.disabled = !state.selectedFilePaths.size || hasPendingChanges();
       });
 
       row.querySelector('[data-rename-entry="file"]')?.addEventListener("click", () => {
@@ -718,6 +752,9 @@
     $saveBtn.disabled = !state.dirty;
     $discardBtn.disabled = !state.dirty;
     updateRenameButtons();
+    if ($moveSelectedFilesBtn) {
+      $moveSelectedFilesBtn.disabled = !state.selectedFilePaths.size || hasPendingChanges();
+    }
   }
 
   window.addEventListener("message", (event) => {
@@ -739,6 +776,7 @@
       }));
       state.folderOriginals = clone(msg.folders || []);
       state.folderDirty = false;
+      state.folderOrderParentPath = "";
       state.selectedFolderPath =
         msg.selectedFolderPath || state.selectedFolderPath;
       if (Array.isArray(msg.files)) {
@@ -759,13 +797,14 @@
       updateDirtyBadge();
     }
 
-    if (msg.type === "entry-renamed") {
+    if (msg.type === "entry-renamed" || msg.type === "entries-moved") {
       state.folders = (msg.folders || []).map((folder) => ({
         ...folder,
         dirty: false,
       }));
       state.folderOriginals = clone(msg.folders || []);
       state.folderDirty = false;
+      state.folderOrderParentPath = "";
       state.selectedFolderPath =
         msg.selectedFolderPath || state.selectedFolderPath;
       state.files = msg.files || [];
@@ -778,6 +817,7 @@
       state.fileOriginalsByFolder = {
         [state.selectedFolderPath]: clone(state.files),
       };
+      state.selectedFilePaths.clear();
 
       renderFolders();
       renderFiles();
@@ -789,6 +829,7 @@
       const serverFiles = msg.files || [];
       const hasDraft = !!state.dirtyMap[folderPath] && !!state.fileDrafts[folderPath];
 
+      if (folderPath !== state.selectedFolderPath) state.selectedFilePaths.clear();
       state.selectedFolderPath = folderPath;
       if (!state.fileOriginalsByFolder[folderPath] || !hasDraft) {
         state.fileOriginalsByFolder[folderPath] = clone(serverFiles);
@@ -821,6 +862,7 @@
       }));
       state.folderOriginals = clone(msg.folders || []);
       state.folderDirty = false;
+      state.folderOrderParentPath = "";
 
       renderFolders();
       updateDirtyBadge();
@@ -868,6 +910,16 @@
     });
   });
 
+  $moveSelectedFilesBtn?.addEventListener("click", () => {
+    if (!state.selectedFilePaths.size || hasPendingChanges()) return;
+    vscode.postMessage({
+      type: "move-entries",
+      kind: "file",
+      entryPaths: [...state.selectedFilePaths],
+      selectedFolderPath: state.selectedFolderPath,
+    });
+  });
+
   $closeBtn?.addEventListener("click", () => {
     const hasFileDirty = Object.values(state.dirtyMap || {}).some(Boolean);
     const hasFolderDirty = !!state.folderDirty;
@@ -900,6 +952,7 @@
       orderedFolders: state.folders,
       selectedFolderPath: state.selectedFolderPath,
       orderChanged: hasFolderOrderChanged(),
+      folderOrderParentPath: state.folderOrderParentPath,
     });
   });
 
@@ -909,11 +962,13 @@
       dirty: false,
     }));
     state.folderDirty = false;
+    state.folderOrderParentPath = "";
     renderFolders();
     updateDirtyBadge();
   });
 
   $reloadFolderListBtn?.addEventListener("click", () => {
+    state.folderOrderParentPath = "";
     vscode.postMessage({ type: "reload-folder-list" });
   });
 

@@ -1,5 +1,6 @@
 const fs = require("fs/promises");
 const path = require("path");
+const { storageRevision, writeStructuredFile } = require("./structured-file-write");
 const { isSingleMode } = require("../core/mojigoto-context");
 const {
   getMojigotoDirForSingle,
@@ -7,6 +8,15 @@ const {
 } = require("../core/mojigoto-paths");
 const { getTemplateById } = require("./note-templates");
 const { makeId } = require("../core/path-utils");
+const { writeNoteIndex } = require("./note-index");
+const { afterNoteSaved } = require("../export/web-note-markdown");
+const { normalizeImportedTarget, findImportedTarget, importedAddressBook } = require("../../web/lib/generated-note-markdown");
+const {
+  createSyncConflictError,
+  hasSyncConflict,
+  noteMemoPayload,
+  syncFingerprint,
+} = require("./concept-sync");
 
 async function ensureDir(dirPath) {
   if (!dirPath) return;
@@ -34,7 +44,9 @@ function createDefaultItemMemo() {
     tags: [],
     linkedConceptMemoIds: [],
     autoSyncToConceptMemo: false,
+    autoSyncToConceptMemoOverride: null,
     conceptMemoSyncedAt: "",
+    conceptMemoSyncFingerprint: "",
   };
 }
 
@@ -194,6 +206,7 @@ async function readNoteFile(filePath, fallbackType = "plot") {
   const parsed = JSON.parse(raw);
 
   return {
+    storageRevision: storageRevision(raw),
     schemaVersion: 4,
     id: String(parsed?.id || makeId(fallbackType)),
     type: String(parsed?.type || fallbackType),
@@ -202,6 +215,8 @@ async function readNoteFile(filePath, fallbackType = "plot") {
     groups: normalizeGroupsFromLegacy(parsed),
     addressBook: normalizeAddressBook(parsed?.addressBook),
     updatedAt: String(parsed?.updatedAt || ""),
+    ...(parsed?.importSource && typeof parsed.importSource === "object" ? { importSource: parsed.importSource } : {}),
+    ...(importedAddressBook(parsed?.importedAddressBook) ? { importedAddressBook: importedAddressBook(parsed.importedAddressBook) } : {}),
   };
 }
 
@@ -237,7 +252,7 @@ async function listNotesWithMeta(type, item) {
   });
 }
 
-async function createNewNote(type, item, title, templateId = "blank") {
+async function createNewNote(type, item, title, templateId = "blank", options = {}) {
   const dir = await resolveNoteBaseDir(type, item);
   const base = slugify(title || (type === "plot" ? "plot" : "reference"));
   let fileName = `${base}.json`;
@@ -277,13 +292,22 @@ async function createNewNote(type, item, title, templateId = "blank") {
     note.groups = cloneTemplateGroups(template.groups);
   }
 
+  if (Array.isArray(options.initialGroups)) {
+    note.groups = options.initialGroups.length
+      ? options.initialGroups.map((group) => normalizeGroup(group))
+      : [createDefaultGroup()];
+  }
+
   note.updatedAt = new Date().toISOString();
 
-  await fs.writeFile(filePath, JSON.stringify(note, null, 2), "utf8");
+  const content = JSON.stringify(note, null, 2);
+  await fs.writeFile(filePath, content, "utf8");
+  writeNoteIndex(path.dirname(path.dirname(filePath)));
+  void afterNoteSaved(filePath);
 
   return {
     filePath,
-    note,
+    note: { ...note, storageRevision: storageRevision(content) },
   };
 }
 
@@ -326,10 +350,11 @@ function normalizeRelatedReferences(value) {
       itemId: String(link?.itemId || "").trim(),
       itemKind: String(link?.itemKind || "entry") === "divider" ? "divider" : "entry",
       itemLabel: String(link?.itemLabel || "").trim(),
+      ...(link?.importTarget ? { importTarget: normalizeImportedTarget(link.importTarget) || { invalid: true } } : {}),
     }))
     .filter((link) => {
-      if (!link.noteId || !link.itemId) return false;
-      const key = `${link.noteId}:${link.groupId}:${link.itemId}`;
+      if ((!link.noteId && !link.importTarget) || !link.itemId) return false;
+      const key = `${link.importTarget?.workId || ""}:${link.noteType}:${link.noteId}:${link.groupId}:${link.itemId}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -350,7 +375,12 @@ function normalizeItemMemo(memo) {
           .filter(Boolean)
       : [],
     autoSyncToConceptMemo: Boolean(memo?.autoSyncToConceptMemo),
+    autoSyncToConceptMemoOverride:
+      typeof memo?.autoSyncToConceptMemoOverride === "boolean"
+        ? memo.autoSyncToConceptMemoOverride
+        : null,
     conceptMemoSyncedAt: String(memo?.conceptMemoSyncedAt || ""),
+    conceptMemoSyncFingerprint: String(memo?.conceptMemoSyncFingerprint || ""),
   };
 }
 
@@ -414,10 +444,14 @@ async function saveNoteFile(filePath, data) {
         : [createDefaultGroup()],
     addressBook: normalizeAddressBook(data?.addressBook),
     updatedAt: new Date().toISOString(),
+    ...(data?.importSource && typeof data.importSource === "object" ? { importSource: data.importSource } : {}),
+    ...(importedAddressBook(data?.importedAddressBook) ? { importedAddressBook: importedAddressBook(data.importedAddressBook) } : {}),
   };
 
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
-  return payload;
+  const saved = await writeStructuredFile(filePath, payload, data?.storageRevision);
+  writeNoteIndex(path.dirname(path.dirname(filePath)));
+  void afterNoteSaved(filePath);
+  return saved;
 }
 
 function normalizeReferenceSearchText(value) {
@@ -497,6 +531,7 @@ async function searchNotesByType(item, noteType, query, options = {}) {
           itemId: String(entry?.id || ""),
           itemKind,
           itemLabel,
+          ...(itemKind === "divider" ? { dividerLabel, dividerValue } : {}),
           preview: makeReferencePreview(
             itemKind === "divider" && dividerValue && dividerLabel
               ? `${dividerLabel}: ${dividerValue}`
@@ -517,6 +552,19 @@ async function searchReferenceNotes(item, query, options = {}) {
 }
 
 async function resolveRelatedNoteTarget(item, descriptor) {
+  if (descriptor?.importTarget && !descriptor.importTarget.self) {
+    const entries = [];
+    for (const type of ["plot", "reference"]) for (const file of await listNoteFiles(type, item)) {
+      try { entries.push({ item: { name: file.name }, filePath: file.fsPath, data: await readNoteFile(file.fsPath, type) }); } catch {}
+    }
+    const root = isSingleMode() ? getMojigotoDirForSingle() : getMojigotoDirForWork(item?.fsPath || "");
+    let workId = "";
+    try { workId = JSON.parse(await fs.readFile(path.join(root, "web-import-settings.json"), "utf8")).workId || ""; } catch {}
+    const resolved = findImportedTarget(entries, descriptor.importTarget, workId);
+    if (!resolved) return null;
+    const group = resolved.entry.data.groups.find((group) => group.id === resolved.link.groupId);
+    return { filePath: resolved.entry.filePath, note: resolved.entry.data, group, item: group.items.find((item) => item.id === resolved.link.itemId) };
+  }
   const noteType = descriptor?.noteType === "plot" ? "plot" : "reference";
   const noteId = String(descriptor?.noteId || "").trim();
   const noteFileName = String(descriptor?.noteFileName || "").trim();
@@ -576,6 +624,7 @@ async function moveNoteInOrder(type, item, filePath, direction) {
       const parsed = JSON.parse(raw);
       parsed.order = order;
       await fs.writeFile(entry.fsPath, JSON.stringify(parsed, null, 2), "utf8");
+      void afterNoteSaved(entry.fsPath);
     }),
   );
 
@@ -630,13 +679,21 @@ async function applyConceptMemoToNoteItem(input) {
       : [],
     linkedConceptMemoIds: nextLinkedIds,
   };
+  const desiredFingerprint = String(input?.syncFingerprint || "") || syncFingerprint(noteMemoPayload(nextMemo));
+  const currentFingerprint = syncFingerprint(noteMemoPayload(currentMemo));
+  const baseline = String(input?.baseSyncFingerprint || currentMemo.conceptMemoSyncFingerprint || "");
+  if (input?.forceOverwrite !== true && hasSyncConflict(currentFingerprint, desiredFingerprint, baseline, input?.requireSyncBaseline)) {
+    throw createSyncConflictError();
+  }
+  nextMemo.conceptMemoSyncFingerprint = desiredFingerprint;
 
   const unchanged =
     currentMemo.type === nextMemo.type &&
     currentMemo.body === nextMemo.body &&
     JSON.stringify(currentMemo.tags) === JSON.stringify(nextMemo.tags) &&
     JSON.stringify(currentMemo.linkedConceptMemoIds) ===
-      JSON.stringify(nextMemo.linkedConceptMemoIds);
+      JSON.stringify(nextMemo.linkedConceptMemoIds) &&
+    currentMemo.conceptMemoSyncFingerprint === nextMemo.conceptMemoSyncFingerprint;
 
   if (unchanged) {
     return {
@@ -688,6 +745,7 @@ async function setItemMemoAutoSync(input = {}) {
       ? normalizeItemMemo(item.memo)
       : createDefaultItemMemo()),
     autoSyncToConceptMemo: Boolean(input?.enabled),
+    autoSyncToConceptMemoOverride: Boolean(input?.enabled),
   };
 
   const saved = await saveNoteFile(notePath, { ...note, groups });
@@ -699,6 +757,7 @@ async function deleteNoteFile(filePath) {
 
   try {
     await fs.unlink(filePath);
+    writeNoteIndex(path.dirname(path.dirname(filePath)));
     return true;
   } catch {
     return false;

@@ -1,6 +1,7 @@
 const vscode = require("vscode");
 const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
 const { getNonce, escapeHtml } = require("../core/path-utils");
+const { getWebviewNoticeScript, getWebviewNoticeCss } = require("./shared/webview-notice");
 const {
   hideCustomGenreOptions,
   restoreGenreOptions,
@@ -328,6 +329,7 @@ function getSetupWebviewHtml(webview, initialState = {}) {
     .hidden {
       display: none !important;
     }
+    ${getWebviewNoticeCss()}
   </style>
 </head>
 <body>
@@ -396,6 +398,8 @@ function getSetupWebviewHtml(webview, initialState = {}) {
         <h3>既存データの移行</h3>
 
         <p>Single の原稿・設定を作品フォルダへ移行できます。</p>
+        <p>構想メモ・画像・バックアップなどの作品用データも、新しい作品フォルダ内の .mojigoto へ移します。直下の .mojigoto に共通TODO・共通テンプレートや未分類のファイルがある場合は残します。空になった場合だけ整理します。</p>
+        <p>Google DriveでWeb版も使う場合は、移行後にDriveの同期完了を待ち、WebのGoogle Drive設定ページで追加許可を行ってください。新しい作品フォルダ・.mojigoto・work.jsonと、新規／再作成された項目を選択してから、Webの作品一覧を再読み込みしてください。</p>
 
         <label>
           <input type="radio" name="migrate" value="yes">
@@ -598,6 +602,8 @@ function getSetupWebviewHtml(webview, initialState = {}) {
     const maxStep = 5;
 
     const statusEl = document.getElementById("status");
+    ${getWebviewNoticeScript()}
+    const setupNotice = createWebviewNotice(statusEl);
     const prevBtn = document.getElementById("prevBtn");
     const nextBtn = document.getElementById("nextBtn");
     const quickFinishBtn = document.getElementById("quickFinishBtn");
@@ -619,8 +625,8 @@ function getSetupWebviewHtml(webview, initialState = {}) {
     const singleCreateOverwriteNotice = document.getElementById("singleCreateOverwriteNotice");
     const multiQuickFinishNotice = document.getElementById("multiQuickFinishNotice");
 
-    function setStatus(message) {
-      statusEl.textContent = message || "";
+    function setStatus(message, isError = false) {
+      setupNotice.show(message, { persist: true, isError });
     }
 
     function escapeClientHtml(value) {
@@ -856,23 +862,23 @@ function getSetupWebviewHtml(webview, initialState = {}) {
 
       if (step === 2) {
         if (payload.mode === "single" && !payload.manuscriptRoot) {
-          setStatus("manuscriptRoot を入力してください。");
+          setStatus("manuscriptRoot を入力してください。", true);
           return false;
         }
         if (payload.mode === "multi" && !payload.workRoot) {
-          setStatus("workRoot を入力してください。");
+          setStatus("workRoot を入力してください。", true);
           return false;
         }
 
         if (payload.mode === "multi" && payload.migrateSingleToMulti && !payload.migrationWorkName) {
-          setStatus("移行先の作品フォルダ名を入力してください。");
+          setStatus("移行先の作品フォルダ名を入力してください。", true);
           return false;
         }
       }
 
       if (step === 5 && payload.createWorkNow) {
         if (!payload.work.title) {
-          setStatus("作品名を入力してください。");
+          setStatus("作品名を入力してください。", true);
           return false;
         }
       }
@@ -1009,7 +1015,7 @@ function getSetupWebviewHtml(webview, initialState = {}) {
 
     function goNext() {
       if (currentStep === 2 && getMigrateSingle()) {
-        setStatus("Single データの移行を選択した場合は「移行して完了」を押してください。");
+        setStatus("Single データの移行を選択した場合は「移行して完了」を押してください。", true);
         updateStepVisibility();
         return;
       }
@@ -1096,7 +1102,7 @@ function getSetupWebviewHtml(webview, initialState = {}) {
       if (!msg) return;
 
       if (msg.type === "error") {
-        setStatus(msg.message || "セットアップに失敗しました。");
+        setStatus(msg.message || "セットアップに失敗しました。", true);
         return;
       }
 

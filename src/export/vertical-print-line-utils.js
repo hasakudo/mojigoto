@@ -6,6 +6,8 @@ const {
   splitTextIntoMeasureLines,
 } = require("../preview/vertical-layout-core");
 
+const { getMonoRubyAdvance } = require('../preview/ruby-spacing');
+
 function countTokenChars(text) {
   return Array.from(String(text || "")).length;
 }
@@ -30,7 +32,7 @@ function getRubyTokenMetrics(token) {
   const visualOverflow = Math.max(0, rubyVisualWidth - baseLen);
 
   // 灰色2文字+ルビ5文字、青灰色3文字+ルビ7文字から送る。
-  const shouldPushByRubyLength = rubyLen >= baseLen * 2 + 1;
+  const shouldPushByRubyLength = !getMonoRubyAdvance(token) && rubyLen >= baseLen * 2 + 1;
 
   const rubyRatio = rubyLen / baseLen;
 
@@ -56,6 +58,8 @@ function getRubyTokenMetrics(token) {
 }
 
 function getRubyVisualMeasureWidth(token) {
+  const monoAdvance = getMonoRubyAdvance(token);
+  if (monoAdvance) return monoAdvance;
   if (!token || token.type !== "ruby") {
     return Number(token?.displayWidth || 0);
   }
@@ -75,6 +79,7 @@ function getRubyVisualMeasureWidth(token) {
 }
 
 function isWideRubyToken(token) {
+  if (getMonoRubyAdvance(token)) return false;
   if (!token || token.type !== "ruby") return false;
 
   const baseLen = countTokenChars(token.displayText || "");
@@ -164,6 +169,9 @@ function normalizeWideRubyLineEnds(lines, layoutOptions = {}) {
     const current = out[i];
     if (!current || current.hardBreak) continue;
     if (!Array.isArray(current.tokens) || !current.tokens.length) continue;
+
+    // Moving a single indivisible ruby to another empty line cannot help.
+    if (current.tokens.length === 1) continue;
 
     if (!shouldPushTailForWideRuby(current, layoutOptions)) continue;
 

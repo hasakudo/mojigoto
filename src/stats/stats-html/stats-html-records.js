@@ -186,7 +186,7 @@ function renderHighlightGroups(state, esc) {
               />
             </td>
             <td>${esc(g.label)}</td>
-            <td class="num">${g.countable === false ? "-" : esc(g.count ?? 0)}</td>
+            <td class="num">${g.countable === false && g.name !== "heading" ? "-" : esc(g.count ?? 0)}</td>
           </tr>`,
       )
       .join("");
@@ -382,6 +382,7 @@ function renderWritingMemoFileTab(state, esc) {
           archivedItems,
           esc,
           state?.editingWritingMemoId || "",
+          { returnWorkId: state?.writingMemoSelectedWorkId || "", returnWorkTitle: state?.writingMemoSelectedWorkTitle || "" },
         )}
       </div>
     </div>
@@ -573,6 +574,7 @@ function renderWritingMemoWorkTab(state, esc) {
           archivedItems,
           esc,
           state?.editingWritingMemoId || "",
+          { returnWorkId: state?.writingMemoSelectedWorkId || "", returnWorkTitle: state?.writingMemoSelectedWorkTitle || "" },
         )}
       </div>
     </div>
@@ -593,7 +595,9 @@ function renderWritingMemoItem(
   const isEditing =
     String(editingWritingMemoId || "") === String(item?.id || "");
   const showFileName = !!options?.showFileName;
-  const targetLocationLabel = item?.targetLocation === "view"
+  const targetLocationLabel = typeof item?.resolvedLocationLabel === "string"
+    ? item.resolvedLocationLabel
+    : item?.targetLocation === "view"
     ? "View側"
     : item?.targetLocation === "work"
       ? "作品元側"
@@ -614,7 +618,7 @@ function renderWritingMemoItem(
                   ${esc(item.fileName)}
                   ${
                     targetLocationLabel
-                      ? `<span class="writingMemoLinkedBadge">${esc(targetLocationLabel)}</span>`
+                      ? `<span class="writingMemoLinkedBadge" title="現在の参照先">${esc(targetLocationLabel)}</span>`
                       : ""
                   }
                 </div>`
@@ -693,9 +697,9 @@ function renderWritingMemoItem(
                   type="button"
                   class="writingMemoMiniAction"
                   data-writing-memo-copy-to-concept="${esc(item?.id || "")}"
-                  title="構想メモへコピー"
+                  title="構想メモへ反映（既存を更新／新しく作成）"
                 >
-                  構想メモへコピー
+                  構想メモへ反映
                 </button>
 
                 <button
@@ -709,19 +713,28 @@ function renderWritingMemoItem(
               </div>
             </div>
           `
-          : item?.body
-            ? `<div class="writingMemoBody">${esc(item.body)}</div>`
-            : ""
+          : (item?.body ? `<div class="writingMemoBody">${esc(item.body)}</div>` : "")
+            + renderWritingMemoListCopyButton(item, esc)
       }
     </li>
   `;
 }
 
-function renderWritingMemoArchivedItem(item, esc) {
-  const payload = JSON.stringify(item || {}).replace(/"/g, "&quot;");
+function renderWritingMemoListCopyButton(item, esc) {
+  return `<div class="writingMemoListActions">
+    <button type="button" class="writingMemoMiniAction"
+      data-writing-memo-copy-to-concept="${esc(item?.id || "")}"
+      data-writing-memo-copy-saved="true"
+      title="保存済みの内容を構想メモへ反映（既存を更新／新しく作成）"
+    >構想メモへ反映</button>
+  </div>`;
+}
+
+function renderWritingMemoArchivedItem(item, esc, options = {}) {
+  const payload = JSON.stringify({ ...item, returnWorkId: options.returnWorkId || "", returnWorkTitle: options.returnWorkTitle || "" }).replace(/"/g, "&quot;");
 
   return `
-    <li class="writingMemoItem is-archived" data-writing-memo='${payload}' title="クリックで原稿へ移動">
+    <li class="writingMemoItem is-archived" data-writing-memo='${payload}' data-writing-memo-id="${esc(item?.id || "")}" title="クリックで原稿へ移動">
       <div class="writingMemoItemHeader">
         <div class="writingMemoExcerpt">
           ${esc(item?.excerpt || "（抜粋なし）")}
@@ -765,6 +778,7 @@ function renderWritingMemoArchivedItem(item, esc) {
       ${
         item?.body ? `<div class="writingMemoBody">${esc(item.body)}</div>` : ""
       }
+      ${renderWritingMemoListCopyButton(item, esc)}
     </li>
   `;
 }
@@ -774,6 +788,7 @@ function renderWritingMemoSecondarySection(
   archivedItems,
   esc,
   editingWritingMemoId = "",
+  options = {},
 ) {
   const safeDone = Array.isArray(doneItems) ? doneItems : [];
   const safeArchived = Array.isArray(archivedItems) ? archivedItems : [];
@@ -862,7 +877,7 @@ function renderWritingMemoSecondarySection(
               ? `<ul class="writingMemoList">
                   ${safeDone
                     .map((item) =>
-                      renderWritingMemoItem(item, esc, editingWritingMemoId),
+                      renderWritingMemoItem(item, esc, editingWritingMemoId, options),
                     )
                     .join("")}
                 </ul>`
@@ -878,7 +893,7 @@ function renderWritingMemoSecondarySection(
           ${
             safeArchived.length
               ? `<ul class="writingMemoList">
-                  ${safeArchived.map((item) => renderWritingMemoArchivedItem(item, esc)).join("")}
+                  ${safeArchived.map((item) => renderWritingMemoArchivedItem(item, esc, options)).join("")}
                 </ul>`
               : `<div class="muted">アーカイブされた執筆メモはありません。</div>`
           }

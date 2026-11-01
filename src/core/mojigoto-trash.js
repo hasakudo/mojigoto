@@ -225,6 +225,18 @@ async function moveToTrash(targetPath, item = null) {
   };
 }
 
+async function countTrashEntries(trashRootItem) {
+  const trashDir = trashRootItem?.fsPath || "";
+  if (!trashDir) return 0;
+  try {
+    const names = await fs.readdir(trashDir);
+    return names.filter((name) => !name.endsWith(META_SUFFIX)).length;
+  } catch (error) {
+    if (error.code === "ENOENT") return 0;
+    throw error;
+  }
+}
+
 async function listTrashEntries(trashRootItem) {
   const trashDir = trashRootItem?.fsPath || "";
   if (!trashDir || !(await pathExists(trashDir))) {
@@ -327,5 +339,6 @@ module.exports = {
   getTrashDirForWork,
   moveToTrash,
   listTrashEntries,
+  countTrashEntries,
   restoreTrashItem,
 };

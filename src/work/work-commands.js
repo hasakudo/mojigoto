@@ -1,3 +1,4 @@
+const { createWorkSwitchCommand } = require("./work-switch-command");
 const vscode = require("vscode");
 const {
   switchWorkImpl,
@@ -19,59 +20,19 @@ function registerWorkCommands(context, deps = {}) {
     previewState = null,
     refreshStatsPanel = () => {},
     scheduleRecalc = () => {},
+    importSharedWritingRecords = async () => ({ imported: 0 }),
   } = deps;
+
+  const switchWorkAndRestart = createWorkSwitchCommand({
+    vscode, context, switchWorkImpl, closeEditorsUnderManuscriptRoot,
+    resetDiffForCurrentWork, itemWork, ensureProjectNameFilled, restartServer,
+    previewState, refreshStatsPanel, scheduleRecalc, importSharedWritingRecords,
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "mojigoto.switchWorkAndRestart",
-      async () => {
-        const ok = await switchWorkImpl(context, {
-          itemWork,
-          onAfterSwitch: async ({ picked }) => {
-            if (itemWork) {
-              itemWork.text = `$(bookmark) ${picked.label}`;
-            }
-
-            await ensureProjectNameFilled(context, "switchWork");
-            await closeEditorsUnderManuscriptRoot();
-            await resetDiffForCurrentWork(context);
-
-            vscode.window.showInformationMessage(
-              `もじごと: 作品切替 → ${picked.label}`,
-            );
-
-            if (restartServer) {
-              await vscode.commands.executeCommand("mojigoto.serverRestart");
-            } else {
-              await vscode.commands.executeCommand("mojigoto.ping");
-            }
-
-            if (previewState?.enabled) {
-              try {
-                await vscode.commands.executeCommand(
-                  "mojigoto.syncPreviewToActiveEditor",
-                );
-              } catch {}
-            }
-
-            if (typeof scheduleRecalc === "function") {
-              scheduleRecalc("switchWork");
-            }
-
-            refreshStatsPanel();
-
-            await vscode.commands.executeCommand("mojigoto.refreshWorkTree");
-
-            try {
-              await vscode.commands.executeCommand(
-                "workbench.view.extension.mojigoto",
-              );
-            } catch {}
-          },
-        });
-
-        return ok;
-      },
+      switchWorkAndRestart,
     ),
 
     vscode.commands.registerCommand("mojigoto.setWorkGoal", async () => {

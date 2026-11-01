@@ -43,8 +43,9 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
         <div class="header-help-content">
           <p class="muted">表示名は複数項目を編集して各欄の下にある保存ボタンでまとめて保存できます。</p>
           <p class="muted">実名は各項目の「実名変更」から1ファイル／1フォルダずつ変更します。</p>
+          <p class="muted">原稿はチェックした複数ファイルをまとめて移動できます。フォルダは「移動」から原稿直下または別フォルダ内へ移動できます。</p>
           <p class="muted">表示名だけの変更では実名を変更しません。</p>
-          <p class="muted">並び替えを保存したときだけ先頭番号を付け直します。サブフォルダは左側に階層表示されます。</p>
+          <p class="muted">並び替えを保存したときだけ先頭番号を付け直します。入れ子フォルダも、同じ親フォルダ内の兄弟同士で並び替えられます。</p>
           <p class="muted">「見出し挿入」は操作したファイル1件だけが対象です。</P>
           <p class="muted">フォルダ名を選んだ場合も、フォルダ内の複数ファイルへ一括挿入はしません。</p>
         </div>
@@ -92,6 +93,7 @@ function getReorderEditorHtml(webview, extensionUri, initialState) {
         <div id="emptyState" class="empty-state" hidden>このフォルダには対象ファイルがありません。</div>
 
         <div class="right-footer">
+          <button id="moveSelectedFilesBtn">選択した原稿を移動</button>
           <button id="saveBtn" class="primary">ファイルを保存</button>
           <div class="sub-actions">
             <button id="discardBtn">変更を破棄</button>

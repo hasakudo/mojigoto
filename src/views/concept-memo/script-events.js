@@ -24,16 +24,62 @@ function getConceptMemoEventsScript() {
       const message = event.data;
       if (!message || typeof message !== "object") return;
 
+      if (message.type === "conceptMemoSourceNamesUpdated") {
+        let changed = false;
+        for (const updated of message.payload?.memos || []) {
+          const memo = currentState.data.memos.find((candidate) => candidate.id === updated.id);
+          const source = memo?.source;
+          const next = updated.source;
+          if (source?.kind !== "noteItem" || next?.kind !== "noteItem" ||
+              ["notePath", "groupId", "itemId"].some((key) => source[key] !== next[key]) ||
+              String(source.noteType || "plot") !== String(next.noteType || "plot")) continue;
+          for (const key of ["noteTitle", "groupTitle", "itemHeading"]) {
+            if (typeof next[key] === "string" && source[key] !== next[key]) {
+              source[key] = next[key];
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          renderMemoList();
+          const summary = document.getElementById("conceptMemoSourceSummary");
+          if (summary) summary.textContent = getSourceSummaryFull(getSelectedMemo());
+        }
+        return;
+      }
+
+      if (message.type === "conceptNoteIndexLoaded") {
+        conceptNoteIndex = message.payload?.notes || [];
+        conceptNoteIndexLoading = false;
+        const status = document.getElementById("memoNoteFilterStatus");
+        if (status) status.textContent = message.payload?.failedCount ? "一部のノートを読み込めませんでした。再度絞り込みを開くと確認します。" : "";
+        // Only refresh the list; never re-render an editor with unsaved input.
+        renderNoteFilter();
+        renderMemoList();
+        renderMemoCounts();
+        return;
+      }
+
       if (message.type === "webviewUiSettingsChanged") {
         const scale = Number(message.payload?.fontScale || 1);
         document.body.style.setProperty(
           "--mojigoto-content-font-scale",
           String(Math.min(1.6, Math.max(0.8, scale))),
         );
+        bootState.uiSettings = {
+          ...(bootState.uiSettings || {}),
+          ...(message.payload || {}),
+        };
+        const autoSaveBadge = document.getElementById("conceptAutoSaveBadge");
+        if (autoSaveBadge) {
+          autoSaveBadge.hidden = !Boolean(message.payload?.autoSaveEnabled);
+        }
+        renderEditor();
         return;
       }
 
       if (message.type === "loadConceptMemos") {
+        requestConceptNoteIndex();
         currentState = normalizeState(message.payload);
 
         const nextQuickFilters = message.payload?.initialQuickFilters;
@@ -54,15 +100,26 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemosSaved") {
+        if (message.payload?.data?.storageRevision) currentState.data.storageRevision = message.payload.data.storageRevision;
+        for (const savedMemo of message.payload?.data?.memos || []) {
+          const liveMemo = currentState.data.memos.find((memo) => memo.id === savedMemo.id);
+          if (liveMemo?.source?.itemId && liveMemo.source.itemId === savedMemo.source?.itemId) {
+            liveMemo.source.syncFingerprint = savedMemo.source.syncFingerprint;
+            liveMemo.source.syncedAt = savedMemo.source.syncedAt;
+          }
+        }
         const savedCurrentRevision =
           Number(message.payload?.revision || 0) >= changeRevision;
         if (savedCurrentRevision) {
           setDirty(false);
+          const savedLabel = message.payload?.autoSave ? "自動保存しました。" : "保存しました。";
+          if (message.payload?.syncErrorCount) {
+            showToast("構想メモは保存しましたが、項目メモへの反映または同期情報の保存が一部完了していません。", { isError: true });
+            return;
+          }
           showToast(
             String(message.payload?.successMessage || "") ||
-              (message.payload?.autoSave
-                ? "自動保存しました。"
-                : "保存しました。"),
+              (message.payload?.reflectedCount ? "項目メモへ反映し、" + savedLabel : savedLabel),
           );
         }
         return;
@@ -84,7 +141,14 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemoAppliedToNoteItem") {
-        saveCurrentMemos({ silentToast: true });
+        const memo = currentState.data.memos.find((candidate) => candidate.id === message.payload?.memoId);
+        if (memo?.source && message.payload?.syncFingerprint) {
+          memo.source.syncFingerprint = message.payload.syncFingerprint;
+          memo.source.syncedAt = message.payload.syncedAt;
+          memo.source.status = "active";
+        }
+        showToast("項目メモへ反映しました。");
+        saveCurrentMemos({ silentToast: true, successMessage: "項目メモへ反映し、構想メモを保存しました。" });
         return;
       }
 
@@ -127,9 +191,20 @@ function getConceptMemoEventsScript() {
       }
 
       if (message.type === "conceptMemosReloaded") {
+        requestConceptNoteIndex();
+        if (isDirty && (message.resetDirty !== true || (message.revision !== undefined && Number(message.revision) < changeRevision))) {
+          showToast("外部更新があります。未保存内容を退避してから最新の内容へ更新してください。", { isError: true });
+          return;
+        }
         currentState = normalizeState(message.payload);
         selectPreferredMemo(selectedMemoId);
+        if (message.resetDirty === true) {
+          setDirty(false);
+        }
         renderAll();
+        if (message.showRefreshStatus === true) {
+          showToast("最新の内容へ更新しました。");
+        }
         return;
       }
     });

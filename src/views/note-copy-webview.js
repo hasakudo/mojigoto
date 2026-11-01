@@ -14,6 +14,7 @@ const { notifyNoteUpdated } = require("./note-webview");
 const { getCopyPanelScript } = require("./note-webview/script-copy-panel");
 
 const copyPanels = new Map();
+const { getWebviewNoticeScript, getWebviewNoticeCss } = require("./shared/webview-notice");
 
 const css = fs.readFileSync(
   path.join(__dirname, "note-webview", "note-copy-webview.css"),
@@ -70,6 +71,7 @@ function getNoteCopyWebviewHtml(note) {
 <title>${escapeHtml(getCopyPanelTitle(note))}</title>
 <style>
 ${css}
+${getWebviewNoticeCss()}
 </style>
 </head>
 <body>
@@ -156,6 +158,8 @@ ${css}
     const initial = ${noteJson};
 
     const toastStatusEl = document.getElementById("toastStatus");
+    ${getWebviewNoticeScript()}
+    const copyNotice = createWebviewNotice(toastStatusEl);
 
     const copyUndoBtn = document.getElementById("copyUndoBtn");
     const copyPanelActionStatus = document.getElementById("copyPanelActionStatus");
@@ -183,7 +187,6 @@ ${css}
     let copyUndoState = null;
     let copyPreviewMode = "item";
     let copyPanelActionStatusTimer = null;
-    let toastTimer = null;
     let dirty = false;
 
     let state = {
@@ -216,22 +219,9 @@ ${css}
 
     state.groups = Array.isArray(state.groups) ? state.groups.map(normalizeGroup) : [];
 
-    function setStatus(message, useToast = false) {
-      if (!toastStatusEl) return;
-
-      if (!useToast || !message) {
-        toastStatusEl.classList.remove("isVisible");
-        toastStatusEl.textContent = "";
-        return;
-      }
-
-      if (toastTimer) clearTimeout(toastTimer);
-      toastStatusEl.textContent = message;
-      toastStatusEl.classList.add("isVisible");
-      toastTimer = setTimeout(() => {
-        toastStatusEl.classList.remove("isVisible");
-        toastStatusEl.textContent = "";
-      }, 1800);
+    function setStatus(message, useToast = false, isError = false) {
+      if (useToast) copyNotice.show(message, { isError });
+      else copyNotice.clear();
     }
 
     function clearStatus() {
@@ -414,7 +404,7 @@ ${css}
         }
 
         if (msg.type === "error") {
-          setStatus(msg.message || "処理に失敗しました。", true);
+          setStatus(msg.message || "処理に失敗しました。", true, true);
           return;
         }
       });

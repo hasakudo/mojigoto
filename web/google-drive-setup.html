@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ja" class="drive-setup-document">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https:; style-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; frame-src https://accounts.google.com https://docs.google.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>Google Driveの作品を登録 | もじごと Web</title>
+  <link rel="stylesheet" href="./styles.css?v=1.0.211">
+  <link rel="stylesheet" href="./google-drive-setup.css?v=1.0.277">
+  <link rel="stylesheet" href="./theme-palettes.css?v=1.0.0">
+  <script src="./theme-init.js?v=1.0.64"></script>
+</head>
+<body>
+  <header class="topbar">
+      <a class="brand" href="./" aria-label="もじごと Web ホーム">
+        <span class="brand-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" clip-rule="evenodd" viewBox="0 0 32 32" ><path d="M2.979 0H29.02A2.979 2.993 0 0 1 32 2.993v26.014A2.979 2.993 0 0 1 29.02 32H2.98A2.979 2.993 0 0 1 0 29.007V2.993A2.979 2.993 0 0 1 2.979 0"/><path fill="#fff" d="M25.187 1.694a6.7 6.7 0 0 0-2.479.419c-3.637 1.4-5.229 5.823-7.303 9.131l4.973 4.965c3.655-2.484 7.785-3.003 9.36-6.45.925-2.02.8-5.014-.73-6.625-.917-.964-2.373-1.42-3.82-1.44zM14.383 12.46c-.189.01-.313.278-.49.744-2.245 1.624-5.046.882-7.473.901-.772.006-1.41 1.604-1.391 2.386-.303 6.33-3.35 11.035-3.35 11.035l.692.893s2.85-3.039 5.809-5.984c-.273-.46-.19-1.91.473-2.428.81-.631 2.333-.577 3.125.078.81.67 1.111 2.153.572 3.041-.452.746-2.54.844-2.54.844l-6.279 5.66.831.677s6.282-3.901 11.806-3.925c.772-.003 1.631-.866 1.643-1.65.038-2.436-.79-4.534.868-6.792.127-.172.876-.27.492-.725-1.076-1.09-3.486-3.497-4.251-4.367-.218-.247-.374-.37-.5-.386z"/></svg></span>
+        <span>もじごと Web</span>
+      </a>
+      <div class="topbar-actions">
+        <span id="userIdentityBadge" class="user-identity-badge" hidden></span>
+        <button id="headerMenuButton" class="header-menu-button" type="button" aria-expanded="false" aria-controls="headerMenu">メニュー</button>
+        <div id="headerMenu" class="header-menu">
+          <span id="connectionBadge" class="connection-badge" hidden><span class="connection-dot" aria-hidden="true"></span><span id="connectionBadgeLabel" class="connection-label">OneDrive 接続済み</span></span>
+          <button id="announcementButton" class="icon-button announcement-button" type="button" aria-label="お知らせを開く"><span class="ui-icon icon-bullhorn" aria-hidden="true"></span><span>お知らせ</span><span id="announcementBadge" class="announcement-badge" aria-label="未読のお知らせ" hidden></span></button>
+          <button id="guideButton" class="icon-button guide-button" type="button" aria-label="もじごとガイドを開く"><span class="guide-label">ガイド</span><span class="guide-mark" aria-hidden="true">？</span></button>
+          <button id="settingsButton" class="icon-button" type="button" aria-label="接続設定">接続設定</button>
+        </div>
+      </div>
+    </header>
+  <main class="shell drive-setup">
+    <aside id="setupActionNotice" class="setup-action-notice" role="status" hidden><p id="setupActionNoticeText"></p><button id="setupActionNoticeClose" class="text-button" type="button">閉じる</button></aside>
+    <section id="setupConnection" class="panel">
+      <p class="setup-step">初回設定 · パソコンでの操作をおすすめします</p>
+      <h1>Google Driveで作品を使う</h1>
+      <p>PCの作品をDriveへ取り込み、WebとVS Codeで同じ作品を編集できます。</p>
+      <p class="setup-note">保存先はあなたのGoogle Driveです。もじごとのサーバーには保存しません。</p>
+      <button class="text-button" type="button" data-setup-help="">操作で迷ったときはヘルプを開く</button>
+      <p><a href="#setupFolderExamples" data-setup-jump="setupFolderExamples">許可するフォルダの階層見本を見る（Single／Multi）</a></p>
+      <div id="setupNotice" class="setup-notice" data-kind="info" role="status" aria-live="polite"><strong>接続・操作のお知らせ</strong><p id="setupStatus">ログイン状態を確認しています…</p></div>
+      <div id="setupLogin" hidden></div>
+      <button id="setupConnect" class="primary-button" type="button" disabled>Google Driveに接続</button>
+      
+      
+    </section>
+    <section id="setupComplete" class="panel setup-complete" hidden>
+      <p class="setup-step">設定完了</p><h2>HOMEで作品を開けます</h2>
+      <p id="setupCompleteSummary"></p>
+      <button id="setupHome" class="primary-button" type="button">HOMEへ戻って作品を開く</button>
+      <p class="setup-note">VS Codeでも、これからはこのDriveフォルダを開いてください。元のPCフォルダは確認後にバックアップとして整理できます。</p>
+    </section>
+    
+    <section id="setupRegistered" class="panel" hidden>
+      <p class="setup-step">登録済みの作品を使う</p><h2>作品の準備はできています</h2>
+      <p id="setupRegisteredSummary"></p>
+      <div class="setup-actions"><button id="setupOpen" class="primary-button" type="button">HOMEへ戻って作品を開く</button><button id="setupAdditional" class="secondary-button" type="button" disabled>登録済み作品の追加ファイルを許可</button><button id="setupSwitchRoot" class="secondary-button" type="button" disabled>別の許可済み作品フォルダへ切り替える</button></div>
+      <p class="setup-note">許可済みファイルの編集だけなら、そのままHOMEで続きを開けます。<br>VS Codeで新規作成した項目や、削除して作り直した項目には追加許可が必要です。</p>
+      <p class="setup-note"><strong>SingleからMultiへ移行した場合</strong><br>Driveの同期完了後、新しい作品フォルダ・<code>.mojigoto</code>・<code>work.json</code>と、新規／再作成された項目の追加許可をします。<br>許可が完了したら、HOMEで作品一覧を再読み込みしてください。<br>※ 移行前のファイルが許可済みでも新しい項目への許可が必要です。</p>
+    </section>
+    
+    <section id="setupPermissions" class="panel" hidden>
+      <p class="setup-step">既存Drive作品の手動登録</p><h2>ファイル／フォルダを許可する</h2>
+      <p id="setupFolderLabel" class="setup-folder"></p>
+      <div id="setupPermissionNotice" class="setup-notice" data-kind="info" role="status" aria-live="polite"><strong>この操作のお知らせ</strong><p id="setupPermissionStatus"></p></div>
+      <button id="setupReconnectLink" class="secondary-button" type="button" hidden>ドライブに接続し直す</button>
+      <div id="setupPermissionActions" class="setup-actions setup-permission-actions"><button id="setupGrant" class="primary-button" type="button">フォルダの配下を許可</button><button id="setupEmpty" class="text-button setup-empty-button" type="button">フォルダが空なのでスキップ</button><button id="setupExclude" class="text-button setup-empty-button" type="button">このフォルダをWebでは使わない</button></div>
+      
+      <p id="setupQueueLabel" class="setup-folder" role="status"></p>
+      <ol id="setupQueueList" class="setup-queue-list" aria-label="中身の選択待ちのフォルダ"></ol>
+      <details id="setupExcluded" class="setup-details" hidden><summary>Webの許可手順から除外したフォルダ</summary><ul id="setupExcludedList" class="setup-queue-list"></ul><p class="setup-note">配下の選択を省略します。Driveのデータ・VS Codeの同期・すでに与えたアクセス許可は変更しません。<br>登録を完了すると、このブラウザの作品登録に記録します。</p><button id="setupRestoreExcluded" class="text-button setup-empty-button" type="button">除外をすべて解除して選択待ちに戻す</button></details>
+      <a class="setup-jump" href="#setupPermissionHelpDetails" data-setup-jump="setupPermissionHelpDetails">ファイル／フォルダを許可するについて</a>
+      <label class="setup-check"><input id="setupConfirmed" type="checkbox">必要なファイル／フォルダをすべて選択しました</label>
+      <button id="setupFinish" class="primary-button" type="button" disabled>登録を完了する</button>
+      <p id="setupFinishHint" class="setup-note"></p>
+      <a class="setup-jump" href="#setupFooter" data-setup-jump="setupFooter">中断・リセットの操作へ</a>
+    </section>
+    <section id="setupGuidance" class="panel setup-guidance" aria-labelledby="setupGuidanceTitle"><h2 id="setupGuidanceTitle">作品フォルダを選ぶ</h2>
+
+
+
+<div id="setupChoices">
+      <details id="setupImportDetails" open><summary><strong>PCの作品をDriveへ取り込む</strong></summary>
+      <p class="setup-step">PCに保存している作品を使う場合</p>
+      <ol class="setup-steps"><li>原稿と <code>.mojigoto</code> が入った作品フォルダ全体を選ぶ</li><li>ファイル数を確認して「Driveへ取り込む」を押す</li><li>完了後、HOMEへ戻って作品を開く</li></ol>
+      <div id="setupLocalDropZone" class="setup-folder-drop" role="group" aria-label="PCの作品フォルダ" aria-describedby="setupLocalDropHelp">
+        <p id="setupLocalDropHelp">ここに作品フォルダを1つドロップ</p>
+        <label class="setup-file">またはフォルダを選択<input id="setupLocalFiles" type="file" webkitdirectory multiple disabled></label>
+        <p id="setupLocalSelection" class="setup-note" role="status"></p>
+        <p id="setupLocalDropStatus" class="setup-note" role="status" aria-live="polite"></p>
+      </div>
+      <p class="setup-note">取り込む作品フォルダとファイル数を確認してください。Driveへの取り込みは、次の「Driveへ取り込む」で開始します。</p>
+      <p id="setupImportSummary" class="setup-note"></p>
+      <fieldset id="setupImportOptions" class="setup-import-options" hidden><legend>取り込み前の確認</legend>
+        <label>取り込み先フォルダ名<input id="setupImportName" type="text" maxlength="120" /></label>
+        <p class="setup-note">同じ名前のフォルダがあっても、別の新しいフォルダへ取り込みます。名前は取り込み後にも変更できます。</p>
+        <p>書き出し専用など、作品編集に使わないフォルダだけを選んで除外できます。</p>
+        <div id="setupImportExclusions"></div>
+        <p class="setup-note"><code>.vscode</code>の設定・ノート画像・履歴は保持します。<br>原稿や<code>.mojigoto</code>／<code>.vscode</code>フォルダは除外をしません。.git／node_modules／.local-config／.env設定ファイルは取り込まず、元のPCフォルダは変更しません。</p>
+      </fieldset>
+      <div class="setup-actions"><button id="setupImport" class="primary-button" type="button" disabled>Driveへ取り込む</button><button id="setupCancelImport" class="secondary-button" type="button" hidden>取り込みを中断</button></div>
+      <div id="setupProgressBox" class="setup-notice" data-kind="info" hidden><strong>取り込みの進行状況</strong><p id="setupImportProgress" role="status" aria-live="polite"></p></div>
+      <p class="setup-note">Driveに新しいフォルダを作りますが、元のPCフォルダはそのまま残ります。<br>空フォルダと_WORKは取り込みません。G:では各作品の原稿フォルダを直接参照します。<br>Multiモードフォルダの読み込みはファイル数により時間がかかる場合があります。</p>
+      </details>
+      <details id="setupRestoreDetails" class="setup-details"><summary>許可済み作品へ切り替える・登録を復元する</summary>
+        <p>PCから取り込んだ作品も、既存作品を許可して登録した作品も選べます。<br>Singleは使いたい作品フォルダを、Multiは作品が並ぶ親フォルダを選んでください。</p>
+        <button id="setupRestore" class="secondary-button" type="button" disabled>許可済みの作品フォルダを選ぶ</button>
+        <p class="setup-note">許可済みの項目だけを読み込みます。取り込みが途中で止まった作品の不足ファイルは復元できません。<br>PCで新しく追加したファイル／フォルダには別途許可が必要です。</p>
+        <p class="setup-note">Drive上の取り込み先ルートフォルダの名前は変更できます。<br>名前の表示が古いときや登録が見つからないときは、名前を変えた同じフォルダを選んで登録を復元してください。</p>
+        <p class="setup-note">再取り込みではありません。PC側の保存先も確認してください。<br><code>manuscript</code>や<code>.mojigoto</code>など内部のフォルダ名を自由に変更する手順ではありません。</p>
+      </details>
+      <details id="setupExistingDetails" class="setup-details"><summary>Driveにある既存作品をそのまま使う</summary>
+        <p>複製を作らず、今のDriveフォルダを使いたい場合はこちらを選んでください。</p>
+        <button id="setupExisting" class="secondary-button" type="button" disabled>既存の作品フォルダを選ぶ</button>
+        <div class="setup-caution"><strong>Webで使うファイル／フォルダを手動で選択・許可する必要があります。</strong>
+        <p>作品フォルダを選ぶだけでは、配下のファイル／フォルダまで許可されません。</p>
+        <p>Google Driveの権限の仕様により「もじごとWebで作成した項目、または選択して許可した項目」だけを操作できます。</p>
+        <p>親フォルダとその配下すべてを一括で許可することはできません。<br>各フォルダ内では複数選択できますが、子フォルダの配下も別途選択・許可が必要です。</p></div>
+      </details>
+    </div>
+</section>
+    
+    <section id="setupFooter" class="panel setup-footer">
+      <div class="setup-actions"><button id="setupPause" class="secondary-button" type="button">中断してHOMEへ戻る</button><button id="setupReset" class="text-button" type="button">選択・登録手順をリセット</button></div>
+      <p class="setup-note">中断すると手動登録の続きは残ります。<br>リセットはこの画面の選択だけを消し、Driveのデータ・許可・登録済み作品は変更しません。</p>
+      
+      
+    </section>
+  </main>
+<button id="setupHelpButton" class="setup-help-launcher secondary-button" type="button" data-setup-help="" aria-controls="setupHelpDialog" aria-expanded="false">？ Google Driveのヘルプ</button>
+<dialog id="setupHelpDialog" class="setup-help-dialog" aria-labelledby="setupHelpTitle">
+  <div class="setup-help-heading"><h2 id="setupHelpTitle">Google Driveのヘルプ</h2><button id="setupHelpClose" class="text-button" type="button" aria-label="Google Driveのヘルプを閉じる">閉じる</button></div>
+  <div id="setupHelpContent" class="setup-help-content">
+    <nav id="setupHelpContents" class="setup-help-contents" aria-label="ヘルプの目次"></nav>
+    <section id="setupFolderExamples" data-setup-help-topic class="setup-help-topic">
+      <h2>許可するフォルダの見本</h2>
+      <p>Singleは作品フォルダ自体を、Multiは作品が並ぶ親フォルダを最初に選びます。フォルダ名は例です。<br>各フォルダの中のファイル・子フォルダも順番に許可してください。</p>
+      <details id="setupSingleFolderExample" class="setup-details"><summary>Single：1作品だけの場合</summary><pre class="setup-folder-tree">作品フォルダ（最初に選ぶ）
+├ manuscript または 原稿/
+│ └ 原稿の .txt・.md
+└ .mojigoto/
+  ├ singleWork.json（作品設定）
+  ├ plots/・references/（ノート）
+  ├ concept-memos.json（構想メモ）
+  ├ notes-index.json・work-metrics.json
+  ├ web-writing-events.json（執筆記録）
+  └ backups/（ある場合）
+    ├ index.json
+    └ snapshots/ → 履歴の .json</pre></details>
+      <details id="setupMultiFolderExample" class="setup-details"><summary>Multi：複数作品</summary><pre class="setup-folder-tree">もじごと用フォルダ（workRoot：最初に選ぶ）
+├ .mojigoto/（共通用：ある場合）
+│ ├ common-todos.json（共通TODO）
+│ └ templates/（共通テンプレート）
+├ 作品A/
+│ ├ manuscript または 原稿/
+│ └ .mojigoto/（作品A用：ここを許可）
+│   ├ work.json（作品設定）
+│   ├ plots/・references/（ノート）
+│   ├ concept-memos.json（構想メモ）
+│   ├ notes-index.json・work-metrics.json
+│   ├ web-writing-events.json（執筆記録）
+│   └ backups/ → index.json・snapshots/の履歴
+├ 作品B/ → 同じ構造
+└ _WORK/（VS CodeのView用：Webの作品ではない）</pre></details>
+      <p class="setup-note">Multiの作品設定は <strong>作品名/.mojigoto/work.json</strong> です。<br>直下の .mojigoto は作品設定ではありません。<br>共通用データがあるため、名前だけを見て削除しないでください。</p><p class="setup-note"><strong>以前の版で移行した場合</strong><br>構想メモやバックアップが直下に残っていないか、中身を確認してから整理してください。</p>
+    </section>
+    <details id="setupVscodeDetails" data-setup-help-topic class="setup-details"><summary>VS Codeでも同じ作品を使うには</summary><ol class="setup-steps"><li>パソコン版Google Driveで、取り込み先を同期する（ミラーリング、または「オフラインで使用可能」）</li><li>VS CodeでそのDriveフォルダを開き、編集先をここに統一する。PC取り込みでは.vscodeの設定を保持します。<br>もじごとの対応版では、元PCの保存先設定を取り込み先へ更新します。<br>Multiでは作品が並ぶ親フォルダを開き、使いたい作品へ切り替えます</li><li>端末を切り替える前に保存し、Driveの同期完了を待つ</li></ol><p class="setup-note">同じ原稿を同時に編集しないでください。<br>同名でも削除して作り直したファイルは再許可が必要になる場合があります。</p><p class="setup-note"><strong>Multiの_WORKはリンク表示用で、作品の正本ではありません。</strong><br>PC取り込みでは作成せず、原稿は各作品の正本だけを取り込みます。</p><p class="setup-note"><strong>G:などjunctionに対応しない場所では原稿フォルダを直接参照します。</strong><br>リンクを使う環境ではVS Codeが必要時にViewを用意します。</p></details>
+    <details id="setupPermissionHelpDetails" data-setup-help-topic class="setup-details">
+      <summary>ファイル／フォルダを許可するについて</summary>
+      <div class="setup-caution"><strong>更新したファイルの許可について</strong><ol class="setup-steps"><li>許可済みファイルの編集には再許可は不要です。</li><li>新しく作った項目の場所がわからない場合は、各フォルダの中身をまとめて選び直してください。</li><li>許可済みの項目を再選択しても、ファイルは複製・上書きされません。</li></ol></div>
+      <ol class="setup-steps"><li>選択待ちフォルダを開き、その中のファイル・子フォルダをすべて選ぶ</li><li>選択を確定すると、次のフォルダの中身を案内します</li></ol>
+      <p class="setup-note"><strong><code>.mojigoto</code>、原稿、ノート、設定、バックアップを含めてください。</strong><br>未許可の項目や選択漏れはWeb版から確認できません。<br><strong>すべてを選択：</strong>PCは Ctrl+A、Macは Command+A</p>
+      <p id="setupQueueHelp" class="setup-note"><strong>「1」の次を選ぶ</strong><br>次の操作で配下のファイルやフォルダを選ぶフォルダであり、フォルダ自体を選び直す案内ではありません。<br>残りの数には表示のフォルダも含まれます。未許可の項目を検出した数ではありません。</p>
+      <p class="setup-note"><strong>フォルダが空なのでスキップ</strong><br><code>plots</code> や <code>references</code> などにJSONファイルがまだ作られておらず、中身が空の場合に使います。<br>Googleの選択画面で、他のファイルや子フォルダもないことを確認してから進んでください。</p>
+      <p class="setup-note"><strong>このフォルダをWebでは使わない</strong><br>Export Rootなどの書き出し専用フォルダは、中身があっても配下の選択を省略できます。<br>Drive上に残るため、VS Codeでは引き続き使えます。</p><p>原稿／<code>.mojigoto</code>／ノート／設定／バックアップには使わないでください。<br>登録完了後、同一ブラウザでは次回の追加許可でも省略します。</p><p>必要になったら、許可画面の「Webの許可手順から除外したフォルダ」で除外を解除してください。</p>
+      <a id="setupReturnToPermissions" class="setup-jump" href="#setupPermissions" data-setup-jump="setupPermissions" hidden>ファイル／フォルダを許可するへ戻る</a>
+      </details>
+    <details id="setupFilePermissionDetails" data-setup-help-topic class="setup-details"><summary>追加許可と、Webで使わない項目</summary>
+        <p>追加許可はVS CodeでDriveに新規作成・再作成したファイル／フォルダごとに必要です。<p></p>すでに許可された同じファイルの内容を更新する場合の再許可は不要です。</p><p>Webで作成した項目はアプリの許可対象になります。</p>
+        <ul><li>原稿：新しく作った各ファイルとフォルダ。</li><li>プロット／資料：新しく作ったノート画面ごとのJSONファイル。</li><li>構想メモ：concept-memos.jsonという1ファイル。<br>許可済みならメモが0件から1件に増えても、その件数変化による追加許可は不要です。<br>ファイル自体を初めて作った／作り直した場合は許可します。</li><li>履歴・執筆記録・索引・集計：その機能で使う新しいファイルも許可します。</li></ul>
+        <p>Webで使わない書き出し専用フォルダ<br>.vscode、_WORK、trash、templatesなどは、配下の許可を省略できる候補です。</p><p>原稿・作品設定・ノート・構想メモの保存先は省略しないでください。<br>履歴をWebで使うならbackupsも許可してください。</p>
+        <p>現行Webはノートの画像ファイルを表示しません。<br>note-imagesの許可を省略できますが、画像ファイルはVS Codeで使います。<br>PCから取り込みでは省く必要はありません。</p>
+      </details>
+    <details id="setupRevokeDetails" data-setup-help-topic class="setup-details"><summary>接続許可を取り消したい方へ</summary><p><a href="https://myaccount.google.com/connections" target="_blank" rel="noopener noreferrer">Googleアカウントの接続設定</a>で、もじごとへの接続許可を取り消せます。<br>Driveの作品データは削除されません。</p></details>
+    <details id="setupUnregisterGroup" data-setup-help-topic class="setup-details"><summary>登録済みのフォルダを削除・変更した場合</summary><p class="setup-note">誤って削除した場合は、まずGoogle Driveのゴミ箱から元のフォルダを復元してください。<br>別のフォルダを使う場合や復元できない場合は、Web側の登録を解除してPCから取り込む。<br>またはDriveの別フォルダを登録してください。</p><button id="setupUnregister" disabled class="secondary-button" type="button">作品フォルダの登録を解除</button><p class="setup-note">このブラウザの登録・途中の手順・除外設定・対象フォルダの閲覧履歴を消します。<br>Driveのデータ・Googleへの接続許可・他のクラウドの登録は変更しません。</p></details>
+  </div>
+</dialog>
+<dialog id="announcementDialog" class="settings-dialog announcement-dialog" aria-labelledby="announcementTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">NEWS</p>
+            <h2 id="announcementTitle">お知らせ</h2>
+          </div>
+          <div class="announcement-heading-actions">
+            <button id="markAllAnnouncementsReadButton" class="text-button" type="button" hidden>すべて既読</button>
+            <button id="closeAnnouncementButton" class="icon-button" type="button" aria-label="お知らせを閉じる">閉じる</button>
+          </div>
+        </div>
+        <div id="announcementList" class="announcement-list" aria-live="polite"></div>
+        <p class="announcement-site-link"><a href="https://mojigoto.com" target="_blank" rel="noopener noreferrer">もじごと HOW TO サイトを開く</a></p>
+      </div>
+    </dialog>
+<dialog id="settingsDialog" class="settings-dialog">
+      <form id="settingsForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">CONNECTION</p>
+            <h2>クラウド接続設定</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="閉じる">閉じる</button>
+        </div>
+        <div id="accountSessionPanel" class="account-session-panel" hidden>
+          <div><span>ログイン中</span><strong id="accountSessionEmail"></strong></div>
+          <div class="account-session-actions">
+            <a id="adminPageLink" class="text-button admin-page-link" href="./admin/" hidden>管理画面</a>
+            <button id="logoutButton" class="text-button" type="button">ログアウト</button>
+          </div>
+        </div>
+        <span id="managedConnectionNotice" hidden></span>
+        <a id="googleDriveSetupLink" class="secondary-button" href="./google-drive-setup.html" hidden>Drive作品の登録・追加読み込み</a>
+        <div id="profilePanel" class="profile-panel" hidden>
+          <label for="nicknameInput">表示用ニックネーム</label>
+          <div class="profile-input-row">
+            <input id="nicknameInput" type="text" maxlength="30" autocomplete="nickname" placeholder="30文字以内">
+            <button id="saveNicknameButton" class="secondary-button" type="button">保存</button>
+          </div>
+          <p>ログイン元に登録された氏名は使用しません。<br>未入力の場合はメールアドレスを表示します。</p>
+        </div>
+        <div class="display-preferences-grid">
+        <label class="field display-theme-field">
+          <span>表示テーマ</span>
+          <select id="displayThemeSelect">
+            <option value="system">端末の設定に合わせる</option>
+            <optgroup label="ライトテーマ">
+              <option value="light">ライト（標準）</option>
+              <option value="beige">ベージュ</option>
+              <option value="green">グリーン</option>
+            </optgroup>
+            <optgroup label="ダークテーマ">
+              <option value="dark">ダーク（標準）</option>
+              <option value="navy">ダークブルー</option>
+              <option value="deep-green">深緑</option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="field display-font-size-field">
+          <span>文字サイズ</span>
+          <select id="displayFontScaleSelect">
+            <option value="0.9">小さめ</option>
+            <option value="1">標準</option>
+            <option value="1.1">大きめ</option>
+            <option value="1.2">さらに大きめ</option>
+          </select>
+        </label>
+        </div><p id="setupSettingsStatus" class="field-help" role="status" aria-live="polite"></p>
+<p class="field-help">このページでの接続解除はGoogle Driveが対象です。作品のデータは削除しません。</p>
+<button id="openGuideFromSettingsButton" class="text-button dialog-guide-link" type="button">もじごとガイドを見る</button>
+<div class="dialog-actions"><button id="disconnectButton" class="danger-button" type="button">Google Driveの接続を解除</button><button class="secondary-button" type="submit" value="cancel">閉じる</button></div>
+</form></dialog>
+<dialog id="guideDialog" class="settings-dialog guide-dialog" aria-labelledby="guideTitle">
+      <div class="dialog-content guide-content">
+        <div class="dialog-heading guide-heading">
+          <div>
+            <p class="section-label">MOJIGOTO GUIDE</p>
+            <h2 id="guideTitle">もじごとガイド</h2>
+          </div>
+          <button id="closeGuideButton" class="icon-button" type="button" aria-label="ガイドを閉じる">閉じる</button>
+        </div>
+        <div id="loginGuideContent" hidden>
+          <p class="guide-lead">ログインとクラウド接続、作品データの取り扱いについてご案内します。</p>
+          <div class="guide-sections">
+            <details open>
+              <summary><span>1</span>ログインできるアカウント</summary>
+              <div>
+                <p>利用申請時に登録したメールアドレスのMicrosoftアカウントまたはGoogleアカウントでログインしてください。登録されていないメールアドレスでは利用できません。</p>
+              </div>
+            </details>
+            <details>
+              <summary><span>2</span>クラウドへ接続する</summary>
+              <div>
+                <p>ログイン後、原稿を保存しているOneDriveまたはGoogle Drive、あるいはDropboxへ接続し、作品フォルダを選びます。</p>
+                <p>ログインとクラウド接続は別の操作です。クラウドへの接続時に、ファイルを読み書きするための許可画面が表示されます。</p>
+              </div>
+            </details>
+            <details>
+              <summary><span>3</span>読み込むデータについて</summary>
+              <div>
+                <p>作品データは選択したクラウドドライブからブラウザへ読み込みます。原稿・ノート・構想メモなどの作品ファイルは、もじごとのサーバーへアップロードまたは保存されません。</p>
+              </div>
+            </details>
+            <details>
+              <summary><span>4</span>データと安全について</summary>
+              <div>
+                <p>クラウド接続用のアクセストークンはブラウザ内で扱います。共用端末では、利用後にクラウド接続の解除ともじごとからのログアウトを行ってください。</p>
+              </div>
+            </details>
+            <details>
+              <summary><span>5</span>VS Code版との互換性</summary>
+              <div>
+                <p>このWebアプリはVS Code拡張機能「もじごと」の補助アプリです。データ形式や同期仕様が変わる更新では、VS Code版とWeb版の両方を対応するバージョンへ更新してください。</p>
+              </div>
+            </details>
+          </div>
+        </div>
+        <div id="appGuideContent">
+          <p class="guide-lead">スマホやタブレットから、いつもの作品フォルダを確認・編集するための簡易ガイドです。</p>
+          <div class="guide-sections">
+          <details open>
+            <summary><span>1</span>クラウドへ接続する（OneDrive・Google Drive・Dropbox）</summary>
+            <div>
+              <p>もじごとへのログインとクラウド接続は別の操作です。HOMEで作品を保存しているサービスを選び、ファイルへのアクセスを許可してください。</p>
+              <h3>OneDrive</h3>
+              <p>「OneDriveに接続」を押してMicrosoftの画面でアクセスを許可し、アプリ内のフォルダ一覧から作品フォルダを選びます。</p>
+              <h3>Google Drive</h3>
+              <p>「Google Driveに接続」から専用の登録ページへ進みます。<br>初回はパソコンでの操作をおすすめします。</p>
+              <ol><li>専用ページでGoogle Driveに接続します。</li><li>「PCの作品をDriveへ取り込む」から、パソコンの作品フォルダを選んで取り込みます。</li><li>取り込みが終わったらHOMEへ戻り、作品を開きます。</li></ol>
+              <section class="guide-drive-card"><h4>すでにDriveにある作品を使う場合</h4><p>「Driveにある既存作品をそのまま使う」を選び、各フォルダの中のファイル・子フォルダを手動で許可します。</p><p>Google Driveの権限の仕様により「もじごとWebで作成した項目、または選択して許可した項目」だけを操作できます。</p></section>
+              <section class="guide-drive-card"><h4>VS Codeで扱うフォルダ</h4><p>パソコン版Google Driveで同期した、もじごとWebと同じ作品フォルダをVS Codeで開いてください。<br>許可済みファイルの編集だけなら再許可は不要です。</p></section>
+              <section class="guide-drive-card"><h4>VS Codeで新規作成・削除して作り直した場合</h4><p>新しく作った項目や、削除して作り直した項目は、HOMEの「登録済み作品の追加ファイルを許可」から許可してください。<br>追加した場所がわからない場合は、各フォルダの中身をまとめて選び直せます。</p></section>
+            </div>
+          </details>
+          <details>
+            <summary><span>2</span>作品を開く</summary>
+            <div>
+              <p>作品一覧では状態での絞り込み、更新日時・タイトル・文字数・ノート数での並び替えができます。集計を有効にすると文字数とノート数も表示します。</p>
+              <p>作品を選ぶと、上部タブまたは画面下のメニューから原稿・プロット・資料・構想メモ・作品設定を切り替えられます。</p>
+              <p>章フォルダがある場合は、原稿一覧のパンくずから前の階層へ戻れます。</p>
+              <p>原稿編集画面の歯車メニューから「ノート参照」を開くと、原稿を編集したままプロット・資料を選んで確認できます。広い画面では右側、狭い画面では開閉できるパネルとして表示します。「数え方」も同じ歯車メニューにあります。</p>
+              <p>同じ作品内では前回開いていた一覧や編集画面を保持します。再読み込み時も、可能な範囲で前回の画面を開き直します。</p>
+            </div>
+          </details>
+          <details>
+            <summary><span>3</span>入力補助を使う</summary>
+            <div>
+              <p>原稿・ノート・構想メモの「入力補助」から、字下げ、記号、ルビ、傍点を挿入できます。原稿をスマートフォンで編集するときは、入力補助を編集ヘッダー直下へ表示します。</p>
+              <p>「記号」サブメニューには大・中・小見出し（<code># </code>・<code>## </code>・<code>### </code>）と、二重かぎ括弧・隅付き括弧・二重山括弧があります。</p>
+              <p>文字列を選択してから括弧・ルビ・傍点を押すと、選択範囲へ記法を付けます。「解除」は、選択範囲に付いた括弧・ルビ・傍点の記法を外します。</p>
+              <p>接続設定ではサイトと入力欄の文字サイズを変更できます。原稿のプレビューは横書き／縦書きを選べ、縦書きでは1行の文字数を画面に合わせる自動表示、文字数指定、行間変更を利用できます。</p>
+            </div>
+          </details>
+          <details>
+            <summary><span>4</span>保存とVS Code同期</summary>
+            <div>
+              <ul>
+                <li>「保存」で現在の内容を接続中のクラウドドライブへ保存します。</li>
+                <li>キーボードでは <code>Ctrl + S</code>（Macは <code>Command + S</code>）で、開いている原稿・ノート・構想メモ・作品設定を保存できます。</li>
+                <li>自動保存を有効にすると、入力後しばらくして保存します。</li>
+                <li>VS Code側で変更した内容は、Web側が外部更新を確認して読み直します。</li>
+                <li>両方で変更された場合は自動上書きせず、競合として確認を求めます。</li>
+              </ul>
+              <p><strong>バックアップ履歴の対象は、原稿フォルダ内の <code>.txt</code>／<code>.md</code>、各プロット／資料ノート、作品の構想メモです。</strong>ノートはファイル単位、構想メモは作品内の全メモをまとめて比較・復元します。作品設定、呼び名一覧、画像などは対象外です。</p>
+              <p>原稿の歯車メニューにある「バックアップ」、またはノート／構想メモ編集画面の「履歴」から、手動バックアップ、比較、復元、履歴の保護ができます。</p>
+              <p>比較では変更行を色分けし、「前の差分」「次の差分」で長文の変更箇所を順に確認できます。<br>自動バックアップの間隔は履歴画面で変更・無効化できます。復元前の内容は設定にかかわらず履歴へ保存します。<br>履歴は対象ごとに50件まで、自動履歴は90日で整理されますが、保護した履歴は残ります。</p>
+              <p>保存先は作品内の <code>.mojigoto/backups</code> で、VS Code版と共有されます。作品全体の保全には、作品フォルダのコピーやクラウドストレージの履歴も併用してください。</p>
+            </div>
+          </details>
+          <details>
+            <summary><span>5</span>ショートカットキー</summary>
+            <div>
+              <p><code>Ctrl + S</code>（Macは <code>Command + S</code>）で、現在編集中の内容を保存します。</p>
+              <p><code>Esc</code>で、開いているポップアップ・メニュー・目次を閉じます。</p>
+              <p><code>Alt + 1〜6</code>（Macは <code>Option + 1〜6</code>）で作品内の画面を切り替えます。</p>
+              <ol>
+                <li>作品一覧</li>
+                <li>原稿</li>
+                <li>プロット</li>
+                <li>資料</li>
+                <li>構想メモ</li>
+                <li>作品設定</li>
+              </ol>
+              <p>スマホやタブレットでは、画面上部の「保存」ボタンまたは自動保存を使用してください。</p>
+            </div>
+          </details>
+          <details>
+        <summary><span>6</span>困ったとき</summary>
+            <div>
+              <ul>
+                <li>作品が見つからない：選択フォルダ内の <code>.mojigoto</code> または原稿フォルダを確認します。</li>
+              <li>更新が見えない：保存状態を確認してから再読み込みします。</li>
+              <li>読み込みに失敗する・読み込みが終わらない：下の手順で再読み込みをお試しください。</li>
+                <li>競合が出た：残したい内容を確認してから、最新版の再読み込みまたは保存を選びます。</li>
+            </ul>
+            <ol>
+              <li>未保存の編集がある場合は、先に保存してください。保存できない場合は、入力内容をコピーして別の場所へ控えてください。</li>
+              <li>インターネット接続を確認し、設定の「再読み込み」を開いて「再読み込み」を押します。</li>
+              <li>改善しない場合は、同じ場所の「アプリのキャッシュを削除して再読み込み」を押します。インストールしたアプリでも利用できます。画面用のキャッシュだけを削除し、作品データ・ログイン情報・履歴・ピン留め・設定は残ります。</li>
+              <li>ドライブとの通信エラーが続く場合は、接続状態を確認し、必要に応じてドライブへ再接続してください。</li>
+            </ol>
+            </div>
+          </details>
+          <details>
+            <summary><span>7</span>データと安全について</summary>
+            <div>
+              <p>作品データは接続したクラウドドライブに保存され、もじごとのサーバーには保存されません。共用端末では、利用後にクラウド接続の解除ともじごとからのログアウトを行ってください。</p>
+            </div>
+          </details>
+          <details>
+            <summary><span>8</span>VS Code版との互換性</summary>
+            <div>
+              <p>このWebアプリは、VS Code拡張機能「もじごと」の補助アプリです。両方が同じ作品データを安全に扱えるよう、対応するバージョンを使用してください。</p>
+              <p>VS Code版の更新でデータ形式や同期仕様が変わった場合は、Web版も対応版への更新が必要です。片方だけ古い状態では、読み込み・保存・同期が正しく動作しないことがあります。</p>
+            </div>
+          </details>
+          <details>
+            <summary><span>9</span>メールアドレスの取り扱い</summary>
+            <div>
+              <p>登録メールアドレスは、ログイン・招待の管理、申込や問い合わせへの対応、運営からの連絡に使用します。</p>
+              <p>管理画面ではメールアドレスを伏せ字で表示し、利用者IDで管理します。全文を表示する機能はありません。本人確認に必要な元のアドレスは、サーバーの登録情報に保持します。</p>
+              <p>利用・解除申込や問い合わせの内容は、受付メールと運営への通知にも含まれます。メッセージには必要のない個人情報を記載しないでください。</p>
+              <p>登録アドレスの変更については<a href="./contact/">お問い合わせ</a>、利用解除については<a href="./apply/">利用・解除申込</a>をご利用ください。詳しくは<a href="./privacy/">プライバシーポリシー</a>をご確認ください。</p>
+            </div>
+          </details>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  <script type="module" src="./google-drive-setup.mjs?v=1.0.277"></script>
+</body>
+</html>

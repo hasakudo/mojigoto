@@ -1,3 +1,5 @@
+const { getMonoRubyAdvance, positionMonoRubyAnnotations, getMonoRubyStyle } = require('./ruby-spacing');
+
 function escapeHtml(text) {
   return String(text ?? "")
     .replace(/&/g, "&amp;")
@@ -19,6 +21,10 @@ function renderDisplayTokenHtml(token, renderOptions = {}) {
     token.hanging && /[！？!?]/.test(ch) ? " mjm-hanging-emphasis" : "";
 
   if (token.type === "ruby") {
+    const monoAdvance = getMonoRubyAdvance(token);
+    if (monoAdvance) {
+      return `<ruby class="mjm-ruby mjm-ruby-mono${hangingClass}" style="--rubyAdvance:${monoAdvance.toFixed(3)}em;${getMonoRubyStyle(token)}"><rb>${escapeHtml(token.displayText)}</rb><rt>${escapeHtml(token.rubyText)}</rt></ruby>`;
+    }
     const typographyAdjustmentsDisabled =
       token.typographyAdjustmentsDisabled === true;
     const rubyLen = countRubyChars(token.rubyText || "");
@@ -119,7 +125,7 @@ function renderDisplayLineHtml(line) {
       ? 0.012
       : 0.03;
 
-  return `<div class="mjm-line${rubyClass}${hangingEmphasisClass}${pushoutTailClass}">${tokens
+  return `<div class="mjm-line${rubyClass}${hangingEmphasisClass}${pushoutTailClass}">${positionMonoRubyAnnotations(tokens)
     .map((token) => renderDisplayTokenHtml(token, { lineTrackEm }))
     .join("")}</div>`;
 }
@@ -294,7 +300,7 @@ function splitTextIntoLinesCore(
 
   function tokenMeasureWidthOf(token) {
     if (applyHanging && token?.hanging) return 0;
-    return Number(token?.displayWidth || 0);
+    return getMonoRubyAdvance(token) || Number(token?.displayWidth || 0);
   }
 
   function tokenFirstChar(token) {
@@ -440,7 +446,7 @@ function getRubyTokenMetrics(token) {
 
   // 書き出し側と同じ基準：
   // 2文字+5文字、3文字+7文字あたりから末尾送り対象にする。
-  const shouldPushByRubyLength = rubyLen >= baseLen * 2 + 1;
+  const shouldPushByRubyLength = !getMonoRubyAdvance(token) && rubyLen >= baseLen * 2 + 1;
 
   const rubyRatio = rubyLen / baseLen;
 
@@ -466,6 +472,8 @@ function getRubyTokenMetrics(token) {
 }
 
 function getRubyVisualMeasureWidth(token) {
+  const monoAdvance = getMonoRubyAdvance(token);
+  if (monoAdvance) return monoAdvance;
   if (!token || token.type !== "ruby") {
     return Number(token?.displayWidth || 0);
   }
@@ -485,6 +493,7 @@ function getRubyVisualMeasureWidth(token) {
 }
 
 function isWideRubyToken(token) {
+  if (getMonoRubyAdvance(token)) return false;
   if (!token || token.type !== "ruby") return false;
 
   const baseLen = countDisplayChars(token.displayText || "");
@@ -583,6 +592,10 @@ function normalizeWideRubyLineEnds(lines, layoutOptions = {}) {
     const current = out[i];
     if (!current || current.hardBreak) continue;
     if (!Array.isArray(current.tokens) || !current.tokens.length) continue;
+
+    // A group ruby cannot be shortened by moving the only token again.
+    // Keep it on this line instead of appending empty lines without end.
+    if (current.tokens.length === 1) continue;
 
     if (!shouldPushTailForWideRuby(current, layoutOptions)) continue;
 

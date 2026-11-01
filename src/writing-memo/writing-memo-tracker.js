@@ -45,15 +45,19 @@ function isSameMemoPath(left, right) {
 function findManuscriptRootFromPath(filePath) {
   let current = path.dirname(String(filePath || ""));
 
+  let outermostMatch = "";
+
   while (current && current !== path.dirname(current)) {
     const base = path.basename(current).toLowerCase();
     if (base === "manuscript" || base === "原稿") {
-      return current;
+      // manuscript/原稿 のように候補名が入れ子になっていても、
+      // 内側の章フォルダではなく外側の作品原稿ルートを採用する。
+      outermostMatch = current;
     }
     current = path.dirname(current);
   }
 
-  return "";
+  return outermostMatch;
 }
 
 function resolveManuscriptRootForTreeItem(item, ...targetPaths) {
@@ -386,6 +390,7 @@ async function reconcileWritingMemoPathsForTarget(context, target = {}) {
 
 module.exports = {
   findManuscriptRootFromPath,
+  resolveManuscriptRootForTreeItem,
   updateWritingMemoFilePathForRenameOrMove,
   updateWritingMemoPathsForFolderRename,
   updateWritingMemoPathsForRenameEvent,

@@ -11,6 +11,7 @@ const {
   buildMergedManuscriptData,
   getMergedManuscriptJoinMode,
   buildMergedManuscriptBaseName,
+  getMergedManuscriptFileVariantSuffix,
   resolveMergedManuscriptHtmlOptions,
 } = require("./merged-manuscript-core");
 
@@ -24,7 +25,11 @@ const {
 
 const {
   openMergedManuscriptBrowserPanel,
+  revealMergedManuscriptBrowserPanel,
 } = require("./merged-manuscript-browser-panel");
+const { getWorkNameForStats } = require("./manuscript-export");
+const { captureManuscriptSource, assertManuscriptSource, groupManuscriptFilesByChapter,
+  buildChapterOutputNames, assertChapterExportDirectory, inspectChapterOutputs, writeChapterOutputs } = require("./merged-manuscript-chapters");
 
 const { ensureNamedExportDir } = require("./export-utils");
 
@@ -32,207 +37,10 @@ const {
   renderMergedManuscriptBrowserRealPrintHtml,
 } = require("./merged-manuscript-browser-realprint-html");
 
-const MERGED_MANUSCRIPT_BROWSER_PANEL_STATE_KEY =
-  "mojigoto.mergedManuscriptBrowserPanelState";
-
-function normalizeRealPrintSizeKey(value) {
-  const v = String(value || "b6")
-    .trim()
-    .toLowerCase();
-
-  if (
-    v === "a5" ||
-    v === "a6" ||
-    v === "b6" ||
-    v === "shiroku" ||
-    v === "shinsho"
-  ) {
-    return v;
-  }
-
-  return "b6";
-}
-
-function isRealPrintTwoColumnSize(value) {
-  const key = normalizeRealPrintSizeKey(value);
-  return key === "a5" || key === "shinsho";
-}
-
-function normalizeRealPrintColumnMode(value, pageSize = "b6") {
-  const mode = String(value || "single")
-    .trim()
-    .toLowerCase();
-
-  if (mode === "two" && isRealPrintTwoColumnSize(pageSize)) {
-    return "two";
-  }
-
-  return "single";
-}
-
-function getRealPrintStateKey(pageSize = "b6", columnMode = "single") {
-  const sizeKey = normalizeRealPrintSizeKey(pageSize);
-  const mode = normalizeRealPrintColumnMode(columnMode, sizeKey);
-  return `${sizeKey}:${mode}`;
-}
-
-function normalizeSimpleLayoutKey(value) {
-  return String(value || "single") === "2up" ? "2up" : "single";
-}
-
-function buildSimplePanelState(state = {}) {
-  return {
-    htmlPrintLayoutMode: normalizeSimpleLayoutKey(state?.htmlPrintLayoutMode),
-
-    htmlPrintOrientation:
-      String(state?.htmlPrintOrientation || "portrait") === "landscape"
-        ? "landscape"
-        : "portrait",
-
-    showPageNumbers: state?.showPageNumbers === true,
-
-    printFontSizePt:
-      Number(state?.printFontSizePt || 0) ||
-      Math.round(Number(state?.printFontSizePx || 0) * 0.75 * 10) / 10,
-
-    printFontSizePx:
-      Number(state?.printFontSizePx || 0) ||
-      Math.round(Number(state?.printFontSizePt || 0) / 0.75),
-
-    printLineHeight: Number(state?.printLineHeight || 0),
-    printMarginMm: Number(state?.printMarginMm || 0),
-    printBodyPaddingPx: Number(state?.printBodyPaddingPx || 0),
-
-    charsPerLine: Number(state?.charsPerLine || 0),
-    linesPerPage: Number(state?.linesPerPage || 0),
-
-    punctuationLayoutMode:
-      String(state?.punctuationLayoutMode || "hanging") === "pushout"
-        ? "pushout"
-        : "hanging",
-    useTypographyAdjustments: state?.useTypographyAdjustments !== false,
-  };
-}
-
-function readMergedManuscriptBrowserPanelState(context) {
-  try {
-    const value = context?.workspaceState?.get(
-      MERGED_MANUSCRIPT_BROWSER_PANEL_STATE_KEY,
-      null,
-    );
-    return value && typeof value === "object" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-async function writeMergedManuscriptBrowserPanelState(context, state) {
-  if (!context?.workspaceState) return;
-
-  const pageSizeKey = normalizeRealPrintSizeKey(state?.realPrintPageSize);
-
-  const columnMode = normalizeRealPrintColumnMode(
-    state?.realPrintColumnMode,
-    pageSizeKey,
-  );
-  const realStateKey = getRealPrintStateKey(pageSizeKey, columnMode);
-
-  const prev = readMergedManuscriptBrowserPanelState(context) || {
-    simple: {},
-    realBySize: {},
-  };
-
-  const nextState = {
-    exportMode:
-      String(state?.exportMode || "simple")
-        .trim()
-        .toLowerCase() === "real"
-        ? "real"
-        : "simple",
-
-    realPrintPageSize: pageSizeKey,
-    realPrintColumnMode: columnMode,
-    useTypographyAdjustments: state?.useTypographyAdjustments !== false,
-    punctuationLayoutMode:
-      state?.punctuationLayoutMode === "pushout" ? "pushout" : "hanging",
-
-    simple: {
-      ...(prev.simple && typeof prev.simple === "object" ? prev.simple : {}),
-
-      currentLayoutMode: normalizeSimpleLayoutKey(state?.htmlPrintLayoutMode),
-
-      byLayout: {
-        ...(prev.simple &&
-        prev.simple.byLayout &&
-        typeof prev.simple.byLayout === "object"
-          ? prev.simple.byLayout
-          : {}),
-
-        [normalizeSimpleLayoutKey(state?.htmlPrintLayoutMode)]:
-          buildSimplePanelState(state),
-      },
-    },
-
-    realBySize: {
-      ...(prev.realBySize || {}),
-      [realStateKey]: {
-        realPrintPageSize: pageSizeKey,
-        realPrintColumnMode: columnMode,
-        realPrintColumnGapMm: Number(state?.realPrintColumnGapMm || 0),
-        realPrintFontSizePt: Number(state?.realPrintFontSizePt || 0),
-        realPrintBleedMm: Number(state?.realPrintBleedMm || 0),
-
-        realPrintBleedMode:
-          String(state?.realPrintBleedMode || "all") === "nonSpine"
-            ? "nonSpine"
-            : "all",
-
-        realPrintMirrorMargins: state?.realPrintMirrorMargins !== false,
-
-        realPrintStartPageSide:
-          String(state?.realPrintStartPageSide || "odd") === "even"
-            ? "even"
-            : "odd",
-
-        realPrintBookOptionsEnabled:
-          state?.realPrintBookOptionsEnabled === true,
-
-        realPrintShowPageNumber: state?.realPrintShowPageNumber === true,
-
-        realPrintPageNumberStart: Number(state?.realPrintPageNumberStart || 1),
-
-        realPrintShowHeading1: state?.realPrintShowHeading1 === true,
-
-        realPrintHeading1Mode:
-          String(state?.realPrintHeading1Mode || "all") === "evenOnly"
-            ? "evenOnly"
-            : "all",
-
-        realPrintHeaderOrder:
-          String(state?.realPrintHeaderOrder || "numberTitle") === "titleNumber"
-            ? "titleNumber"
-            : "numberTitle",
-
-        realPrintHeaderPosition:
-          String(state?.realPrintHeaderPosition || "bottom") === "top"
-            ? "top"
-            : "bottom",
-
-        realPrintMarginTopMm: Number(state?.realPrintMarginTopMm || 0),
-        realPrintMarginBottomMm: Number(state?.realPrintMarginBottomMm || 0),
-        realPrintMarginRightMm: Number(state?.realPrintMarginRightMm || 0),
-        realPrintMarginLeftMm: Number(state?.realPrintMarginLeftMm || 0),
-        realPrintCharsPerLine: Number(state?.realPrintCharsPerLine || 0),
-        realPrintLinesPerPage: Number(state?.realPrintLinesPerPage || 0),
-      },
-    },
-  };
-
-  await context.workspaceState.update(
-    MERGED_MANUSCRIPT_BROWSER_PANEL_STATE_KEY,
-    nextState,
-  );
-}
+const {
+  normalizeRealPrintSizeKey, normalizeRealPrintColumnMode, getRealPrintStateKey, normalizeSimpleLayoutKey,
+  readMergedManuscriptBrowserPanelState, writeMergedManuscriptBrowserPanelState,
+} = require("./merged-manuscript-panel-settings");
 
 function renderMergedManuscriptHtml(mergedData, options = {}) {
   const target = String(options.htmlTarget || "browser");
@@ -362,11 +170,38 @@ function writeMergedManuscriptFile(outPath, content) {
   fs.writeFileSync(outPath, content, "utf8");
 }
 
+async function pickMergedManuscriptScope(context) {
+  const manuscriptRoot = resolveMergedManuscriptRoot();
+  const files = collectMergedManuscriptFiles(manuscriptRoot, [".txt", ".md"]);
+  ensureMergedManuscriptFiles(files);
+  const source = captureManuscriptSource(manuscriptRoot, getWorkNameForStats(context));
+  const picked = await vscode.window.showQuickPick([
+    {label:"全体を1ファイルにまとめる", description:"Viewの原稿をすべて結合", unit:"all"},
+    {label:"章ごとに別ファイルで書き出す", description:"章を選択し、1章につき1ファイルを作成", unit:"chapters"},
+  ], {title:"もじごと: 原稿の書き出し単位", ignoreFocusOut:true});
+  if (!picked) return null;
+  if (picked.unit === "all") return {...source, exportUnit:"all", exportScopeDescription:""};
+  const chapters = groupManuscriptFilesByChapter(manuscriptRoot, files);
+  const selected = await vscode.window.showQuickPick(chapters.map(chapter => ({
+    label:chapter.title, description:`${chapter.files.length}ファイル`, picked:true, chapterId:chapter.id,
+  })), {title:"もじごと: 書き出す章を選択", canPickMany:true, ignoreFocusOut:true,
+    placeHolder:"選択した章ごとに1ファイルを作成します。子フォルダの原稿も含みます。"});
+  if (!selected?.length) return null;
+  const ids = new Set(selected.map(item => item.chapterId));
+  const ordered = chapters.filter(chapter => ids.has(chapter.id));
+  return {...source, exportUnit:"chapters", chapterIds:ordered.map(chapter => chapter.id),
+    previewChapters:ordered.map(chapter => ({id:chapter.id, title:chapter.title})),
+    exportScopeDescription:`章ごとに${ordered.length}ファイルを書き出します。プレビューでは確認する章を切り替えられます。`};
+}
+
 async function collectMergedManuscriptExportOptions(context) {
+  const selection = await pickMergedManuscriptScope(context);
+  if (!selection) return null;
   const preset = await pickMergedManuscriptExportPreset();
   if (!preset) return null;
 
   const options = {
+    ...selection,
     format: String(preset.format || "txt"),
     joinMode: getMergedManuscriptJoinMode(),
     htmlTarget: String(preset.htmlTarget || "browser"),
@@ -386,7 +221,7 @@ async function collectMergedManuscriptExportOptions(context) {
     return options;
   }
 
-  const manuscriptRoot = resolveMergedManuscriptRoot();
+  const manuscriptRoot = selection.manuscriptRoot;
   const resolvedHtmlOptions = resolveMergedManuscriptHtmlOptions(
     { manuscriptRoot },
     options,
@@ -490,6 +325,8 @@ async function collectMergedManuscriptExportOptions(context) {
           ...options,
           ...basePanelState,
           ...panelOptions,
+          ...selection,
+          printPreview: false,
           format: "html",
           htmlTarget: "browser",
           htmlDirection: "vertical",
@@ -504,30 +341,9 @@ async function collectMergedManuscriptExportOptions(context) {
           };
         }
 
-        const typeLabel = getMergedManuscriptTypeLabel(result);
-
         void (async () => {
           try {
-            const action = await vscode.window.showInformationMessage(
-              `もじごと: 結合ファイル（${typeLabel}）を書き出しました → ${path.basename(result.outPath)}`,
-              "フォルダを開く",
-              "ファイルを開く",
-            );
-
-            if (action === "ファイルを開く") {
-              await vscode.commands.executeCommand(
-                "vscode.open",
-                vscode.Uri.file(result.outPath),
-              );
-              return;
-            }
-
-            if (action === "フォルダを開く") {
-              await vscode.commands.executeCommand(
-                "revealFileInOS",
-                vscode.Uri.file(result.outPath),
-              );
-            }
+            await notifyMergedManuscriptExport(result);
           } catch (error) {
             console.error(
               "mojigoto: failed to handle export notification action",
@@ -537,7 +353,7 @@ async function collectMergedManuscriptExportOptions(context) {
         })();
 
         return {
-          message: "HTMLを書き出しました。",
+          message: result.exportUnit === "chapters" ? `${result.outPaths.length}章のHTMLを書き出しました。` : "HTMLを書き出しました。",
         };
       },
 
@@ -546,12 +362,12 @@ async function collectMergedManuscriptExportOptions(context) {
           ...options,
           ...basePanelState,
           ...panelOptions,
+          ...selection,
           format: "html",
           htmlTarget: "browser",
           htmlDirection: "vertical",
           htmlPageSize: "auto",
           htmlOrientation: "auto",
-          exportMode: "real",
         };
 
         const result = await buildMergedManuscriptPreviewHtml(
@@ -561,7 +377,7 @@ async function collectMergedManuscriptExportOptions(context) {
 
         return {
           html: result.html,
-          message: "現在の実寸優先設定で本文プレビューを表示しています。",
+          message: `${result.chapterTitle ? `「${result.chapterTitle}」 / ` : ""}${finalOptions.exportMode === "real" ? "実寸優先" : finalOptions.htmlPrintLayoutMode === "2up" ? "A4横・二面" : finalOptions.htmlPrintOrientation === "landscape" ? "A4横" : "A4縦"}の現在の設定で表示しています。`,
         };
       },
     },
@@ -582,12 +398,39 @@ function getMergedManuscriptTypeLabel(result) {
   return "テキスト";
 }
 
-async function buildMergedManuscriptPreviewHtml(context, options = {}) {
+function resolveMergedExportData(context, options) {
   const manuscriptRoot = resolveMergedManuscriptRoot();
+  if (options.manuscriptIdentity) assertManuscriptSource(options, manuscriptRoot);
   const files = collectMergedManuscriptFiles(manuscriptRoot, [".txt", ".md"]);
   ensureMergedManuscriptFiles(files);
+  const allChapters = groupManuscriptFilesByChapter(manuscriptRoot, files);
+  let chapters = [];
+  if (options.exportUnit === "chapters") {
+    if (!Array.isArray(options.chapterIds) || !options.chapterIds.length) throw new Error("書き出す章を選び直してください。");
+    const ids = new Set(options.chapterIds);
+    chapters = allChapters.filter(chapter => ids.has(chapter.id));
+    if (chapters.length !== ids.size) throw new Error("選択した章の原稿が見つかりません。書き出す章を選び直してください。");
+  }
+  const selectedFiles = chapters.length ? chapters.flatMap(chapter => chapter.files) : files;
+  const mergedData = buildMergedManuscriptData(context, manuscriptRoot, selectedFiles, {
+    strictRead:chapters.length > 0, workName:options.workName,
+  });
+  return {manuscriptRoot, mergedData, chapters, allChapters};
+}
 
-  const mergedData = buildMergedManuscriptData(context, manuscriptRoot, files);
+function chapterMergedData(mergedData, chapter) {
+  const files = new Set(chapter.files);
+  return {...mergedData, workName:`${mergedData.workName} / ${chapter.title}`,
+    entries:mergedData.entries.filter(entry => files.has(entry.filePath))};
+}
+
+async function buildMergedManuscriptPreviewHtml(context, options = {}) {
+  const {mergedData, chapters} = resolveMergedExportData(context, options);
+  const previewChapter = chapters.length
+    ? chapters.find(chapter => chapter.id === (options.previewChapterId ?? chapters[0].id))
+    : null;
+  if (chapters.length && !previewChapter) throw new Error("プレビューする章を書き出し対象から選んでください。");
+  const previewData = previewChapter ? chapterMergedData(mergedData, previewChapter) : mergedData;
 
   const finalOptions = {
     ...options,
@@ -596,25 +439,22 @@ async function buildMergedManuscriptPreviewHtml(context, options = {}) {
     htmlDirection: "vertical",
     htmlPageSize: "auto",
     htmlOrientation: "auto",
-    exportMode: "real",
+    printPreview: options.exportMode !== "real",
   };
 
-  const html = renderMergedManuscriptByFormat("html", mergedData, finalOptions);
+  const html = renderMergedManuscriptByFormat("html", previewData, finalOptions);
 
   return {
     html,
-    pageCount: Array.isArray(mergedData?.files) ? mergedData.files.length : 0,
+    pageCount: previewData.entries.length,
+    chapterTitle:previewChapter?.title || "",
   };
 }
 
 async function runMergedManuscriptExport(context, options = {}) {
   const format = String(options.format || "txt");
-
-  const manuscriptRoot = resolveMergedManuscriptRoot();
-  const files = collectMergedManuscriptFiles(manuscriptRoot, [".txt", ".md"]);
-  ensureMergedManuscriptFiles(files);
-
-  const mergedData = buildMergedManuscriptData(context, manuscriptRoot, files);
+  const {manuscriptRoot, mergedData, chapters, allChapters} = resolveMergedExportData(context, options);
+  if (chapters.length) return runChapterManuscriptExport(context, options, mergedData, chapters, allChapters);
   const content = renderMergedManuscriptByFormat(format, mergedData, options);
 
   const saveUri = await pickMergedManuscriptSaveUri(context, manuscriptRoot, {
@@ -627,6 +467,7 @@ async function runMergedManuscriptExport(context, options = {}) {
     realPrintColumnMode: options.realPrintColumnMode,
   });
   if (!saveUri) return { cancelled: true };
+  if (options.manuscriptIdentity) assertManuscriptSource(options, resolveMergedManuscriptRoot());
 
   writeMergedManuscriptFile(saveUri.fsPath, content);
 
@@ -639,33 +480,66 @@ async function runMergedManuscriptExport(context, options = {}) {
   };
 }
 
+async function runChapterManuscriptExport(context, options, mergedData, chapters, allChapters) {
+  const format = String(options.format || "txt");
+  const names = buildChapterOutputNames(mergedData.workName, allChapters, format, getMergedManuscriptFileVariantSuffix(format, options));
+  const namesById = new Map(allChapters.map((chapter, index) => [chapter.id, names[index]]));
+  const outputs = chapters.map(chapter => ({title:chapter.title, fileName:namesById.get(chapter.id),
+    content:renderMergedManuscriptByFormat(format, chapterMergedData(mergedData, chapter), options)}));
+  const exportDir = await ensureNamedExportDir(context, "原稿書き出し");
+  if (!exportDir) return {cancelled:true};
+  assertManuscriptSource(options, resolveMergedManuscriptRoot());
+  const defaultDir = path.join(exportDir, "章ごと");
+  fs.mkdirSync(defaultDir, {recursive:true});
+  let directory;
+  while (!directory) {
+    const picked = await vscode.window.showOpenDialog({title:`もじごと: ${outputs.length}章の書き出し先`,
+      defaultUri:vscode.Uri.file(defaultDir), canSelectFiles:false, canSelectFolders:true, canSelectMany:false,
+      openLabel:"このフォルダに章ごとに書き出す"});
+    if (!picked?.[0]) return {cancelled:true};
+    assertManuscriptSource(options, resolveMergedManuscriptRoot());
+    try { directory = assertChapterExportDirectory(picked[0].fsPath, options.manuscriptRoot); }
+    catch (error) { await vscode.window.showWarningMessage(String(error.message || error)); }
+  }
+  const expected = inspectChapterOutputs(directory, outputs);
+  const existing = expected.filter(item => item.version);
+  if (existing.length) {
+    const answer = await vscode.window.showWarningMessage(`${existing.length}件の同名ファイルを上書きしますか？`,
+      {modal:true, detail:existing.map(item => path.basename(item.outPath)).join("\n")}, "上書きする");
+    if (answer !== "上書きする") return {cancelled:true};
+  }
+  const outPaths = await vscode.window.withProgress({location:vscode.ProgressLocation.Notification, title:"もじごと: 章ごとに書き出し中"},
+    async progress => writeChapterOutputs(directory, outputs, expected, {
+      beforeCommit() { assertManuscriptSource(options, resolveMergedManuscriptRoot());
+        assertChapterExportDirectory(directory, options.manuscriptRoot); },
+      onProgress(done, total, title) { progress.report({increment:100 / total, message:`${done}/${total} ${title}`}); },
+    }));
+  return {cancelled:false, exportUnit:"chapters", outPath:outPaths[0], outPaths, outDir:directory,
+    format, htmlTarget:String(options.htmlTarget || "browser")};
+}
+
+async function notifyMergedManuscriptExport(result) {
+  const typeLabel = getMergedManuscriptTypeLabel(result);
+  const message = result.exportUnit === "chapters"
+    ? `もじごと: ${result.outPaths.length}章を${typeLabel}で書き出しました → ${path.basename(result.outDir)}`
+    : `もじごと: 結合ファイル（${typeLabel}）を書き出しました → ${path.basename(result.outPath)}`;
+  const actions = ["フォルダを開く"];
+  if (!result.outPaths || result.outPaths.length === 1) actions.push("ファイルを開く");
+  const action = await vscode.window.showInformationMessage(message, ...actions);
+  if (action === "ファイルを開く") await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(result.outPath));
+  else if (action === "フォルダを開く") await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(result.outPath));
+}
+
 async function exportMergedManuscript(context) {
   try {
+    if (revealMergedManuscriptBrowserPanel()) return;
     const options = await collectMergedManuscriptExportOptions(context);
     if (!options) return;
 
     const result = await runMergedManuscriptExport(context, options);
     if (!result || result.cancelled) return;
 
-    const typeLabel = getMergedManuscriptTypeLabel(result);
-
-    const action = await vscode.window.showInformationMessage(
-      `もじごと: 結合ファイル（${typeLabel}）を書き出しました → ${path.basename(result.outPath)}`,
-      "フォルダを開く",
-      "ファイルを開く",
-    );
-
-    if (action === "ファイルを開く") {
-      await vscode.commands.executeCommand(
-        "vscode.open",
-        vscode.Uri.file(result.outPath),
-      );
-    } else if (action === "フォルダを開く") {
-      await vscode.commands.executeCommand(
-        "revealFileInOS",
-        vscode.Uri.file(result.outPath),
-      );
-    }
+    await notifyMergedManuscriptExport(result);
   } catch (e) {
     const message = String(e?.message || e || "");
 

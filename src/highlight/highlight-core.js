@@ -145,7 +145,9 @@ function getDefaultHighlightGroups() {
       label: "見出し",
       enabled: false,
       countable: false,
-      regex: "^(###|##|#)(?=\\s|$)",
+      type: "lineRule",
+      rule: "heading",
+      regex: "^(#{1,3})(?!#)(?=\\s|$)",
       style: {
         color: "rgba(218, 191, 191, 0.85)",
         fontWeight: "bold",
@@ -189,27 +191,39 @@ function readHighlightGroups() {
     return getDefaultHighlightGroups();
   }
 
-  return groups.map((g, index) => ({
-    name: String(g?.name || `group_${index}`),
-    label: String(g?.label || g?.name || `Group ${index + 1}`),
-    enabled: g?.enabled !== false,
-    countable: g?.countable !== false,
+  return groups.map((g, index) => {
+    const name = String(g?.name || `group_${index}`);
+    const isHeading = name.toLowerCase() === "heading";
+    return {
+      name,
+      label: String(g?.label || g?.name || `Group ${index + 1}`),
+      enabled: g?.enabled !== false,
+      countable: g?.countable !== false,
 
-    type: String(g?.type || ""),
-    rule: String(g?.rule || ""),
+      type: isHeading ? "lineRule" : String(g?.type || ""),
+      rule: isHeading ? "heading" : String(g?.rule || ""),
 
-    words: Array.isArray(g?.words) ? g.words.map(String).filter(Boolean) : [],
-    regex: g?.regex ? String(g.regex) : "",
+      words: isHeading
+        ? []
+        : Array.isArray(g?.words)
+          ? g.words.map(String).filter(Boolean)
+          : [],
+      regex: isHeading
+        ? "^(#{1,3})(?!#)(?=\\s|$)"
+        : g?.regex
+          ? String(g.regex)
+          : "",
 
-    excludeStartsWith: Array.isArray(g?.excludeStartsWith)
-      ? g.excludeStartsWith.map(String).filter(Boolean)
-      : [],
-    excludeEndsWith: Array.isArray(g?.excludeEndsWith)
-      ? g.excludeEndsWith.map(String).filter(Boolean)
-      : [],
+      excludeStartsWith: Array.isArray(g?.excludeStartsWith)
+        ? g.excludeStartsWith.map(String).filter(Boolean)
+        : [],
+      excludeEndsWith: Array.isArray(g?.excludeEndsWith)
+        ? g.excludeEndsWith.map(String).filter(Boolean)
+        : [],
 
-    style: typeof g?.style === "object" && g?.style ? g.style : {},
-  }));
+      style: typeof g?.style === "object" && g?.style ? g.style : {},
+    };
+  });
 }
 
 function makeDecorationOptions(style = {}) {
@@ -404,6 +418,34 @@ function findMissingPeriodRanges(doc, group) {
   return ranges;
 }
 
+function parseHeadingLine(text) {
+  const match = /^(#{1,3})(?!#)(?=\s|$)(?:\s+)?(.*)$/u.exec(
+    String(text || ""),
+  );
+  if (!match) return null;
+  return {
+    level: match[1].length,
+    markerLength: match[1].length,
+    text: String(match[2] || "").trim(),
+  };
+}
+
+function findHeadingRanges(doc) {
+  const ranges = [];
+  for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+    const text = String(doc.lineAt(lineIndex).text || "");
+    const heading = parseHeadingLine(text);
+    if (!heading) continue;
+    ranges.push(
+      new vscode.Range(
+        new vscode.Position(lineIndex, 0),
+        new vscode.Position(lineIndex, heading.markerLength),
+      ),
+    );
+  }
+  return ranges;
+}
+
 function collectHighlightMatches(doc, groups) {
   const result = [];
 
@@ -421,6 +463,8 @@ function collectHighlightMatches(doc, groups) {
         ranges = findOddRepeatRanges(doc, "―");
       } else if (group.rule === "missingPeriod") {
         ranges = findMissingPeriodRanges(doc, group);
+      } else if (group.rule === "heading") {
+        ranges = findHeadingRanges(doc);
       }
     } else {
       if (Array.isArray(group.words) && group.words.length > 0) {
@@ -449,4 +493,6 @@ module.exports = {
   readHighlightGroups,
   makeDecorationOptions,
   collectHighlightMatches,
+  findHeadingRanges,
+  parseHeadingLine,
 };

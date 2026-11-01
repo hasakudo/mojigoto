@@ -14,6 +14,7 @@ const {
   updateWritingMemoFilePathForRenameOrMove,
   updateWritingMemoPathsForFolderRename,
 } = require("../writing-memo/writing-memo-tracker");
+const { migrateManuscriptBackupsForMove } = require("../backup/manuscript-backup");
 
 let activeReorderPanel = null;
 let openingReorderEditor = null;
@@ -36,6 +37,10 @@ function isPathInsideRoot(candidate, rootDir) {
     path.resolve(String(candidate || "")),
   );
   return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function pathsEqual(left, right) {
+  return normalizeComparablePath(left) === normalizeComparablePath(right);
 }
 
 function splitEditableEntryName(entryPath, kind) {
@@ -647,6 +652,156 @@ async function openReorderEditorImpl(context, deps = {}) {
     );
   }
 
+  async function handleMoveEntries(msg) {
+    const kind = msg.kind === "folder" ? "folder" : "file";
+    const sourcePaths = [...new Set(
+      (Array.isArray(msg.entryPaths) ? msg.entryPaths : [msg.entryPath])
+        .map((value) => path.resolve(String(value || "").trim()))
+        .filter(Boolean),
+    )];
+    const rootPath = path.resolve(rootDir);
+
+    if (!sourcePaths.length) throw new Error("移動する項目を選択してください。");
+    if (kind === "folder" && sourcePaths.length !== 1) {
+      throw new Error("フォルダは1件ずつ移動してください。");
+    }
+
+    for (const sourcePath of sourcePaths) {
+      if (
+        sourcePath === rootPath ||
+        !isPathInsideRoot(sourcePath, rootPath) ||
+        !fs.existsSync(sourcePath)
+      ) {
+        throw new Error("移動対象が原稿フォルダ内に見つかりません。");
+      }
+      const stat = fs.statSync(sourcePath);
+      if ((kind === "folder" && !stat.isDirectory()) || (kind === "file" && !stat.isFile())) {
+        throw new Error("移動対象の種類が一致しません。");
+      }
+      if (hasDirtyDocumentAtPath(sourcePath, kind)) {
+        vscode.window.showWarningMessage(
+          kind === "folder"
+            ? "もじごと: 移動するフォルダ内に未保存の原稿があります。保存してから移動してください。"
+            : "もじごと: 選択した原稿に未保存の変更があります。保存してから移動してください。",
+        );
+        return;
+      }
+    }
+
+    const folders = await reorderCore.buildFolderViewModel(rootDir);
+    const destinationItems = folders
+      .filter((folder) => {
+        const candidate = path.resolve(folder.path);
+        if (kind === "file") {
+          return !sourcePaths.some((sourcePath) => pathsEqual(path.dirname(sourcePath), candidate));
+        }
+        const sourcePath = sourcePaths[0];
+        return !pathsEqual(candidate, path.dirname(sourcePath)) && !isSameOrChildPath(candidate, sourcePath);
+      })
+      .map((folder) => ({
+        label: folder.kind === "root"
+          ? "原稿フォルダ直下"
+          : path.relative(rootDir, folder.path).split(path.sep).join(" / "),
+        description: folder.path,
+        targetPath: folder.path,
+      }));
+
+    const picked = await vscode.window.showQuickPick(destinationItems, {
+      title: kind === "folder" ? "もじごと: フォルダの移動先" : "もじごと: 原稿ファイルの移動先",
+      placeHolder: "原稿フォルダ直下、または既存フォルダを選んでください",
+      ignoreFocusOut: true,
+      matchOnDescription: true,
+    });
+    if (!picked) return;
+
+    const targetDir = path.resolve(picked.targetPath);
+    const moves = sourcePaths.map((sourcePath) => ({
+      from: sourcePath,
+      to: path.join(targetDir, path.basename(sourcePath)),
+    }));
+    const duplicateTargets = new Set();
+    for (const move of moves) {
+      const comparable = normalizeComparablePath(move.to);
+      if (duplicateTargets.has(comparable) || fs.existsSync(move.to)) {
+        throw new Error(`移動先に同名の項目があります: ${path.basename(move.to)}`);
+      }
+      duplicateTargets.add(comparable);
+    }
+
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    for (const move of moves) {
+      workspaceEdit.renameFile(vscode.Uri.file(move.from), vscode.Uri.file(move.to), {
+        overwrite: false,
+        ignoreIfExists: false,
+      });
+    }
+    const applied = await vscode.workspace.applyEdit(workspaceEdit);
+    if (!applied) throw new Error("選択した項目を移動できませんでした。");
+
+    try {
+      await saveDisplayNameChanges(rootDir, [], { moves });
+    } catch (error) {
+      console.warn("[mojigoto] reorder move display-name migration failed:", error);
+      vscode.window.showWarningMessage(
+        "もじごと: 項目は移動しましたが、作品ツリーの表示名を引き継げませんでした。表示名を再設定してください。",
+      );
+    }
+
+    try {
+      for (const move of moves) {
+        await migrateManuscriptBackupsForMove(move.from, move.to);
+      }
+    } catch (error) {
+      console.warn("[mojigoto] reorder move backup migration failed:", error);
+      vscode.window.showWarningMessage(
+        "もじごと: 項目は移動しましたが、バックアップ履歴の保存先更新に失敗しました。履歴を開くと内容一致から再検出を試みます。",
+      );
+    }
+
+    const trackerItem = { fsPath: targetDir, workDir: path.dirname(rootDir) };
+    try {
+      for (const move of moves) {
+        if (kind === "folder") {
+          await updateWritingMemoPathsForFolderRename(trackerItem, move.from, move.to);
+        } else {
+          await updateWritingMemoFilePathForRenameOrMove(trackerItem, move.from, move.to);
+        }
+      }
+    } catch (error) {
+      console.warn("[mojigoto] reorder move writing-memo migration failed:", error);
+      vscode.window.showWarningMessage(
+        "もじごと: 項目は移動しましたが、関連する執筆メモの参照先を更新できませんでした。",
+      );
+    }
+
+    const previousSelectedPath = path.resolve(String(msg.selectedFolderPath || rootDir));
+    let selectedFolderPath = fs.existsSync(previousSelectedPath) ? previousSelectedPath : targetDir;
+    if (kind === "folder" && isSameOrChildPath(previousSelectedPath, moves[0].from)) {
+      selectedFolderPath = path.join(moves[0].to, path.relative(moves[0].from, previousSelectedPath));
+    }
+    if (!fs.existsSync(selectedFolderPath)) selectedFolderPath = targetDir;
+
+    const nextFolders = await reorderCore.buildFolderViewModel(rootDir);
+    const files = await reorderCore.buildFileViewModel(selectedFolderPath, 1, rootDir);
+    await refreshMojigotoTreeAfterReorder();
+    scheduleRecalc("reorderEditorEntryMove");
+    await refreshStatsPanel();
+
+    webviewPanel.webview.postMessage({
+      type: "entries-moved",
+      kind,
+      moves,
+      folders: nextFolders,
+      selectedFolderPath,
+      files,
+    });
+    vscode.window.showInformationMessage(
+      kind === "folder"
+        ? `もじごと: フォルダを移動しました: ${path.basename(moves[0].from)}`
+        : `もじごと: 原稿ファイルを${moves.length}件移動しました。`,
+    );
+  }
+
   async function handleInsertHeading(msg) {
     const filePath = path.resolve(String(msg.filePath || "").trim());
     const rootPath = path.resolve(rootDir);
@@ -876,9 +1031,23 @@ async function openReorderEditorImpl(context, deps = {}) {
           ? msg.orderedFolders
           : [];
         const orderChanged = msg.orderChanged === true;
+        const folderOrderParentPath = path.resolve(
+          String(msg.folderOrderParentPath || rootDir).trim(),
+        );
+        const sourceOrderFolders = orderedFolders.filter(
+          (item) =>
+            item?.kind === "folder" &&
+            path.resolve(path.dirname(item.path)) === folderOrderParentPath,
+        );
         let folders;
 
         if (orderChanged) {
+          if (sourceOrderFolders.some((item) => hasDirtyDocumentAtPath(item.path, "folder"))) {
+            vscode.window.showWarningMessage(
+              "もじごと: 並び替えるフォルダ内に未保存の原稿があります。保存してからフォルダ順を変更してください。",
+            );
+            return;
+          }
           const startPicked = await vscode.window.showQuickPick(
             [
               { label: "1から", value: 1 },
@@ -896,12 +1065,69 @@ async function openReorderEditorImpl(context, deps = {}) {
             rootDir,
             orderedFolders,
             Number(startPicked.value ?? 1),
+            folderOrderParentPath,
           );
         } else {
           folders = await reorderCore.saveFolderDisplayNames(
             rootDir,
             orderedFolders,
           );
+        }
+
+        const savedOrderFolders = orderChanged
+          ? folders.filter(
+            (item) =>
+              item?.kind === "folder" &&
+              path.resolve(item.parentPath || path.dirname(item.path)) === folderOrderParentPath,
+          )
+          : [];
+        const folderMoves = sourceOrderFolders
+          .map((item, index) => ({
+            from: item.path,
+            to: savedOrderFolders[index]?.path || item.path,
+          }))
+          .filter((move) => !pathsEqual(move.from, move.to));
+
+        if (folderMoves.length) {
+          const migrationStamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+          const referenceMoves = folderMoves.map((move, index) => ({
+            ...move,
+            temporary: path.join(
+              folderOrderParentPath,
+              `.__mojigoto_order_ref_${migrationStamp}_${index}`,
+            ),
+          }));
+          try {
+            for (const move of referenceMoves) {
+              await migrateManuscriptBackupsForMove(move.from, move.temporary);
+            }
+            for (const move of referenceMoves) {
+              await migrateManuscriptBackupsForMove(move.temporary, move.to);
+            }
+          } catch (error) {
+            console.warn("[mojigoto] reorder folder backup migration failed:", error);
+            vscode.window.showWarningMessage(
+              "もじごと: フォルダ順は保存しましたが、バックアップ履歴の保存先更新に失敗しました。履歴を開くと内容一致から再検出を試みます。",
+            );
+          }
+
+          const trackerItem = {
+            fsPath: folderOrderParentPath,
+            workDir: path.dirname(rootDir),
+          };
+          try {
+            for (const move of referenceMoves) {
+              await updateWritingMemoPathsForFolderRename(trackerItem, move.from, move.temporary);
+            }
+            for (const move of referenceMoves) {
+              await updateWritingMemoPathsForFolderRename(trackerItem, move.temporary, move.to);
+            }
+          } catch (error) {
+            console.warn("[mojigoto] reorder folder writing-memo migration failed:", error);
+            vscode.window.showWarningMessage(
+              "もじごと: フォルダ順は保存しましたが、関連する執筆メモの参照先を更新できませんでした。",
+            );
+          }
         }
 
         await refreshMojigotoTreeAfterReorder();
@@ -911,22 +1137,14 @@ async function openReorderEditorImpl(context, deps = {}) {
         const previousSelectedPath = String(msg.selectedFolderPath || "").trim();
         let nextSelectedPath = previousSelectedPath || rootDir;
         if (orderChanged && previousSelectedPath !== rootDir) {
-          const sourceFolders = orderedFolders.filter(
-            (item) =>
-              item?.kind === "folder" &&
-              (Number(item.depth) === 1 || path.dirname(item.path) === rootDir),
-          );
-          const selectedIndex = sourceFolders.findIndex((item) =>
+          const selectedIndex = sourceOrderFolders.findIndex((item) =>
             isSameOrChildPath(previousSelectedPath, item?.path),
           );
-          const savedFolders = folders.filter(
-            (item) => item?.kind === "folder" && Number(item.depth) === 1,
-          );
-          if (selectedIndex >= 0 && savedFolders[selectedIndex]?.path) {
-            const oldTopLevelPath = sourceFolders[selectedIndex].path;
+          if (selectedIndex >= 0 && savedOrderFolders[selectedIndex]?.path) {
+            const oldFolderPath = sourceOrderFolders[selectedIndex].path;
             nextSelectedPath = path.join(
-              savedFolders[selectedIndex].path,
-              path.relative(oldTopLevelPath, previousSelectedPath),
+              savedOrderFolders[selectedIndex].path,
+              path.relative(oldFolderPath, previousSelectedPath),
             );
           }
         }
@@ -976,6 +1194,11 @@ async function openReorderEditorImpl(context, deps = {}) {
 
       if (msg.type === "rename-entry") {
         await handleRenameEntry(msg);
+        return;
+      }
+
+      if (msg.type === "move-entries") {
+        await handleMoveEntries(msg);
         return;
       }
 

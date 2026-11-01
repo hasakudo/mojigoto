@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const path = require("path");
+const { registerRestorableWebview, withRestoredWebviews, webviewFileKey } = require("./shared/restored-webviews");
 const {
   readSettingsFile,
   writeSettingsFile,
@@ -16,12 +17,14 @@ const {
 const { exportTreeItem } = require("../export/export-service");
 const { getNonce, escapeHtml } = require("../core/path-utils");
 const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
+const { MOJIGOTO_ICONS } = require("../ui/mojigoto-icons");
 const {
   getRelatedWorkOptions,
   syncRelatedWorks,
 } = require("../work/related-works");
 
 const settingsPanels = new Map();
+const { getWebviewNoticeScript, getWebviewNoticeCss } = require("./shared/webview-notice");
 
 function getSettingsUiSettings() {
   const config = vscode.workspace.getConfiguration("mojigoto");
@@ -44,7 +47,7 @@ function getSettingsPanelKey(target, item) {
   if (target?.mode === "single") {
     return "single";
   }
-  return `multi:${String(item?.fsPath || "")}`;
+  return `multi:${webviewFileKey(item?.fsPath || target.dir)}`;
 }
 
 function getSettingsWebviewHtml(webview, settings, meta) {
@@ -59,9 +62,10 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     : [];
   const nonce = getNonce();
   const config = vscode.workspace.getConfiguration("mojigoto");
-  const { fontScale } = getSettingsUiSettings();
+  const { fontScale, autoSaveEnabled } = getSettingsUiSettings();
 
   const exportDefaults = {
+    includeSubtitle: config.get("exportIncludeSubtitle", true),
     includeFolderName: config.get("exportIncludeFolderName", false),
     includeGenre: config.get("exportIncludeGenre", true),
     includeTargetChars: config.get("exportIncludeTargetChars", true),
@@ -107,6 +111,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
       gap: 18px;
       align-items: start;
+    }
+
+    .settingsForm {
+      min-width: 0;
+      container-type: inline-size;
     }
 
     .exportPreview {
@@ -244,7 +253,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       right: 0;
       bottom: 0;
       margin: 0;
-      padding: 12px 20px;
+      padding: 10px 20px;
       border-top: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editor-background);
       box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.12);
@@ -346,12 +355,29 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 0 0 12px;
+      margin: 0 0 4px;
     }
 
     .headerRow h1 {
       font-size: calc(20px * var(--mojigoto-content-font-scale));
       margin: 0;
+    }
+
+    .settingsFolderName {
+      color: var(--vscode-descriptionForeground);
+      font-size: calc(12px * var(--mojigoto-content-font-scale));
+      overflow-wrap: anywhere;
+      margin-bottom: 12px;
+    }
+
+    .settingsStickyHeader {
+      position: sticky;
+      top: 0;
+      z-index: 25;
+      padding: 8px 0 1px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+      margin-bottom: 10px;
     }
 
     .dirtyBadge {
@@ -366,9 +392,32 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       white-space: nowrap;
     }
 
+    .autoSaveBadge {
+      flex: 0 0 auto;
+      padding: 4px 9px;
+      border: 1px solid color-mix(in srgb, var(--vscode-testing-iconPassed, #3a9d5d) 45%, var(--vscode-panel-border));
+      border-radius: 999px;
+      color: var(--vscode-testing-iconPassed, #3a9d5d);
+      background: color-mix(in srgb, var(--vscode-testing-iconPassed, #3a9d5d) 12%, transparent);
+      font-size: calc(11px * var(--mojigoto-content-font-scale));
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
     .genrePicker {
       display: grid;
       gap: 8px;
+    }
+
+    .genreControlGrid {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr);
+      gap: 8px 12px;
+      align-items: start;
+    }
+
+    .genreControlGrid > * {
+      min-width: 0;
     }
 
     .genreInputRow {
@@ -377,7 +426,12 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       gap: 8px;
     }
 
+    .genreInputRow .secondary {
+      white-space: nowrap;
+    }
+
     .genreOptionsMenu {
+      position: relative;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 6px;
       background: var(--vscode-input-background);
@@ -390,10 +444,19 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     .genreOptionList {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      left: 0;
+      z-index: 30;
       display: grid;
       max-height: 220px;
       overflow-y: auto;
-      border-top: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-foreground);
+      background: var(--vscode-dropdown-background, var(--vscode-input-background));
+      border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
     }
 
     .genreOptionRow {
@@ -557,6 +620,12 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       border-top: 1px solid color-mix(in srgb, var(--vscode-panel-border) 60%, transparent);
     }
 
+    @container (max-width: 680px) {
+      .genreControlGrid {
+        grid-template-columns: 1fr;
+      }
+    }
+
     @media (max-width: 720px) {
       .grid {
         grid-template-columns: 1fr;
@@ -594,14 +663,19 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         position: static;
       }
     }
+    ${getWebviewNoticeCss()}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="headerRow">
-      <h1>${escapeHtml(title)}</h1>
-      <div id="dirtyBadge" class="dirtyBadge" hidden>未保存</div>
-      <div class="status" id="statusMessage" role="status" aria-live="polite"></div>
+    <div class="settingsStickyHeader">
+      <div class="headerRow">
+        <h1>${escapeHtml(title)}</h1>
+        <div id="settingsAutoSaveBadge" class="autoSaveBadge"${autoSaveEnabled ? "" : " hidden"}>自動保存 ON</div>
+        <div id="dirtyBadge" class="dirtyBadge" hidden>未保存</div>
+        <div class="status" id="statusMessage" role="status" aria-live="polite"></div>
+      </div>
+      <div class="settingsFolderName">フォルダ: ${escapeHtml(settings.folderName || "（未設定）")}</div>
     </div>
 
     <div class="settingsLayout">
@@ -613,19 +687,27 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         <div class="hint">作品ツリーや統計、作品切替などにも使われます。</div>
       </div>
 
+      <label for="subtitle">補助タイトル</label>
+      <div>
+        <input id="subtitle" type="text" value="${escapeHtml(settings.subtitle || "")}" placeholder="サブタイトルやシリーズ共通タイトル" />
+        <div class="hint">作品ツリーなどの主表示には使わず、書き出し時に作品名と併記できます。</div>
+      </div>
+
       <label for="genreInput">ジャンル</label>
       <div>
         <div class="genrePicker">
           <div id="genreChips" class="genreChips"></div>
 
-          <details class="genreOptionsMenu">
-            <summary>候補から選ぶ</summary>
-            <div id="genreOptionList" class="genreOptionList"></div>
-          </details>
+          <div class="genreControlGrid">
+            <details class="genreOptionsMenu">
+              <summary>候補から選ぶ</summary>
+              <div id="genreOptionList" class="genreOptionList"></div>
+            </details>
 
-          <div class="genreInputRow">
-            <input id="genreInput" type="text" placeholder="自由入力でジャンルを追加" />
-            <button type="button" class="secondary" id="addGenreBtn">追加</button>
+            <div class="genreInputRow">
+              <input id="genreInput" type="text" placeholder="自由入力でジャンルを追加" />
+              <button type="button" class="secondary" id="addGenreBtn">追加</button>
+            </div>
           </div>
 
           <div class="hint">
@@ -724,9 +806,10 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
         <div id="morePanel" class="morePanel" hidden>
           <div class="menuSection">
-            <div class="menuTitle">HTML書き出し設定</div>
-            <p>HTML書き出しに含める項目にチェック</p>
+            <div class="menuTitle">書き出し設定</div>
+            <p>書き出しに含める項目にチェック</p>
 
+            <label><input type="checkbox" id="includeSubtitle"> 補助タイトル</label>
             <label><input type="checkbox" id="includeFolderName"> フォルダ名</label>
             <label><input type="checkbox" id="includeGenre"> ジャンル</label>
             <label><input type="checkbox" id="includeTargetChars"> 目標文字数</label>
@@ -743,6 +826,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    vscode.setState?.(${JSON.stringify({item:meta.restoreItem || null, path:meta.path}).replace(/</g, "\\u003c")});
     const initial = ${JSON.stringify(settings)};
     const exportDefaults = ${JSON.stringify(exportDefaults)};
     let currentUiSettings = ${JSON.stringify(getSettingsUiSettings())};
@@ -764,13 +848,14 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           .filter(Boolean);
 
     const statusEl = document.getElementById("statusMessage");
+    ${getWebviewNoticeScript()}
+    const settingsNotice = createWebviewNotice(statusEl);
     const deadlineInput = document.getElementById("deadline");
     const summaryInput = document.getElementById("summary");
     const memoInput = document.getElementById("memo");
 
     const dirtyBadgeEl = document.getElementById("dirtyBadge");
     let dirty = false;
-    let statusTimer = 0;
     let changeRevision = 0;
 
     function updateDirtyUi() {
@@ -797,16 +882,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     }
 
     function setStatus(message, persist = false, isError = false) {
-      window.clearTimeout(statusTimer);
-      statusEl.textContent = message || "";
-      statusEl.classList.toggle("isError", Boolean(isError));
-      statusEl.classList.toggle("isVisible", Boolean(message));
-      if (message && !persist) {
-        statusTimer = window.setTimeout(() => {
-          statusEl.classList.remove("isVisible", "isError");
-          statusEl.textContent = "";
-        }, 1800);
-      }
+      settingsNotice.show(message, { persist, isError });
     }
 
     function countChars(text) {
@@ -1059,6 +1135,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     function collectPayload() {
       return {
         title: document.getElementById("title").value,
+        subtitle: document.getElementById("subtitle").value,
         genre: selectedGenres.join(", "),
         genres: selectedGenres,
         status: document.getElementById("status").value,
@@ -1071,6 +1148,7 @@ function getSettingsWebviewHtml(webview, settings, meta) {
         memo: memoInput.value,
 
         exportOptions: {
+          includeSubtitle: document.getElementById("includeSubtitle").checked,
           includeFolderName: document.getElementById("includeFolderName").checked,
           includeGenre: document.getElementById("includeGenre").checked,
           includeTargetChars: document.getElementById("includeTargetChars").checked,
@@ -1087,6 +1165,10 @@ function getSettingsWebviewHtml(webview, settings, meta) {
       const rows = [
         ["作品名", payload.title || "（未入力）"],
       ];
+
+      if (payload.exportOptions.includeSubtitle && payload.subtitle) {
+        rows.push(["補助タイトル", payload.subtitle]);
+      }
 
       if (payload.exportOptions.includeFolderName) {
         rows.push(["フォルダ名", initial.folderName || "（未設定）"]);
@@ -1122,6 +1204,11 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 
     function applyExportOptions(initial) {
       const opts = initial.exportOptions || {};
+
+      document.getElementById("includeSubtitle").checked =
+        typeof opts.includeSubtitle === "boolean"
+          ? opts.includeSubtitle
+          : !!exportDefaults.includeSubtitle;
 
       document.getElementById("includeFolderName").checked =
         typeof opts.includeFolderName === "boolean"
@@ -1245,12 +1332,14 @@ function getSettingsWebviewHtml(webview, settings, meta) {
     function bindDirtyInputs() {
       [
         "title",
+        "subtitle",
         "status",
         "targetChars",
         "deadline",
         "penName",
         "summary",
         "memo",
+        "includeSubtitle",
         "includeFolderName",
         "includeGenre",
         "includeTargetChars",
@@ -1314,6 +1403,10 @@ function getSettingsWebviewHtml(webview, settings, meta) {
           "--mojigoto-content-font-scale",
           String(scale),
         );
+        const autoSaveBadge = document.getElementById("settingsAutoSaveBadge");
+        if (autoSaveBadge) {
+          autoSaveBadge.hidden = !Boolean(currentUiSettings.autoSaveEnabled);
+        }
         return;
       }
 
@@ -1352,7 +1445,12 @@ function getSettingsWebviewHtml(webview, settings, meta) {
 }
 
 async function openSettingsWebview(context, treeProvider, item) {
+  return withRestoredWebviews(vscode, "mojigoto.settingsEditor", () => openSettingsWebviewReady(context, treeProvider, item));
+}
+
+async function openSettingsWebviewReady(context, treeProvider, item, restoredPanel = null, savedPath = "") {
   const target = await resolveSettingsTarget(item);
+  if (savedPath && webviewFileKey(savedPath) !== webviewFileKey(target.path)) { restoredPanel.dispose(); return; }
   const panelKey = getSettingsPanelKey(target, item);
   const currentWork = target.mode === "multi"
     ? {
@@ -1364,29 +1462,14 @@ async function openSettingsWebview(context, treeProvider, item) {
 
   const existing = settingsPanels.get(panelKey);
   if (existing) {
-    let latest = await readSettingsFile(target.readPath || target.path, item);
-    existing.title = latest.title ? `作品設定: ${latest.title}` : "作品設定";
-    const genreOptions = await collectGenreOptions(
-      latest.genres || latest.genre,
-      context,
-    );
-    const relatedWorkOptions = target.mode === "multi"
-      ? await getRelatedWorkOptions(currentWork)
-      : [];
-
-    existing.webview.html = getSettingsWebviewHtml(existing.webview, latest, {
-      ...target,
-      genreOptions,
-      penNameOptions: getPenNameOptions(context, latest.penName),
-      relatedWorkOptions,
-    });
+    if (restoredPanel && existing !== restoredPanel) { restoredPanel.dispose(); return; }
     existing.reveal(vscode.ViewColumn.One);
     return;
   }
 
   let initial = await readSettingsFile(target.readPath || target.path, item);
 
-  const panel = vscode.window.createWebviewPanel(
+  const panel = restoredPanel || vscode.window.createWebviewPanel(
     "mojigoto.settingsEditor",
     initial.title ? `作品設定: ${initial.title}` : "作品設定",
     vscode.ViewColumn.One,
@@ -1395,7 +1478,8 @@ async function openSettingsWebview(context, treeProvider, item) {
       retainContextWhenHidden: true,
     },
   );
-  setWebviewPanelThemeIcon(panel, "settings-gear");
+  panel.webview.options = { enableScripts: true };
+  setWebviewPanelThemeIcon(panel, MOJIGOTO_ICONS.settings);
 
   settingsPanels.set(panelKey, panel);
   panel.__mojigotoSettingsWorkDir = String(currentWork?.fsPath || "").trim();
@@ -1447,6 +1531,7 @@ async function openSettingsWebview(context, treeProvider, item) {
 
   panel.webview.html = getSettingsWebviewHtml(panel.webview, initial, {
     ...target,
+    restoreItem: item ? {fsPath:item.fsPath, workName:item.workName, label:item.label} : null,
     genreOptions,
     penNameOptions: getPenNameOptions(context, initial.penName),
     relatedWorkOptions,
@@ -1621,6 +1706,15 @@ async function openSettingsWebview(context, treeProvider, item) {
   );
 }
 
+function createSettingsSerializer(context, treeProvider) {
+  return registerRestorableWebview(vscode, "mojigoto.settingsEditor", {
+    async deserializeWebviewPanel(panel, saved) {
+      if (!saved?.path || !path.isAbsolute(saved.path)) { panel.dispose(); return; }
+      await openSettingsWebviewReady(context, treeProvider, saved.item, panel, saved.path);
+    },
+  });
+}
+
 async function closeSettingsWebviewsUnderFolder(folderPath) {
   if (!folderPath) return 0;
   const root = path.resolve(folderPath);
@@ -1638,6 +1732,7 @@ async function closeSettingsWebviewsUnderFolder(folderPath) {
 
 module.exports = {
   openSettingsWebview,
+  createSettingsSerializer,
   getSettingsWebviewHtml,
   closeSettingsWebviewsUnderFolder,
 };

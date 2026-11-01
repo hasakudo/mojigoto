@@ -1,5 +1,34 @@
 function getUtilsScript() {
   return `
+    function renderNoteSearchMatches(record, group = false) {
+      if (!searchQuery) return "";
+      const fields = group ? [["大分類", record?.title]] : record?.kind === "divider"
+        ? [["区分", record.label], ["補足", record.value]]
+        : [["項目名", record?.heading], ["ふりがな", record?.headingRuby], ["詳細", record?.body],
+          ["項目メモ", record?.memo?.body], ["タグ", (record?.memo?.tags || []).join(" / ")]];
+      const matches = [];
+      const query = normalizeSearchText(searchQuery);
+      for (const [label, value] of fields) {
+        String(value || "").split(/\\r?\\n/).forEach((line, index) => {
+          const position = normalizeSearchText(line).indexOf(query);
+          if (position < 0) return;
+          const start = Math.max(0, position - 35);
+          const end = Math.min(line.length, Math.max(position + searchQuery.length + 35, start + 90));
+          const excerpt = (start ? "…" : "") + line.slice(start, end) + (end < line.length ? "…" : "");
+          matches.push('<div><span class="noteSearchLocation">' + esc(label) + '・' + (index + 1) + '行目</span> ' + noteDisplayRenderer.text(excerpt, searchQuery) + '</div>');
+        });
+      }
+      return matches.slice(0, 5).join("") + (matches.length > 5 ? '<div class="muted">ほか ' + (matches.length - 5) + ' 行に一致</div>' : "");
+    }
+
+    function refreshNoteSearchMatches() {
+      groupsRoot.querySelectorAll("[data-search-group]").forEach(root => {
+        const group = state.groups.find(group => group.id === root.dataset.searchGroup);
+        const record = root.dataset.searchItem ? group?.items?.find(item => item.id === root.dataset.searchItem) : group;
+        root.innerHTML = renderNoteSearchMatches(record, !root.dataset.searchItem);
+      });
+    }
+
     function getVisibleGroupsForSearch() {
       return state.groups.filter((group) =>
         groupMatchesQuery(group, searchQuery),
@@ -27,7 +56,9 @@ function getUtilsScript() {
       return (
         normalizeSearchText(item?.heading).includes(q) ||
         normalizeSearchText(item?.headingRuby).includes(q) ||
-        normalizeSearchText(item?.body).includes(q)
+        normalizeSearchText(item?.body).includes(q) ||
+        normalizeSearchText(item?.memo?.body).includes(q) ||
+        (Array.isArray(item?.memo?.tags) && item.memo.tags.some(tag => normalizeSearchText(tag).includes(q)))
       );
     }
 
@@ -290,7 +321,12 @@ function getUtilsScript() {
               .filter(Boolean)
           : [],
         autoSyncToConceptMemo: Boolean(memo?.autoSyncToConceptMemo),
+        autoSyncToConceptMemoOverride:
+          typeof memo?.autoSyncToConceptMemoOverride === "boolean"
+            ? memo.autoSyncToConceptMemoOverride
+            : null,
         conceptMemoSyncedAt: String(memo?.conceptMemoSyncedAt || ""),
+        conceptMemoSyncFingerprint: String(memo?.conceptMemoSyncFingerprint || ""),
       };
     }
 
@@ -333,8 +369,9 @@ function getUtilsScript() {
           itemId: String(link?.itemId || ""),
           itemKind: link?.itemKind === "divider" ? "divider" : "entry",
           itemLabel: String(link?.itemLabel || ""),
+          ...(link?.importTarget ? { importTarget: structuredClone(link.importTarget) } : {}),
         }))
-        .filter((link) => link.noteId && link.itemId);
+        .filter((link) => (link.noteId || link.importTarget) && link.itemId);
     }
 
     function normalizeGroup(group) {

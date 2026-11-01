@@ -1,5 +1,15 @@
 function getConceptMemoUtilsScript() {
   return `
+    function setConceptActionState(button, label, active) {
+      if (!button) return;
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      if (typeof active === "boolean") {
+        button.setAttribute("aria-pressed", String(active));
+        button.classList.toggle("isActive", active);
+      }
+    }
+
     function formatJstDateTime(value) {
       if (!value) return "";
 
@@ -66,6 +76,14 @@ function getConceptMemoUtilsScript() {
       };
 
       return map[value] || value;
+    }
+
+    function isConceptMemoAutoSyncEnabled(source) {
+      if (typeof source?.autoSyncToNoteItemOverride === "boolean") {
+        return source.autoSyncToNoteItemOverride;
+      }
+      if (source?.autoSyncToNoteItem === true) return true;
+      return Boolean(bootState?.uiSettings?.conceptMemoAutoSyncDefault);
     }
 
     function getSourceSummaryShort(memo) {
@@ -273,20 +291,35 @@ function getConceptMemoUtilsScript() {
       };
     }
 
+    function normalizeMemoFolderIds(memo) {
+      const values = Array.isArray(memo?.folderIds)
+        ? memo.folderIds
+        : [memo?.folderId];
+      return values
+        .map((folderId) => String(folderId || "").trim())
+        .filter(Boolean)
+        .filter((folderId, index, items) => items.indexOf(folderId) === index);
+    }
+
     function normalizeState(state) {
       return {
         filePath: state?.filePath || "",
         workDir: state?.workDir || "",
         workTitle: state?.workTitle || "",
         data: {
+          storageRevision: state?.data?.storageRevision,
           version: Number(state?.data?.version || 1),
           updatedAt: state?.data?.updatedAt || "",
           memos: Array.isArray(state?.data?.memos)
-            ? state.data.memos.map((memo) => ({
-                ...memo,
-                showInDashboard: Boolean(memo?.showInDashboard),
-                folderId: String(memo?.folderId || "").trim(),
-              }))
+            ? state.data.memos.map((memo) => {
+                const folderIds = normalizeMemoFolderIds(memo);
+                return {
+                  ...memo,
+                  showInDashboard: Boolean(memo?.showInDashboard),
+                  folderIds,
+                  folderId: folderIds[0] || "",
+                };
+              })
             : [],
           folders: Array.isArray(state?.data?.folders)
             ? state.data.folders

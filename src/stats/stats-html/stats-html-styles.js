@@ -133,8 +133,7 @@ function makeStatsStyles() {
       cursor: pointer;
     }
     .tab-btn.is-active {
-      background: var(--mg-active-bg);
-      color: var(--mg-active-fg);
+      color: var(--mg-muted);
       border-color: var(--mg-focus);
     }
     .tab-panel { display:none; }
@@ -154,6 +153,26 @@ function makeStatsStyles() {
       border-left: 3px solid var(--mg-focus);
     }
     .highlight-group-row.is-selected td { font-weight:600; }
+    .highlight-heading-row td:last-child {
+      font-weight: 600;
+    }
+    .highlight-heading-row.is-level-2 td:last-child {
+      padding-left: 30px;
+    }
+    .highlight-heading-row.is-level-3 td:last-child {
+      padding-left: 52px;
+    }
+    .highlightHeadingLevel {
+      display: inline-block;
+      min-width: 22px;
+      margin-right: 7px;
+      color: var(--mg-muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .highlightHeadingText {
+      overflow-wrap: anywhere;
+    }
     .headingBatchToolbar {
       display: flex;
       align-items: center;
@@ -326,6 +345,11 @@ function makeStatsStyles() {
     .dashboardSummaryCard td {
       word-break: normal;
       overflow-wrap: anywhere;
+    }
+    .dashboardShareAction {
+      display: flex;
+      justify-content: flex-start;
+      margin-top: 12px;
     }
     .dashboardProgressHead {
       display: flex;
@@ -682,6 +706,305 @@ function makeStatsStyles() {
       background: var(--mg-bg);
     }
 
+    .progressShareModal {
+      width: min(980px, 100%);
+      max-height: min(90vh, 960px);
+    }
+    .progressShareEyebrow {
+      margin-bottom: 3px;
+      color: var(--mg-muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+    }
+    .progressShareLayout {
+      display: grid;
+      grid-template-columns: minmax(160px, 190px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .progressShareOptions {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--mg-border);
+      border-radius: 10px;
+      background: var(--mg-soft-bg);
+    }
+    .progressShareOptionsTitle {
+      margin-bottom: 2px;
+      color: var(--mg-muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .progressShareDateField {
+      display: grid !important;
+      gap: 5px !important;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--mg-border);
+      font-weight: 700;
+    }
+    .progressShareDateField input { width: 100%; }
+    .progressShareDateField select { width: 100%; }
+    .progressShareOptions label[hidden] { display: none !important; }
+    .progressShareRetentionHelp { position: relative; justify-self: end; }
+    .progressShareRetentionHelp > summary { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid var(--mg-border); border-radius: 50%; color: var(--mg-button-bg); background: var(--mg-widget-bg); font-weight: 800; cursor: pointer; list-style: none; }
+    .progressShareRetentionHelp > summary::-webkit-details-marker { display: none; }
+    .progressShareRetentionHelp > div { position: absolute; top: 31px; right: 0; z-index: 5; width: min(310px, 70vw); padding: 10px 12px; border: 1px solid var(--mg-border); border-radius: 9px; color: var(--mg-widget-fg); background: var(--mg-widget-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); font-size: 11px; line-height: 1.6; }
+    .progressShareOptions label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .progressShareWorkBreakdown {
+      display: grid;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border: 1px solid #c9dce3;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .progressShareWorkBreakdownTitle { color: #456d7b; font-size: 12px; font-weight: 700; }
+    .progressShareWorkBreakdownRow { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; }
+    .progressShareWorkBreakdownRow strong { color: #005990; white-space: nowrap; }
+    .progressSharePreviewStage {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-width: 0;
+      max-height: min(60vh, 640px);
+      box-sizing: border-box;
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--mg-border);
+      border-radius: 12px;
+      background: var(--mg-soft-bg);
+    }
+    .progressSharePreviewScaler {
+      position: relative;
+      flex: 0 0 auto;
+      width: 480px;
+      height: 640px;
+    }
+    .progressShareCard {
+      position: absolute;
+      inset: 0 auto auto 0;
+      box-sizing: border-box;
+      width: 480px;
+      height: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 22px;
+      overflow: hidden;
+      border: 1px solid #c9dce3;
+      border-radius: 14px;
+      color: #123f52;
+      background: #f7fafb;
+    }
+    .progressShareCardTop {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .progressShareCardBrand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #1a5d78;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    .progressShareCardLogo {
+      width: 40px;
+      height: 40px;
+      display: block;
+      border-radius: 8px;
+    }
+    .progressShareCardDate {
+      color: #456d7b;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .progressShareCardContent {
+      width: 100%;
+      margin: 18px 0 0;
+    }
+    .progressShareCardTitle {
+      margin: 14px 0 2px;
+      font-size: 22px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .progressShareGraph {
+      margin-top: 14px;
+    }
+    .progressShareGraphLabel {
+      margin-bottom: 6px;
+      color: #456d7b;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .progressShareBars {
+      height: 125px;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      align-items: end;
+      padding: 12px 10px 8px;
+      border-radius: 14px;
+      background: #eef5f7;
+    }
+    .progressShareBars.is-monthly {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .progressShareBars.is-annual {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 3px;
+      padding-right: 6px;
+      padding-left: 6px;
+    }
+    .progressShareBarItem {
+      min-width: 0;
+      height: 100%;
+      display: grid;
+      grid-template-rows: 20px minmax(0, 1fr) 18px;
+      row-gap: 5px;
+      align-items: end;
+      text-align: center;
+    }
+    .progressShareBarValue,
+    .progressShareBarDate {
+      overflow: hidden;
+      color: #456d7b;
+      font-size: 9px;
+      font-variant-numeric: tabular-nums;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .progressShareBarTrack {
+      width: min(60%, 34px);
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-self: center;
+      border-radius: 1px;
+      background: transparent;
+    }
+    .progressShareBar {
+      width: 100%;
+      min-height: 2px;
+      border-radius: 1px;
+      background: #005990;
+    }
+    .progressShareBar.is-negative {
+      background: linear-gradient(180deg, #bd8790, #8b4c58);
+    }
+    .progressShareMetrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 9px;
+      margin-top: 12px;
+    }
+    .progressShareMetrics.is-count-1 {
+      grid-template-columns: 1fr;
+    }
+    .progressShareMetrics.is-count-2,
+    .progressShareMetrics.is-count-3,
+    .progressShareMetrics.is-count-4,
+    .progressShareMetrics.is-count-5 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .progressShareMetric {
+      min-width: 0;
+      padding: 9px 11px;
+      border: 1px solid #c9dce3;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .progressShareMetric span {
+      display: block;
+      margin-bottom: 4px;
+      color: #456d7b;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .progressShareMetric strong {
+      display: block;
+      color: #005990;
+      font-size: 22px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.25;
+    }
+    .progressShareMetric small {
+      display: block;
+      margin-top: 2px;
+      color: #456d7b;
+      font-size: 9px;
+    }
+    .progressShareCardFoot {
+      margin-top: 18px;
+      padding-top: 10px;
+      color: #1a5d78;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: right;
+    }
+    .progressShareFooter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: var(--mg-muted);
+      font-size: 11px;
+    }
+    .progressShareOutputActions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .progressShareLogoSource {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    @media (max-width: 720px) {
+      .progressShareModalOverlay {
+        padding: 8px;
+      }
+      .progressShareModal {
+        max-height: 94vh;
+        padding: 12px;
+      }
+      .progressShareModalHeader {
+        margin-bottom: 8px;
+      }
+      .progressShareLayout {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .progressShareOptions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 10px;
+      }
+      .progressShareOptionsTitle {
+        grid-column: 1 / -1;
+      }
+      .progressSharePreviewStage {
+        padding: 8px;
+      }
+    }
+
     .statsControlsBar {
       padding: 12px 14px;
     }
@@ -926,6 +1249,12 @@ function makeStatsStyles() {
       border-color: var(--mg-focus);
     }
 
+    .writingMemoListActions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
+    }
+
     .writingMemoEditBox {
       margin-top: 8px;
       display: grid;
@@ -1122,6 +1451,15 @@ function makeStatsStyles() {
       transition: opacity 0.18s ease, transform 0.18s ease;
     }
 
+    .webviewActionIcon { width: 17px; height: 17px; flex: 0 0 auto; pointer-events: none; }
+    .statsHeaderActions .statsIconButton { display: inline-flex; align-items: center; justify-content: center; width: 34px; min-width: 34px; min-height: 32px; padding: 6px; }
+    .dashboardBackupSettings { table-layout: fixed; width: 100%; }
+    .dashboardBackupSettings th, .dashboardBackupSettings td { overflow-wrap: anywhere; white-space: normal; }
+    #saveSettingsNotice, #webMarkdownNotice { margin: 12px 0; padding: 10px 12px; border-left: 3px solid var(--vscode-focusBorder); background: var(--vscode-textBlockQuote-background); overflow-wrap: anywhere; white-space: pre-line; }
+    .dashboardMarkdownDetails { margin-top: 16px; }
+    #webMarkdownRegenerate[hidden] { display: none !important; }
+    .dashboardMarkdownDetails > summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
+    #saveSettingsNotice[data-kind="error"], #webMarkdownNotice[role="alert"] { border-left-color: var(--vscode-errorForeground); }
     .statsToast.is-visible {
       opacity: 1;
       transform: translateY(0);

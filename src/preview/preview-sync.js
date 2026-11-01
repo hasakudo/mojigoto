@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { safeFontFamily } = require("./font-defaults");
 const { post } = require("./server-service");
 
 function isTextLikePath(filePath) {
@@ -79,6 +80,7 @@ async function sendPreviewSettings(options = {}) {
       : false;
 
   return post(state, "/api/settings", {
+    defaultFontFamily: safeFontFamily(cfg.get("defaultManuscriptFontFamily")),
     verticalPunctuationLayout:
       verticalPunctuationLayout === "pushout" ? "pushout" : "hanging",
     useTypographyAdjustments,

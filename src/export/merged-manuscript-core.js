@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { resolveManuscriptFont } = require("../preview/font-defaults");
 const path = require("path");
 const fs = require("fs");
 const { getWorkNameForStats } = require("./manuscript-export");
@@ -124,8 +125,8 @@ function toMergedRelativePath(rootDir, filePath) {
   return path.relative(rootDir, filePath).replace(/\\/g, "/");
 }
 
-function buildMergedManuscriptEntry(rootDir, filePath) {
-  const content = String(safeRead(filePath) || "")
+function buildMergedManuscriptEntry(rootDir, filePath, options = {}) {
+  const content = String((options.strictRead ? fs.readFileSync(filePath, "utf8") : safeRead(filePath)) || "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 
@@ -139,12 +140,12 @@ function buildMergedManuscriptEntry(rootDir, filePath) {
   };
 }
 
-function buildMergedManuscriptData(context, manuscriptRoot, files) {
+function buildMergedManuscriptData(context, manuscriptRoot, files, options = {}) {
   return {
     manuscriptRoot,
-    workName: getWorkNameForStats(context),
+    workName: options.workName ?? getWorkNameForStats(context),
     entries: files.map((filePath) =>
-      buildMergedManuscriptEntry(manuscriptRoot, filePath),
+      buildMergedManuscriptEntry(manuscriptRoot, filePath, options),
     ),
   };
 }
@@ -915,7 +916,7 @@ function readMergedManuscriptHtmlConfig(manuscriptRoot) {
     json?.spacing?.lineAdvanceEm ?? json?.font?.lineHeight,
   );
 
-  const fontFamily = String(json?.font?.family || "").trim();
+  const fontFamily = resolveManuscriptFont(json?.font, vscode.workspace.getConfiguration("mojigoto").get("defaultManuscriptFontFamily"));
 
   return {
     filePath,

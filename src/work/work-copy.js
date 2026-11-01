@@ -16,6 +16,7 @@ const { linkWorksBidirectionally } = require("./related-works");
 
 const SETTINGS_FIELDS = [
   { key: "title", label: "作品タイトル", description: "新しい作品名もコピーします", picked: false },
+  { key: "subtitle", label: "補助タイトル", description: "サブタイトルやシリーズ共通タイトルをコピーします", picked: false },
   { key: "penName", label: "ペンネーム", description: "作者名をコピーします", picked: true },
   { key: "genres", label: "ジャンル", description: "ジャンル設定をコピーします", picked: true },
   { key: "status", label: "作品の状態", description: "構想中・執筆中などをコピーします", picked: false },
@@ -301,7 +302,9 @@ async function copyWorkData({ sourceWork, destinationWork, settingFields = [], n
               ...(cloned.memo || {}),
               linkedConceptMemoIds: [],
               autoSyncToConceptMemo: false,
+              autoSyncToConceptMemoOverride: false,
               conceptMemoSyncedAt: "",
+              conceptMemoSyncFingerprint: "",
             };
           }
           return cloned;
@@ -348,6 +351,7 @@ async function copyWorkData({ sourceWork, destinationWork, settingFields = [], n
     throw error;
   }
 
+  for (const file of createdNotePaths) void require("../export/web-note-markdown").afterNoteSaved(file);
   return {
     copiedSettings,
     copiedPlots: selectedNotes.filter((entry) => entry.type === "plot").length,

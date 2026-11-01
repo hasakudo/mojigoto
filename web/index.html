@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#123f52">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="もじごと Web">
+    <meta name="description" content="スマホから原稿と作品資料を確認・編集する、もじごとのWebアプリ">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https:; style-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com; frame-src https://accounts.google.com https://docs.google.com; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>もじごと Web</title>
+    <link rel="icon" href="./favicon.ico" sizes="any">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <script src="./boot.js?v=1.0.282" data-build="1.0.282"></script>
+    <script src="./theme-init.js?v=1.0.65"></script>
+    <link rel="stylesheet" href="./styles.css?v=1.0.211">
+    <link rel="stylesheet" href="./theme-palettes.css?v=1.0.0">
+  </head>
+  <body class="auth-pending">
+    <section id="authBoot" class="auth-boot" aria-live="polite">
+      <div class="auth-boot-content">
+        <span class="spinner auth-spinner" aria-hidden="true"></span>
+        <span id="authBootMessage">読み込み中…</span>
+      </div>
+    </section>
+    <section id="loginGate" class="login-gate" aria-labelledby="loginTitle" hidden>
+      <div class="login-card">
+        <div class="login-brand" aria-label="もじごと Web"><span class="brand-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" clip-rule="evenodd" viewBox="0 0 32 32" ><path d="M2.979 0H29.02A2.979 2.993 0 0 1 32 2.993v26.014A2.979 2.993 0 0 1 29.02 32H2.98A2.979 2.993 0 0 1 0 29.007V2.993A2.979 2.993 0 0 1 2.979 0"/><path fill="#fff" d="M25.187 1.694a6.7 6.7 0 0 0-2.479.419c-3.637 1.4-5.229 5.823-7.303 9.131l4.973 4.965c3.655-2.484 7.785-3.003 9.36-6.45.925-2.02.8-5.014-.73-6.625-.917-.964-2.373-1.42-3.82-1.44zM14.383 12.46c-.189.01-.313.278-.49.744-2.245 1.624-5.046.882-7.473.901-.772.006-1.41 1.604-1.391 2.386-.303 6.33-3.35 11.035-3.35 11.035l.692.893s2.85-3.039 5.809-5.984c-.273-.46-.19-1.91.473-2.428.81-.631 2.333-.577 3.125.078.81.67 1.111 2.153.572 3.041-.452.746-2.54.844-2.54.844l-6.279 5.66.831.677s6.282-3.901 11.806-3.925c.772-.003 1.631-.866 1.643-1.65.038-2.436-.79-4.534.868-6.792.127-.172.876-.27.492-.725-1.076-1.09-3.486-3.497-4.251-4.367-.218-.247-.374-.37-.5-.386z"/></svg></span><span>もじごと Web</span></div>
+        <p class="section-label">DEVELOPMENT</p>
+        <h1 id="loginTitle">もじごと Webへログイン</h1>
+        <p id="loginMessage" class="login-message">ログイン状態を確認しています…</p>
+        <div id="loginProviderActions" class="login-provider-actions" hidden>
+          <a id="microsoftLoginLink" class="login-provider microsoft" href="#">Microsoftでログイン</a>
+          <a id="googleLoginLink" class="login-provider google" href="#">Googleでログイン</a>
+          <a id="emailLoginLink" class="login-provider" href="#" hidden>メールアドレス・パスワードでログイン</a>
+        </div>
+        <p class="login-note">招待されたメールアドレスのアカウントを使用してください。</p>
+        <p class="login-legal-note"><a href="./about/">もじごと Webについて</a>をご覧いただけます。</p>
+        <p class="login-legal-note">ログイン前に<a href="./terms/">利用規約</a>と<a href="./privacy/">プライバシーポリシー</a>をご確認ください。<br>未登録の方は<a href="./apply/">利用申込</a>をご利用ください。</p>
+        <p class="login-legal-note">ご不明な点は<a href="./contact/">お問い合わせ</a>からご連絡ください。</p>
+        <button id="loginGuideButton" class="text-button" type="button">もじごとガイドを見る</button>
+      </div>
+    </section>
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="もじごと Web ホーム">
+        <span class="brand-mark" aria-hidden="true"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" xml:space="preserve" fill-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2" clip-rule="evenodd" viewBox="0 0 32 32" ><path d="M2.979 0H29.02A2.979 2.993 0 0 1 32 2.993v26.014A2.979 2.993 0 0 1 29.02 32H2.98A2.979 2.993 0 0 1 0 29.007V2.993A2.979 2.993 0 0 1 2.979 0"/><path fill="#fff" d="M25.187 1.694a6.7 6.7 0 0 0-2.479.419c-3.637 1.4-5.229 5.823-7.303 9.131l4.973 4.965c3.655-2.484 7.785-3.003 9.36-6.45.925-2.02.8-5.014-.73-6.625-.917-.964-2.373-1.42-3.82-1.44zM14.383 12.46c-.189.01-.313.278-.49.744-2.245 1.624-5.046.882-7.473.901-.772.006-1.41 1.604-1.391 2.386-.303 6.33-3.35 11.035-3.35 11.035l.692.893s2.85-3.039 5.809-5.984c-.273-.46-.19-1.91.473-2.428.81-.631 2.333-.577 3.125.078.81.67 1.111 2.153.572 3.041-.452.746-2.54.844-2.54.844l-6.279 5.66.831.677s6.282-3.901 11.806-3.925c.772-.003 1.631-.866 1.643-1.65.038-2.436-.79-4.534.868-6.792.127-.172.876-.27.492-.725-1.076-1.09-3.486-3.497-4.251-4.367-.218-.247-.374-.37-.5-.386z"/></svg></span>
+        <span>もじごと Web</span>
+      </a>
+      <div class="topbar-actions">
+        <span id="userIdentityBadge" class="user-identity-badge" hidden></span>
+        <button id="headerMenuButton" class="header-menu-button" type="button" aria-expanded="false" aria-controls="headerMenu">メニュー<span id="headerAnnouncementBadge" class="announcement-badge" aria-hidden="true" hidden></span></button>
+        <div id="headerMenu" class="header-menu">
+          <span id="connectionBadge" class="connection-badge" hidden><span class="connection-dot" aria-hidden="true"></span><span id="connectionBadgeLabel" class="connection-label">OneDrive 接続済み</span></span>
+          <button id="announcementButton" class="icon-button announcement-button" type="button" aria-label="お知らせを開く"><span class="ui-icon icon-bullhorn" aria-hidden="true"></span><span>お知らせ</span><span id="announcementBadge" class="announcement-badge" aria-label="未読のお知らせ" hidden></span></button>
+          <button id="guideButton" class="icon-button guide-button" type="button" aria-label="もじごとガイドを開く"><span class="guide-label">ガイド</span><span class="guide-mark" aria-hidden="true">？</span></button>
+          <button id="settingsButton" class="icon-button" type="button" aria-label="接続設定">接続設定</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">MOBILE MOJIGOTO WRITING</p>
+        <p>もじごとをスマホやタブレットで編集保存できます。</p>
+      </section>
+
+      <aside id="googleDriveReconnectNotice" class="google-drive-reconnect-notice" role="status" hidden>
+        <strong>Google Driveへの再接続</strong>
+        <p id="googleDriveReconnectMessage"></p>
+        <button id="reconnectGoogleDriveButton" class="secondary-button google-drive-button" type="button">Google Driveに再接続</button>
+      </aside>
+      <section id="connectionPanel" class="panel connection-panel" aria-labelledby="connectionTitle">
+        <div>
+          <p class="section-label">CLOUD DRIVE</p>
+          <h2 id="connectionTitle">クラウドへ接続</h2>
+          <p id="connectionDescription" class="muted">原稿はアプリのサーバーに保存されません。</p>
+          <label class="auto-connect-option"><input id="autoConnectCheckbox" type="checkbox">次回から前回と同じクラウドへ自動接続する</label>
+          <p id="autoConnectHelp" class="auto-connect-help muted">このブラウザに保存します。<br>認証の確認や接続ボタンの操作が必要になる場合があります。</p>
+        </div>
+        <div class="cloud-connect-actions">
+          <button id="connectButton" class="primary-button" type="button">OneDriveに接続</button>
+          <button id="connectGoogleDriveButton" class="secondary-button google-drive-button" type="button" hidden>Google Driveに接続</button>
+          <button id="connectDropboxButton" class="secondary-button" type="button" hidden>Dropboxに接続</button>
+          <button id="selectGoogleDriveFolderButton" class="primary-button" type="button" hidden>作品フォルダを選ぶ</button>
+        </div>
+        <div id="googleDriveAdditionalActions" class="google-drive-additional-actions" hidden>
+        <button id="googleDriveAdditionalButton" class="secondary-button" type="button" aria-describedby="googleDriveAdditionalHelp" hidden>登録済み作品の追加ファイルを許可</button>
+        <p id="googleDriveAdditionalHelp" class="field-help" hidden>VS Codeで新規作成したファイル（原稿やノートなど）・フォルダがある場合に、追加許可が必要です。<br>許可済みファイルの編集だけなら不要です。<br>削除して作り直した項目は追加許可の対象です。</p>
+        </div>
+      </section>
+
+      <details id="recentViewsPanel" class="panel recent-views-panel">
+        <summary>最近開いた画面 <span id="recentViewsCount" class="muted">0件</span></summary>
+        <p class="muted">作品内のピン留めと最近開いた画面5件。作品名を押すと履歴を開閉できます。</p>
+        <div id="recentViewsList" class="recent-views-list" tabindex="0" aria-label="作品ごとの最近開いた画面"></div>
+      </details>
+
+      <section id="browserSection" class="section" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">FOLDER</p>
+            <h2>作品フォルダを選ぶ</h2>
+          </div>
+          <button id="selectFolderButton" class="text-button" type="button">ここを選択</button>
+        </div>
+        <nav id="breadcrumbs" class="breadcrumbs" aria-label="現在のフォルダ"></nav>
+        <div id="folderList" class="folder-list" aria-live="polite"></div>
+      </section>
+
+      <section id="worksSection" class="section" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">WORKS</p>
+            <h2>作品</h2>
+          </div>
+          <button id="changeFolderButton" class="text-button" type="button">フォルダ変更</button>
+        </div>
+        <p id="workRootLabel" class="muted"></p>
+        <div class="works-controls" aria-label="作品一覧の絞り込みと並び替え">
+          <details id="workStatusFilter" class="multi-filter">
+            <summary><span>状態</span><strong id="workStatusFilterLabel">すべて</strong></summary>
+            <div class="multi-filter-options" aria-label="作品状態で絞り込み">
+              <button class="multi-filter-clear" type="button" data-clear-multi="work">チェックをすべて解除</button>
+              <label><input type="checkbox" value="preparing">準備中</label>
+              <label><input type="checkbox" value="planning">構想中</label>
+              <label><input type="checkbox" value="draft">執筆中</label>
+              <label><input type="checkbox" value="revision">改稿中</label>
+              <label><input type="checkbox" value="hold">保留</label>
+              <label><input type="checkbox" value="complete">完結</label>
+              <label><input type="checkbox" value="unset">未設定</label>
+            </div>
+          </details>
+          <label><span>並び順</span><select id="workSortField">
+            <option value="updatedAt">最終更新</option><option value="title">タイトル</option><option value="totalChars">総文字数</option><option value="noteCount">ノート数</option>
+          </select></label>
+          <button id="workSortDirection" class="text-button filter-direction" type="button" data-direction="desc">降順 ↓</button>
+          <label class="metrics-toggle"><input id="workMetricsToggle" type="checkbox"><span>文字数・ノート数を集計</span></label>
+        </div>
+        <p id="worksCount" class="list-count" aria-live="polite"></p>
+        <p id="worksLoadingStatus" class="loading-status" role="status" hidden><span class="spinner" aria-hidden="true"></span><span>作品を探しています…</span></p>
+        <div id="worksList" class="works-grid" aria-live="polite"></div>
+      </section>
+
+      <nav id="globalWorkNav" class="global-work-nav" aria-label="作品内メニュー" hidden>
+        <button type="button" data-work-destination="works"><span class="ui-icon icon-house" aria-hidden="true"></span><span>作品</span></button>
+        <button type="button" data-work-destination="manuscript"><span class="ui-icon icon-pen" aria-hidden="true"></span><span>原稿</span></button>
+        <button type="button" data-work-destination="plot"><span class="ui-icon icon-plot" aria-hidden="true"></span><span>プロット</span></button>
+        <button type="button" data-work-destination="reference"><span class="ui-icon icon-reference" aria-hidden="true"></span><span>資料</span></button>
+        <button type="button" data-work-destination="concept"><span class="ui-icon icon-concept" aria-hidden="true"></span><span>構想</span></button>
+        <button type="button" data-work-destination="settings"><span class="ui-icon icon-gear" aria-hidden="true"></span><span class="nav-label-wide">作品設定</span><span class="nav-label-compact">設定</span></button>
+      </nav>
+
+      <section id="filesSection" class="section" hidden>
+        <button id="backToWorksButton" class="back-button" type="button">← 作品一覧</button>
+        <nav class="work-nav" aria-label="作品内メニュー">
+          <button class="active" type="button" aria-current="page">原稿</button>
+          <button id="openPlotsButton" type="button">プロット</button>
+          <button id="openReferencesButton" type="button">資料</button>
+          <button id="openConceptMemosButton" type="button">構想メモ</button>
+          <button id="openWorkSettingsButton" type="button">作品設定</button>
+        </nav>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">MANUSCRIPT</p>
+            <h2 id="selectedWorkTitle">原稿</h2>
+          </div>
+          <div class="manuscript-list-actions">
+            <button id="newFolderButton" class="text-button" type="button">＋ 新規フォルダ</button>
+            <button id="newFileButton" class="secondary-button" type="button">＋ 新規原稿</button>
+            <div class="editor-options manuscript-list-menu">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-controls="manuscriptListMenuPanel" aria-label="原稿一覧のメニュー" title="原稿一覧のメニュー"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div id="manuscriptListMenuPanel" class="editor-options-panel">
+            <button id="openWholeManuscriptButton" class="assist-toggle" data-close-editor-menu type="button" aria-haspopup="dialog" aria-controls="wholeManuscriptDialog">全体プレビュー</button>
+            <button id="openProgressShareButton" class="assist-toggle" data-close-editor-menu type="button">進捗画像</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <nav id="manuscriptBreadcrumbs" class="manuscript-breadcrumbs" aria-label="原稿フォルダ階層"></nav>
+        <details id="recentManuscriptsPanel" class="recent-manuscripts-panel" hidden>
+          <summary>最近編集した原稿 <span id="recentManuscriptsCount"></span></summary>
+          <p class="muted">このブラウザからWebで保存した原稿を最大5件表示します。</p>
+          <p id="recentManuscriptsNotice" class="recent-manuscripts-notice" role="status" hidden></p>
+          <div id="recentManuscriptsList" class="recent-manuscripts-list"></div>
+        </details>
+        <p id="filesCount" class="list-count" aria-live="polite"></p>
+        <div id="filesList" class="file-list" aria-live="polite"></div>
+      </section>
+
+      <section id="readerSection" class="reader-section" hidden>
+        <div class="reader-toolbar">
+          <button id="backToFilesButton" class="back-button" type="button" aria-label="原稿一覧へ戻る" title="原稿一覧へ戻る"><span class="back-label-full">← 原稿一覧</span><span class="back-label-short" aria-hidden="true">← 一覧</span></button>
+          <div class="editor-actions">
+            <button id="readerListButton" class="assist-toggle editor-list-button" type="button">一覧</button>
+            <div class="editor-options">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-label="原稿の編集オプションを開く" title="編集オプション"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div class="editor-options-panel">
+                <div class="editor-icon-row" role="group" aria-label="よく使う操作"><button class="assist-toggle editor-menu-icon" type="button" data-editor-settings aria-haspopup="dialog" aria-controls="settingsDialog" aria-label="接続設定" title="接続設定"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18H6a4 4 0 0 1-.4-8A6.5 6.5 0 0 1 18 8.5a4.8 4.8 0 0 1 0 9.5h-1"/><path d="M9 15h6m-6 4h6m-3-6v8"/></svg><span class="visually-hidden">接続設定</span></button>
+<button id="openManuscriptSearchButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="manuscriptSearchDialog" aria-label="原稿内を検索・置換" title="原稿内を検索・置換"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span class="visually-hidden">原稿内を検索・置換</span></button>
+<button id="inputAssistToggle" class="assist-toggle editor-menu-icon" type="button" aria-expanded="false" aria-controls="inputAssistBar" aria-label="入力補助" title="入力補助"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 16h10"/></svg><span class="visually-hidden">入力補助</span></button>
+<button id="readerNoteReferenceButton" class="assist-toggle editor-menu-icon" type="button" aria-expanded="false" aria-controls="readerNoteReferencePanel" aria-label="ノート参照" title="ノート参照"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c4-1 7-1 10 2 3-3 6-3 10-2V4c-3-1-7-1-10 1Z"/><path d="M5 8h3m8 0h3M5 12h3m8 0h3"/></svg><span class="visually-hidden">ノート参照</span></button>
+<button id="readerBackupButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="manuscriptBackupDialog" aria-label="バックアップ" title="バックアップ"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9H2V3m0 6a10 10 0 1 1 1 9"/><path d="M12 6v6l4 2"/></svg><span class="visually-hidden">バックアップ</span></button></div>
+                
+                
+                <button id="deleteManuscriptButton" class="danger-button compact-button" type="button">原稿を削除</button>
+                <details id="readerCountModeDetails" class="count-mode-details">
+                  <summary>数え方</summary>
+                  <label class="count-mode-control"><span>文字数の数え方</span><select id="readerCountMode">
+                    <option value="compact">空白・改行を除く</option>
+                    <option value="default">ルビ・見出し・空白・改行を除く</option>
+                    <option value="withFullWidthSpaces">全角空白を含む（ルビ除外）</option>
+                    <option value="withNewlines">改行を含む（ルビ・空白除外）</option>
+                    <option value="withSpacesAndNewlines">空白・改行を含む（ルビ除外）</option>
+                    <option value="allExceptNewlines">改行だけ除く（ルビ含む）</option>
+                    <option value="allInclusive">すべて含む</option>
+                  </select></label>
+                </details>
+                <label class="autosave-control">
+                  <input id="autoSaveToggle" type="checkbox">
+                  <span>自動保存</span>
+                </label>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-saving">保存ガイド</button>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-file-import">ファイル読込ガイド</button>
+              </div>
+            </div>
+            <span id="readerStatus" class="reader-status">読み込み中</span>
+            <button class="secondary-button compact-button editor-recent-views-button" type="button" aria-label="履歴（最近開いた画面）" title="最近開いた画面" aria-haspopup="dialog" aria-controls="workRecentViewsDialog">履歴</button>
+            <button id="saveFileButton" class="primary-button compact-button" type="button">保存</button>
+          </div>
+        </div>
+        <div class="reader-heading">
+          <h2 id="readerTitle">原稿</h2>
+          <div class="reader-meta-row">
+            <p id="readerMeta" class="muted"></p>
+            <button id="readerAddressBookButton" class="reader-meta-button" type="button" title="呼び名一覧を開く">呼び名</button>
+            <details id="readerPreviewLauncher" class="reader-preview-launcher">
+              <summary class="reader-meta-button">プレビュー</summary>
+              <div class="manuscript-preview-controls">
+                <div class="reader-preview-choices" role="group" aria-label="プレビューの範囲">
+                <button id="readerPreviewButton" class="primary-button compact-button" type="button" aria-label="ページプレビューを開く" title="この原稿のプレビュー">ページ</button>
+                <button id="readerWholeManuscriptButton" class="secondary-button compact-button" type="button" aria-haspopup="dialog" aria-controls="wholeManuscriptDialog" aria-label="全体プレビュー" title="作品全体のプレビュー">全体</button>
+                </div>
+                <details id="readerPreviewSettings" class="reader-preview-settings"><summary>表示設定</summary><div class="reader-preview-setting-fields">
+                <label><span>表示方向</span><select id="manuscriptPreviewMode"><option value="horizontal">横書き</option><option value="vertical">縦書き</option></select></label>
+                <label><span>書体</span><select id="manuscriptPreviewFont" aria-label="原稿プレビューの書体"><option value="mincho">明朝体</option><option value="gothic">ゴシック体</option></select></label>
+                <label><span>文字サイズ</span><select id="manuscriptPreviewFontSize"><option value="13">13px</option><option value="14">14px</option><option value="15">15px（標準）</option><option value="16">16px</option><option value="17">17px</option><option value="18">18px</option></select></label>
+                <label id="manuscriptPreviewAutoFitWrap" class="preview-check"><input id="manuscriptPreviewAutoFit" type="checkbox"><span>1行の文字数を画面に合わせる</span></label>
+                <label id="manuscriptPreviewLineCharactersWrap"><span>縦書き1行の文字数</span><input id="manuscriptPreviewLineCharacters" type="number" min="10" max="40" step="1" inputmode="numeric"><small class="preview-control-note">収まらない場合は文字を縮小します。</small></label>
+                <label id="manuscriptPreviewLineHeightWrap"><span>縦書きの行間</span><select id="manuscriptPreviewLineHeight"><option value="1.6">狭い</option><option value="1.9">標準</option><option value="2.2">広い</option><option value="2.5">とても広い</option></select></label>
+
+
+                </div></details>
+              </div>
+            </details>
+          </div>
+        </div>
+        <textarea id="readerContent" class="reader-content" spellcheck="false" aria-label="原稿本文"></textarea>
+        <aside id="readerNoteReferencePanel" class="reader-note-reference" aria-label="ノート参照" hidden>
+          <div class="reader-note-reference-heading">
+            <div><p class="section-label">NOTE REFERENCE</p><h3>ノート参照</h3></div>
+            <button id="closeReaderNoteReferenceButton" class="icon-button" type="button" aria-label="ノート参照を閉じる">閉じる</button>
+          </div>
+          <details id="readerNoteOptions" class="note-preview-options">
+            <summary>
+              <span class="note-preview-options-line"><span>参照元・表示設定</span><span id="readerNoteOptionsLoading" class="reference-source-loading note-preview-options-loading" role="status" hidden>関連作品を読み込み中…</span></span>
+              <span id="readerNoteSelectionSummary" class="note-preview-selection-summary">この作品・プロット</span>
+            </summary>
+            <div class="note-preview-options-body">
+          <div class="reader-note-reference-controls">
+            <label class="reader-note-reference-source">
+              <span class="reference-source-heading"><span>参照元作品</span><span id="readerNoteSourceLoading" class="reference-source-loading" role="status" hidden>関連作品を読み込み中…</span></span>
+              <select id="readerNoteWorkSelect" aria-label="参照元作品" aria-busy="false"><option value="">この作品</option></select>
+              <span id="readerNoteSourceLoadingHelp" class="reference-source-loading-help" hidden>この作品のノートは操作できます。関連作品への切替は読み込み完了後に利用できます。</span>
+            </label>
+            <label><span>種類</span><select id="readerNoteTypeSelect"><option value="plot">プロット</option><option value="reference">資料</option></select></label>
+            <label><span>ノート</span><select id="readerNoteSelect" disabled><option>読み込み中…</option></select></label>
+          </div>
+          <p id="readerNoteReferenceStatus" class="reader-note-reference-status" role="status"></p>
+            </div>
+          </details>
+          <div id="readerNoteReferenceContent" class="reader-note-reference-content" aria-live="polite"></div>
+        </aside>
+        <div id="readerJumpControls" class="reader-jump-controls" aria-label="原稿内移動">
+          <button id="jumpToTopButton" type="button" title="原稿の先頭へ">↑<span>先頭</span></button>
+          <button id="jumpToBottomButton" type="button" title="原稿の末尾へ">↓<span>末尾</span></button>
+        </div>
+      </section>
+
+      <section id="notesSection" class="section" hidden>
+        <button id="notesBackToWorksButton" class="back-button" type="button">← 作品一覧</button>
+        <nav class="work-nav" aria-label="作品内メニュー">
+          <button id="notesOpenManuscriptsButton" type="button">原稿</button>
+          <button id="notesPlotsButton" type="button">プロット</button>
+          <button id="notesReferencesButton" type="button">資料</button>
+          <button id="notesOpenConceptMemosButton" type="button">構想メモ</button>
+          <button id="notesOpenWorkSettingsButton" type="button">作品設定</button>
+        </nav>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">NOTES</p>
+            <h2 id="notesTitle">プロット</h2>
+          </div>
+          <div class="note-list-actions">
+            <button id="addressBookButton" class="text-button" type="button">呼び名一覧</button>
+            <button id="newNoteButton" class="secondary-button" type="button">＋ 新規ノート</button>
+          </div>
+        </div>
+        <label class="note-search">
+          <span class="visually-hidden">ノートを検索</span>
+          <input id="noteSearchInput" type="search" placeholder="タイトル・本文・タグを検索">
+        </label>
+        <p id="notesCount" class="list-count" aria-live="polite"></p>
+        <div id="notesList" class="notes-list" aria-live="polite"></div>
+      </section>
+
+      <section id="conceptMemosSection" class="section" hidden>
+        <button id="conceptBackToWorksButton" class="back-button" type="button">← 作品一覧</button>
+        <nav class="work-nav" aria-label="作品内メニュー">
+          <button id="conceptOpenManuscriptsButton" type="button">原稿</button>
+          <button id="conceptOpenPlotsButton" type="button">プロット</button>
+          <button id="conceptOpenReferencesButton" type="button">資料</button>
+          <button class="active" type="button" aria-current="page">構想メモ</button>
+          <button id="conceptOpenWorkSettingsButton" type="button">作品設定</button>
+        </nav>
+        <div class="section-heading">
+          <div>
+            <p class="section-label">CONCEPT MEMOS</p>
+            <h2 id="conceptMemosTitle">構想メモ</h2>
+          </div>
+          <div class="concept-list-actions">
+            <span id="conceptListStatus" class="reader-status" role="status"></span>
+            <button id="conceptListSaveButton" class="primary-button compact-button" type="button" hidden>保存・反映を再試行</button>
+            <div class="editor-options">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-label="構想メモ一覧のオプションを開く" title="一覧オプション"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div class="editor-options-panel">
+                <div class="editor-icon-row" role="group" aria-label="よく使う操作"><button id="openConceptSearchButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="conceptSearchDialog" aria-label="構想メモ全体を検索・置換" title="構想メモ全体を検索・置換"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span class="visually-hidden">構想メモ全体を検索・置換</span></button>
+<button id="conceptMemoBackupButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="manuscriptBackupDialog" aria-label="バックアップ（全メモ）" title="バックアップ（全メモ）"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9H2V3m0 6a10 10 0 1 1 1 9"/><path d="M12 6v6l4 2"/></svg><span class="visually-hidden">バックアップ（全メモ）</span></button></div>
+                
+              </div>
+            </div>
+            <button id="newConceptMemoButton" class="secondary-button" type="button">＋ 新規メモ</button>
+          </div>
+        </div>
+        <div class="concept-filters">
+          <input id="conceptSearchInput" type="search" placeholder="タイトル・本文・タグを検索" aria-label="構想メモを検索">
+          <details id="conceptFolderFilter" class="multi-filter concept-folder-filter">
+            <summary><span>フォルダ</span><strong id="conceptFolderFilterLabel">すべて</strong></summary>
+            <div id="conceptFolderFilterOptions" class="multi-filter-options" aria-label="フォルダで絞り込み"></div>
+          </details>
+          <details id="conceptTagFilter" class="multi-filter concept-tag-filter">
+            <summary><span>タグ</span><strong id="conceptTagFilterLabel">すべて</strong></summary>
+            <div id="conceptTagFilterOptions" class="multi-filter-options" aria-label="タグで絞り込み"></div>
+          </details>
+          <select id="conceptStatusFilter" aria-label="状態で絞り込み">
+            <option value="">全状態</option><option value="active">使用中</option><option value="pinned">ピン留め</option><option value="archived">アーカイブ</option>
+          </select>
+          <select id="conceptSortField" aria-label="並び替え項目">
+            <option value="updatedAt">更新日時</option><option value="createdAt">作成日時</option><option value="title">タイトル</option><option value="order">追加順</option><option value="noteOrder">ノートの項目順</option>
+          </select>
+          <button id="conceptSortDirection" class="text-button filter-direction" type="button" data-direction="desc">降順 ↓</button>
+          <select id="conceptNoteFilter" aria-label="関連するノートで絞り込み" aria-describedby="conceptNoteFilterStatus"><option value="">すべてのノート</option></select>
+        </div>
+        <p id="conceptNoteFilterStatus" class="list-count" role="status"></p>
+        <p id="conceptMemosCount" class="list-count" aria-live="polite"></p>
+        <div id="conceptMemosList" class="concept-memos-list" aria-live="polite"></div>
+        <nav id="conceptPagination" class="pagination" aria-label="構想メモのページ切り替え" hidden>
+          <button id="conceptPreviousPageButton" class="text-button" type="button">← 前へ</button>
+          <span id="conceptPageStatus"></span>
+          <button id="conceptNextPageButton" class="text-button" type="button">次へ →</button>
+        </nav>
+        <div id="conceptListJumpControls" class="concept-list-jump-controls" aria-label="構想メモ一覧内移動">
+          <button id="conceptJumpToTopButton" type="button" title="構想メモ一覧の先頭へ">↑<span>先頭</span></button>
+          <button id="conceptJumpToBottomButton" type="button" title="構想メモ一覧の末尾へ">↓<span>末尾</span></button>
+        </div>
+      </section>
+
+      <section id="conceptMemoEditorSection" class="note-editor-section" hidden>
+        <div class="reader-toolbar">
+          <button id="backToConceptMemosButton" class="back-button" type="button" aria-label="構想メモ一覧へ戻る" title="構想メモ一覧へ戻る"><span class="back-label-full">← 構想メモ一覧</span><span class="back-label-short" aria-hidden="true">← 一覧</span></button>
+          <div class="editor-actions">
+            <button id="conceptListButton" class="assist-toggle editor-list-button" type="button">一覧</button>
+            <div class="editor-options">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-label="構想メモの編集オプションを開く" title="編集オプション"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div class="editor-options-panel">
+                <div class="editor-icon-row" role="group" aria-label="よく使う操作"><button class="assist-toggle editor-menu-icon" type="button" data-editor-settings aria-haspopup="dialog" aria-controls="settingsDialog" aria-label="接続設定" title="接続設定"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18H6a4 4 0 0 1-.4-8A6.5 6.5 0 0 1 18 8.5a4.8 4.8 0 0 1 0 9.5h-1"/><path d="M9 15h6m-6 4h6m-3-6v8"/></svg><span class="visually-hidden">接続設定</span></button>
+<button id="conceptInputAssistToggle" class="assist-toggle editor-menu-icon" type="button" aria-expanded="false" aria-controls="inputAssistBar" aria-label="入力補助" title="入力補助"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 16h10"/></svg><span class="visually-hidden">入力補助</span></button>
+<button id="previewConceptSourceMenuButton" class="assist-toggle editor-menu-icon" type="button" aria-expanded="false" aria-controls="conceptNoteReferencePanel" aria-label="ノートをプレビュー" title="連携先ノートをプレビュー" disabled><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 5v16M12 5C9 3 5 3 2 4v15c4-1 7-1 10 2 3-3 6-3 10-2V4c-3-1-7-1-10 1Z"/><path d="M5 8h3m8 0h3M5 12h3m8 0h3"/></svg><span class="visually-hidden">ノートをプレビュー</span></button></div>
+                
+                <button id="deleteConceptMemoButton" class="danger-button compact-button" type="button">メモを削除</button>
+                <label class="autosave-control"><input id="conceptAutoSaveToggle" type="checkbox"><span>自動保存</span></label>
+                <label class="autosave-control"><input id="conceptAutoReflectToggle" type="checkbox"><span>構想メモ→項目メモ（全体）</span></label>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-auto-reflect">保存・反映ガイド</button>
+              </div>
+            </div>
+            <span id="conceptMemoStatus" class="reader-status">読み込み中</span>
+            <button class="secondary-button compact-button editor-recent-views-button" type="button" aria-label="履歴（最近開いた画面）" title="最近開いた画面" aria-haspopup="dialog" aria-controls="workRecentViewsDialog">履歴</button>
+            <button id="saveConceptMemoButton" class="primary-button compact-button" type="button">保存</button>
+          </div>
+        </div>
+        <div class="concept-editor-layout">
+        <details id="conceptEditorListPanel" class="concept-editor-list-panel" hidden>
+          <summary><span class="concept-editor-list-label">構想メモ一覧</span></summary>
+          <div id="conceptEditorListContent" class="concept-editor-list-content" aria-label="編集中の作品の構想メモ一覧"></div>
+        </details>
+        <div class="concept-editor">
+          <label class="field"><span>タイトル</span><input id="conceptMemoTitleInput" autocomplete="off"></label>
+          <div class="concept-editor-row">
+            <label class="field"><span>形式</span><select id="conceptMemoTypeSelect"><option value="text">通常</option><option value="list">リスト</option><option value="todo">TODO</option></select></label>
+            <div class="field"><span>フォルダ（複数選択可）</span>
+              <details id="conceptMemoFolderSelect" class="multi-filter concept-folder-select">
+                <summary><span>フォルダ</span><strong id="conceptMemoFolderLabel">未分類</strong></summary>
+                <div id="conceptMemoFolderOptions" class="multi-filter-options" aria-label="構想メモのフォルダ"></div>
+              </details>
+            </div>
+          </div>
+          <label class="field"><span id="conceptMemoBodyLabel">本文</span><textarea id="conceptMemoBodyInput" class="concept-body" spellcheck="false"></textarea></label>
+          <label class="field"><span class="tag-field-heading">タグ（カンマ区切り）<button id="conceptTagHistoryButton" class="tag-history-button" type="button">履歴から選ぶ</button></span><input id="conceptMemoTagsInput" autocomplete="off"></label>
+          <div class="concept-checks">
+            <label><input id="conceptMemoPinnedInput" type="checkbox"> ピン留め</label>
+            <label><input id="conceptMemoArchivedInput" type="checkbox"> アーカイブ</label>
+            <label><input id="conceptMemoDashboardInput" type="checkbox"> Dashboardに表示</label>
+          </div>
+          <div id="conceptMemoSource" class="concept-source" hidden>
+            <div>
+              <span class="section-label">SOURCE</span><p id="conceptMemoSourceText"></p>
+              <p id="conceptMemoSyncStatus" class="muted">同期状態を確認していません</p>
+              <label>このメモの項目メモへの自動反映 <select id="conceptMemoAutoReflectInput" aria-describedby="conceptMemoAutoReflectHelp"><option value="inherit">全体設定に従う</option><option value="on">このメモはON</option><option value="off">このメモはOFF</option></select></label>
+              <p id="conceptMemoAutoReflectHelp" class="muted"></p>
+            </div>
+            <div class="concept-source-actions">
+              <button id="previewConceptSourceButton" class="secondary-button" type="button" aria-expanded="false" aria-controls="conceptNoteReferencePanel">ノートをプレビュー</button>
+              <button id="applyConceptToNoteButton" class="secondary-button" type="button">項目メモへ反映</button>
+            </div>
+          </div>
+        </div>
+        </div>
+        <aside id="conceptNoteReferencePanel" class="reader-note-reference concept-note-reference" aria-label="連携先ノートのプレビュー" hidden>
+          <div class="reader-note-reference-heading">
+            <div><p class="section-label">SOURCE NOTE</p><h3 id="conceptNoteReferenceTitle">連携先ノート</h3></div>
+            <button id="closeConceptNoteReferenceButton" class="icon-button" type="button" aria-label="連携先ノートのプレビューを閉じる">閉じる</button>
+          </div>
+          <p id="conceptNoteReferencePath" class="muted"></p>
+          <button id="openConceptSourceNoteButton" class="secondary-button" type="button" disabled>ノートを開く</button>
+          <div id="conceptNoteReferenceContent" class="reader-note-reference-content"></div>
+        </aside>
+      </section>
+
+      <section id="workSettingsSection" class="note-editor-section" hidden>
+        <div class="reader-toolbar">
+          <button id="settingsBackToWorksButton" class="back-button" type="button" aria-label="作品一覧へ戻る" title="作品一覧へ戻る"><span class="back-label-full">← 作品一覧</span><span class="back-label-short" aria-hidden="true">← 一覧</span></button>
+          <div class="editor-actions">
+            <div class="editor-options">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-label="作品設定の編集オプションを開く" title="編集オプション"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div class="editor-options-panel">
+                <div class="editor-icon-row" role="group" aria-label="よく使う操作"><button class="assist-toggle editor-menu-icon" type="button" data-editor-settings aria-haspopup="dialog" aria-controls="settingsDialog" aria-label="接続設定" title="接続設定"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18H6a4 4 0 0 1-.4-8A6.5 6.5 0 0 1 18 8.5a4.8 4.8 0 0 1 0 9.5h-1"/><path d="M9 15h6m-6 4h6m-3-6v8"/></svg><span class="visually-hidden">接続設定</span></button></div>
+                <label class="autosave-control"><input id="settingsAutoSaveToggle" type="checkbox"><span>自動保存</span></label>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-saving">保存ガイド</button>
+              </div>
+            </div>
+            <span id="workSettingsStatus" class="reader-status">読み込み中</span>
+            <button id="saveWorkSettingsButton" class="primary-button compact-button" type="button">保存</button>
+          </div>
+        </div>
+        <nav class="work-nav settings-work-nav" aria-label="作品内メニュー">
+          <button id="settingsOpenManuscriptsButton" type="button">原稿</button>
+          <button id="settingsOpenPlotsButton" type="button">プロット</button>
+          <button id="settingsOpenReferencesButton" type="button">資料</button>
+          <button id="settingsOpenConceptMemosButton" type="button">構想メモ</button>
+          <button class="active" type="button" aria-current="page">作品設定</button>
+        </nav>
+        <div class="work-settings-heading">
+          <p class="section-label">WORK SETTINGS</p>
+          <h2 id="workSettingsHeading">作品設定</h2>
+          <p id="workSettingsMeta" class="muted"></p>
+        </div>
+        <div id="workSettingsLoading" class="editor-loading" role="status" aria-label="作品設定を読み込んでいます" hidden><span class="spinner" aria-hidden="true"></span><span class="loading-word">Loading</span></div>
+        <div id="workSettingsForm" class="work-settings-form">
+          <label class="field"><span>作品名</span><input id="workTitleInput" autocomplete="off"></label>
+          <label class="field">
+            <span>補助タイトル</span>
+            <input id="workSubtitleInput" autocomplete="off" placeholder="サブタイトルやシリーズ共通タイトル">
+            <small class="field-help">作品一覧などでは作品名を優先し、書き出し時に作品名と併記できます。</small>
+          </label>
+          <div class="work-settings-pairs">
+            <label class="field"><span>状態</span><select id="workStatusSelect">
+              <option value="">未設定</option><option value="preparing">準備中</option><option value="planning">構想中</option><option value="draft">執筆中</option><option value="revision">改稿中</option><option value="hold">保留</option><option value="complete">完結</option>
+            </select></label>
+            <label class="field"><span>ペンネーム</span><input id="workPenNameInput" autocomplete="off"></label>
+            <label class="field"><span>目標文字数</span><input id="workTargetCharsInput" type="number" min="0" step="100" inputmode="numeric"></label>
+            <label class="field"><span>締切</span><input id="workDeadlineInput" type="date"></label>
+          </div>
+          <label class="field"><span>ジャンル（カンマ区切り）</span><input id="workGenresInput" autocomplete="off"></label>
+          <label class="field"><span>あらすじ</span><textarea id="workSummaryInput" class="settings-textarea"></textarea></label>
+          <label class="field"><span>メモ</span><textarea id="workMemoInput" class="settings-textarea compact"></textarea></label>
+          <section class="work-related-settings" aria-labelledby="relatedWorksHeading">
+            <h3 id="relatedWorksHeading">関連作品</h3>
+            <p class="muted">関連付けた作品のノートを、原稿・ノートのプレビューで参照できます。</p>
+            <p id="relatedWorksSummary" class="muted">登録済みの関連：0件</p>
+            <p id="relatedWorksPendingNotice" class="related-works-pending" role="status" hidden>関連設定に未完了の更新があります。「関連作品を設定」から再試行してください。</p>
+            <button id="openRelatedWorksButton" class="text-button" type="button" aria-haspopup="dialog" aria-controls="relatedWorksDialog">関連作品を設定</button>
+          </section>
+          <details class="work-export-options" hidden>
+            <summary>HTML書き出し設定</summary>
+            <div class="work-export-grid">
+              <label><input id="exportSubtitleInput" type="checkbox"> 補助タイトル</label>
+              <label><input id="exportFolderNameInput" type="checkbox"> フォルダ名</label>
+              <label><input id="exportGenreInput" type="checkbox"> ジャンル</label>
+              <label><input id="exportTargetCharsInput" type="checkbox"> 目標文字数</label>
+              <label><input id="exportDeadlineInput" type="checkbox"> 締切日</label>
+              <label><input id="exportPenNameInput" type="checkbox"> ペンネーム</label>
+              <label><input id="exportMemoInput" type="checkbox"> メモ</label>
+              <label><input id="exportUpdatedAtInput" type="checkbox"> 更新日時</label>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section id="noteEditorSection" class="note-editor-section" hidden>
+        <div class="reader-toolbar">
+          <button id="backToNotesButton" class="back-button" type="button" aria-label="ノート一覧へ戻る" title="ノート一覧へ戻る"><span class="back-label-full">← ノート一覧</span><span class="back-label-short" aria-hidden="true">← 一覧</span></button>
+          <div class="editor-actions">
+            <button id="noteListButton" class="assist-toggle editor-list-button" type="button">一覧</button>
+            <div class="editor-options">
+              <button class="editor-options-toggle" type="button" aria-expanded="false" aria-label="ノートの編集オプションを開く" title="編集オプション"><span class="ui-icon icon-gear" aria-hidden="true"></span></button>
+              <div class="editor-options-panel">
+                <div class="editor-icon-row" role="group" aria-label="よく使う操作"><button class="assist-toggle editor-menu-icon" type="button" data-editor-settings aria-haspopup="dialog" aria-controls="settingsDialog" aria-label="接続設定" title="接続設定"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 18H6a4 4 0 0 1-.4-8A6.5 6.5 0 0 1 18 8.5a4.8 4.8 0 0 1 0 9.5h-1"/><path d="M9 15h6m-6 4h6m-3-6v8"/></svg><span class="visually-hidden">接続設定</span></button>
+<button id="openNoteSearchButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="noteSearchDialog" aria-label="ノート内を検索・置換" title="ノート内を検索・置換"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span class="visually-hidden">ノート内を検索・置換</span></button>
+<button id="noteInputAssistToggle" class="assist-toggle editor-menu-icon" type="button" aria-expanded="false" aria-controls="inputAssistBar" aria-label="入力補助" title="入力補助"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m4 0h1m4 0h1M6 12h1m4 0h1m4 0h1M7 16h10"/></svg><span class="visually-hidden">入力補助</span></button>
+<button id="noteBackupButton" class="assist-toggle editor-menu-icon" type="button" aria-haspopup="dialog" aria-controls="manuscriptBackupDialog" aria-label="バックアップ" title="バックアップ"><svg class="editor-menu-symbol" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9H2V3m0 6a10 10 0 1 1 1 9"/><path d="M12 6v6l4 2"/></svg><span class="visually-hidden">バックアップ</span></button></div>
+                
+                
+                <button id="deleteNoteButton" class="danger-button compact-button" type="button">ノートを削除</button>
+                <label class="autosave-control">
+                  <input id="noteAutoSaveToggle" type="checkbox">
+                  <span>自動保存</span>
+                </label>
+                <label class="autosave-control"><input id="noteAutoReflectToggle" type="checkbox"><span>項目メモ→構想メモ（全体）</span></label>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-auto-reflect">保存・反映ガイド</button>
+                <button class="assist-toggle" type="button" data-editor-guide="guide-file-import">ファイル読込ガイド</button>
+              </div>
+            </div>
+            <span id="noteStatus" class="reader-status">読み込み中</span>
+            <button class="secondary-button compact-button editor-recent-views-button" type="button" aria-label="履歴（最近開いた画面）" title="最近開いた画面" aria-haspopup="dialog" aria-controls="workRecentViewsDialog">履歴</button>
+            <button id="saveNoteButton" class="primary-button compact-button" type="button">保存</button>
+          </div>
+        </div>
+        <div id="noteEditorLoading" class="editor-loading" role="status" aria-label="ノートを読み込んでいます" hidden><span class="spinner" aria-hidden="true"></span><span class="loading-word">Loading</span></div>
+        <div class="note-view-tools">
+          <button id="notePreviewButton" class="note-preview-toggle" type="button" aria-haspopup="dialog" aria-controls="notePreviewDialog">プレビュー</button>
+          <button id="noteTocToggle" class="note-toc-toggle" type="button" aria-expanded="false" aria-controls="noteToc">目次</button>
+        </div>
+        <div id="currentNoteGroupIndicator" class="current-note-group-indicator" aria-live="polite" hidden></div>
+        <div class="note-editor-heading">
+          <div class="note-title-wrap">
+            <span id="noteEditorTypeBadge" class="note-type-badge">プロット編集中</span>
+            <label class="field note-title-field">
+              <span>ノート名</span>
+              <input id="noteTitleInput" autocomplete="off">
+            </label>
+          </div>
+          <div class="note-editor-tools">
+            <button id="toggleNoteItemsButton" class="text-button" type="button" aria-controls="noteGroups" aria-expanded="true" title="項目詳細をすべて閉じる" aria-label="項目詳細をすべて閉じる">項目を閉じる</button>
+            <button id="toggleNoteMemosButton" class="text-button" type="button" aria-controls="noteGroups" aria-expanded="false" title="項目メモをすべて開く" aria-label="項目メモをすべて開く">メモを開く</button>
+            <button id="addNoteGroupButton" class="secondary-button" type="button">＋ 大分類</button>
+          </div>
+        </div>
+        <details class="note-ruby-help field-help">
+          <summary>ふりがな・ルビの入力方法</summary>
+          <p>項目名全体の読みは「ふりがな」欄へ入力します。項目名の一部や項目詳細・項目メモには <code>｜東京《とうきょう》</code> と入力すると、プレビューでルビを表示します。入力補助の「ルビ」も使えます。</p>
+        </details>
+        <nav id="noteToc" class="note-toc" aria-label="ノート目次" hidden></nav>
+        <div id="noteGroups" class="note-groups"></div>
+        <div id="noteJumpControls" class="note-jump-controls" aria-label="ノート内移動">
+          <button id="noteJumpToTopButton" type="button" title="ノートの先頭へ">↑<span>先頭</span></button>
+          <button id="noteJumpToBottomButton" type="button" title="ノートの末尾へ">↓<span>末尾</span></button>
+        </div>
+      </section>
+
+      <div id="inputAssistBar" class="input-assist" aria-label="入力補助" hidden>
+        <button type="button" data-assist-kind="insert" data-assist-text="　" title="字下げ（全角空白）" aria-label="字下げ（全角空白）"><span class="ui-icon icon-space" aria-hidden="true"></span></button>
+        <button type="button" data-assist-kind="insert" data-assist-text="……" title="三点リーダーを2つ挿入">…</button>
+        <button type="button" data-assist-kind="insert" data-assist-text="――" title="ダッシュを2つ挿入">―</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="「" data-assist-close="」" title="かぎ括弧で囲む">「 」</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="（" data-assist-close="）" title="丸括弧で囲む">（ ）</button>
+        <button type="button" data-assist-kind="ruby" title="選択文字へルビ記法を挿入">ルビ</button>
+        <button type="button" data-assist-kind="emphasis" title="選択文字へ傍点記法を挿入">傍点</button>
+        <button type="button" data-assist-kind="unwrap" title="選択範囲の括弧・ルビ・傍点記法を解除">解除</button>
+        <button id="inputAssistSymbolsButton" class="assist-symbols-button" type="button" aria-expanded="false" aria-controls="inputAssistSymbolsMenu" title="見出しと括弧のサブメニュー">記号</button>
+      </div>
+      <div id="inputAssistSymbolsMenu" class="assist-more-menu" aria-label="見出しと括弧" hidden>
+        <button type="button" data-assist-kind="insert" data-assist-text="# " title="大見出しを挿入">#</button>
+        <button type="button" data-assist-kind="insert" data-assist-text="## " title="中見出しを挿入">##</button>
+        <button type="button" data-assist-kind="insert" data-assist-text="### " title="小見出しを挿入">###</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="『" data-assist-close="』" title="二重かぎ括弧で囲む">『 』</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="【" data-assist-close="】" title="隅付き括弧で囲む">【 】</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="《" data-assist-close="》" title="二重山括弧で囲む">《 》</button>
+        <button type="button" data-assist-kind="wrap" data-assist-open="〝" data-assist-close="〟" title="ダブルクオーテーションで囲む">〝 〟</button>
+      </div>
+
+      <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+      <details id="editorFooterMenu" class="editor-footer-menu" hidden>
+        <summary>アプリメニュー</summary>
+        <div class="editor-footer-menu-actions">
+          <button type="button" data-editor-footer-action="announcements">
+            <span class="ui-icon icon-bullhorn" aria-hidden="true"></span>
+            <span>お知らせ</span>
+            <span id="editorAnnouncementBadge" class="announcement-badge" aria-label="未読のお知らせ" hidden></span>
+          </button>
+          <button type="button" data-editor-footer-action="guide">ガイド</button>
+          <button type="button" data-editor-footer-action="settings">接続設定</button>
+        </div>
+      </details>
+      <footer class="site-footer">
+        <a href="https://mojigoto.com/" target="_blank" rel="noopener noreferrer">公式HOW TO</a>
+        <a href="./about/">サービスについて</a>
+        <a href="./apply/">利用・解除申込</a>
+        <a href="./contact/">お問い合わせ</a>
+        <a href="./terms/">利用規約</a>
+        <a href="./privacy/">プライバシーポリシー</a>
+      </footer>
+    </main>
+
+    <dialog id="noteSearchDialog" class="settings-dialog note-search-dialog" aria-labelledby="noteSearchTitle">
+      <div class="note-search-header">
+        <div class="dialog-heading"><h2 id="noteSearchTitle">検索・置換</h2><div class="note-search-heading-actions"><button class="text-button" type="button" data-editor-guide="guide-note-search" data-editor-guide-inline>ガイド</button><button id="closeNoteSearchButton" class="text-button" type="button">閉じる</button></div></div>
+        <div class="note-search-fields">
+          <label class="field"><span class="visually-hidden">検索する文字</span><input id="noteSearchQuery" type="search" placeholder="検索する文字" autocomplete="off" spellcheck="false"></label>
+          <div id="noteReplaceFields" hidden><label class="field"><span class="visually-hidden">置換後の文字（空欄にすると削除）</span><textarea id="noteReplaceText" rows="1" placeholder="置換後の文字（空欄で削除）" autocomplete="off" spellcheck="false"></textarea></label></div>
+        </div>
+        <div class="note-search-tools"><label class="note-replace-choice"><input id="noteReplaceMode" type="checkbox">置換する</label>
+          <details id="noteSearchFilter" class="note-search-filter"><summary id="noteSearchFilterSummary">検索条件</summary><div class="note-search-options">
+            <label><input id="noteSearchNames" type="checkbox" title="大分類名・区分名・補足・項目名" checked>名称</label><label><input id="noteSearchDetails" type="checkbox" checked>項目詳細</label>
+            <label><input id="noteSearchMemos" type="checkbox">項目メモ</label><label><input id="noteSearchCase" type="checkbox">大文字・小文字を区別する</label>
+          </div></details>
+        </div>
+        <p id="noteSearchStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div id="noteSearchResults" class="note-search-results" aria-label="ノート内の検索結果"></div>
+      <footer class="note-search-footer"><div class="note-replace-footer"><div id="noteReplaceActions" class="note-replace-actions" hidden><button id="noteReplaceSelectAll" class="text-button" type="button" title="ページ外を含む全候補を選択">全選択</button><button id="noteReplaceClear" class="text-button" type="button">選択解除</button><button id="noteReplaceApply" class="primary-button compact-button" type="button" disabled>選択した0箇所を置換</button></div><button id="noteReplaceUndo" class="text-button" type="button" hidden>直前の置換を戻す</button></div><div class="note-search-pager"><button id="noteSearchPrev" class="text-button" type="button">前へ</button><span id="noteSearchPage">1 / 1</span><button id="noteSearchNext" class="text-button" type="button">次へ</button></div></footer>
+    </dialog>
+
+    <dialog id="conceptSearchDialog" class="settings-dialog note-search-dialog" aria-labelledby="conceptSearchTitle">
+      <div class="note-search-header">
+        <div class="dialog-heading"><h2 id="conceptSearchTitle">検索・置換</h2><div class="note-search-heading-actions"><button class="text-button" type="button" data-editor-guide="guide-concept-search" data-editor-guide-inline>ガイド</button><button id="closeConceptSearchButton" class="text-button" type="button">閉じる</button></div></div>
+        <div class="note-search-fields">
+          <label class="field"><span class="visually-hidden">検索する文字</span><input id="conceptSearchQuery" type="search" placeholder="検索する文字" autocomplete="off" spellcheck="false"></label>
+          <div id="conceptReplaceFields" hidden><label class="field"><span class="visually-hidden">置換後の文字（空欄にすると削除）</span><textarea id="conceptReplaceText" rows="1" placeholder="置換後の文字（空欄で削除）" autocomplete="off" spellcheck="false"></textarea></label></div>
+        </div>
+        <div class="note-search-tools"><label class="note-replace-choice"><input id="conceptReplaceMode" type="checkbox">置換する</label>
+          <details id="conceptSearchFilter" class="note-search-filter"><summary id="conceptSearchFilterSummary">検索条件</summary><div class="note-search-options">
+            <label><input id="conceptSearchNames" type="checkbox" title="構想メモのタイトル" checked>タイトル</label><label><input id="conceptSearchDetails" type="checkbox" checked>本文</label>
+            <label hidden><input id="conceptSearchMemos" type="checkbox">項目メモ</label><label><input id="conceptSearchCase" type="checkbox">大文字・小文字を区別する</label>
+          </div></details>
+        </div>
+        <p id="conceptSearchStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div id="conceptSearchResults" class="note-search-results" aria-label="構想メモ内の検索結果"></div>
+      <footer class="note-search-footer"><div class="note-replace-footer"><div id="conceptReplaceActions" class="note-replace-actions" hidden><button id="conceptReplaceSelectAll" class="text-button" type="button" title="ページ外を含む全候補を選択">全選択</button><button id="conceptReplaceClear" class="text-button" type="button">選択解除</button><button id="conceptReplaceApply" class="primary-button compact-button" type="button" disabled>選択した0箇所を置換</button></div><button id="conceptReplaceUndo" class="text-button" type="button" hidden>直前の置換を戻す</button></div><div class="note-search-pager"><button id="conceptSearchPrev" class="text-button" type="button">前へ</button><span id="conceptSearchPage">1 / 1</span><button id="conceptSearchNext" class="text-button" type="button">次へ</button></div></footer>
+    </dialog>
+
+    <dialog id="manuscriptSearchDialog" class="settings-dialog note-search-dialog" aria-labelledby="manuscriptSearchTitle">
+      <div class="note-search-header">
+        <div class="dialog-heading"><h2 id="manuscriptSearchTitle">検索・置換</h2><div class="note-search-heading-actions"><button class="text-button" type="button" data-editor-guide="guide-manuscript-search" data-editor-guide-inline>ガイド</button><button id="closeManuscriptSearchButton" class="text-button" type="button">閉じる</button></div></div>
+        <div class="note-search-fields">
+          <label class="field"><span class="visually-hidden">検索する文字</span><input id="manuscriptSearchQuery" type="search" placeholder="検索する文字" autocomplete="off" spellcheck="false"></label>
+          <div id="manuscriptReplaceFields" hidden><label class="field"><span class="visually-hidden">置換後の文字（空欄にすると削除）</span><textarea id="manuscriptReplaceText" rows="1" placeholder="置換後の文字（空欄で削除）" autocomplete="off" spellcheck="false"></textarea></label></div>
+        </div>
+        <div class="note-search-tools"><label class="note-replace-choice"><input id="manuscriptReplaceMode" type="checkbox">置換する</label>
+          <details id="manuscriptSearchFilter" class="note-search-filter"><summary id="manuscriptSearchFilterSummary">条件：本文</summary><div class="note-search-options">
+            <label hidden><input id="manuscriptSearchNames" type="checkbox">名称</label><label hidden><input id="manuscriptSearchDetails" type="checkbox" checked>項目詳細</label>
+            <label hidden><input id="manuscriptSearchMemos" type="checkbox">項目メモ</label><label><input id="manuscriptSearchCase" type="checkbox">大文字・小文字を区別する</label>
+          </div></details>
+        </div>
+        <p id="manuscriptSearchStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div id="manuscriptSearchResults" class="note-search-results" aria-label="原稿内の検索結果"></div>
+      <footer class="note-search-footer"><div class="note-replace-footer"><div id="manuscriptReplaceActions" class="note-replace-actions" hidden><button id="manuscriptReplaceSelectAll" class="text-button" type="button" title="ページ外を含む全候補を選択">全選択</button><button id="manuscriptReplaceClear" class="text-button" type="button">選択解除</button><button id="manuscriptReplaceApply" class="primary-button compact-button" type="button" disabled>選択した0箇所を置換</button></div><button id="manuscriptReplaceUndo" class="text-button" type="button" hidden>直前の置換を戻す</button></div><div class="note-search-pager"><button id="manuscriptSearchPrev" class="text-button" type="button">前へ</button><span id="manuscriptSearchPage">1 / 1</span><button id="manuscriptSearchNext" class="text-button" type="button">次へ</button></div></footer>
+    </dialog>
+
+    <dialog id="relatedWorksDialog" class="settings-dialog related-works-dialog" aria-labelledby="relatedWorksTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading"><div><p class="section-label">RELATED WORKS</p><h2 id="relatedWorksTitle">関連作品を設定</h2></div><button id="closeRelatedWorksButton" class="icon-button" type="button" aria-label="関連作品の設定を閉じる">閉じる</button></div>
+        <p class="muted">同じクラウド・作品ルートの作品が対象です。相手ごとのボタンで両作品に保存します。通常の作品設定の自動保存とは別に確定します。</p>
+        <p id="relatedWorksNotice" class="muted related-works-notice"></p>
+        <div id="relatedWorksList" class="related-works-list" aria-label="関連作品の候補"></div>
+        <p id="relatedWorksStatus" class="related-works-status" role="status" aria-live="polite"></p>
+        <button id="reloadRelatedWorksButton" class="text-button" type="button">一覧を再読み込み</button>
+      </div>
+    </dialog>
+
+    <dialog id="announcementDialog" class="settings-dialog announcement-dialog" aria-labelledby="announcementTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">NEWS</p>
+            <h2 id="announcementTitle">お知らせ</h2>
+          </div>
+          <div class="announcement-heading-actions">
+            <button id="markAllAnnouncementsReadButton" class="text-button" type="button" hidden>すべて既読</button>
+            <button id="closeAnnouncementButton" class="icon-button" type="button" aria-label="お知らせを閉じる">閉じる</button>
+          </div>
+        </div>
+        <div id="announcementList" class="announcement-list" aria-live="polite"></div>
+        <p class="announcement-site-link"><a href="https://mojigoto.com" target="_blank" rel="noopener noreferrer">もじごと HOW TO サイトを開く</a></p>
+      </div>
+    </dialog>
+
+    <dialog id="settingsDialog" class="settings-dialog">
+      <form id="settingsForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">CONNECTION</p>
+            <h2>クラウド接続設定</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="閉じる">閉じる</button>
+        </div>
+        <div id="accountSessionPanel" class="account-session-panel" hidden>
+          <div><span>ログイン中</span><strong id="accountSessionEmail"></strong></div>
+          <div class="account-session-actions">
+            <a id="adminPageLink" class="text-button admin-page-link" href="./admin/" hidden>管理画面</a>
+            <button id="logoutButton" class="text-button" type="button">ログアウト</button>
+          </div>
+        </div>
+        <span id="managedConnectionNotice" hidden></span>
+        <div class="connection-session-actions">
+          <button id="disconnectButton" class="danger-button" type="button">クラウド接続を解除</button>
+        </div>
+        <a id="googleDriveSetupLink" class="secondary-button" href="./google-drive-setup.html" hidden>Drive作品の登録・追加読み込み</a>
+        <details class="setup-help app-recovery-panel">
+          <summary>再読み込み</summary>
+          <p>読み込みに失敗したときなどはまず通常の再読み込み、新しい設定や機能が反映されないときはアプリキャッシュの削除をお試しください。</p>
+          <div class="diagnostic-copy-actions">
+            <button id="reloadAppButton" class="secondary-button" type="button">再読み込み</button>
+            <button id="clearAppCacheButton" class="secondary-button" type="button">アプリのキャッシュを削除して再読み込み</button>
+          </div>
+          <p class="field-help">キャッシュ削除はインターネットに接続した状態で行ってください。<br>作品データ・ログイン情報・履歴・ピン留め・設定は削除しません。未保存の変更は再読み込みで失われるため、先に保存またはコピーしてください。</p>
+        </details>
+        <details id="profilePanel" class="profile-panel" hidden>
+          <summary>表示用ニックネーム</summary>
+          <label class="visually-hidden" for="nicknameInput">表示用ニックネーム</label>
+          <div class="profile-input-row">
+            <input id="nicknameInput" type="text" maxlength="30" autocomplete="nickname" placeholder="30文字以内">
+            <button id="saveNicknameButton" class="secondary-button" type="button">保存</button>
+          </div>
+          <p>ログイン元に登録された氏名は使用しません。<br>未入力の場合はメールアドレスを表示します。</p>
+        </details>
+        <div class="diagnostic-copy-actions">
+          <button id="copyEnvironmentButton" class="secondary-button environment-copy-button" type="button">不具合報告用の環境情報をコピー</button>
+          <button id="copyPerformanceButton" class="secondary-button environment-copy-button" type="button">速度計測結果をコピー</button>
+        </div>
+        <p class="field-help diagnostic-copy-help">作品一覧や各画面を操作したあと、直近30件の読み込み時間をコピーできます。計測結果はページを閉じると消去されます。</p>
+        <div class="display-preferences-grid">
+        <label class="field display-theme-field">
+          <span>表示テーマ</span>
+          <select id="displayThemeSelect">
+            <option value="system">端末の設定に合わせる</option>
+            <optgroup label="ライトテーマ">
+              <option value="light">ライト（標準）</option>
+              <option value="beige">ベージュ</option>
+              <option value="green">グリーン</option>
+            </optgroup>
+            <optgroup label="ダークテーマ">
+              <option value="dark">ダーク（標準）</option>
+              <option value="navy">ダークブルー</option>
+              <option value="deep-green">深緑</option>
+            </optgroup>
+          </select>
+        </label>
+        <label class="field display-font-size-field">
+          <span>文字サイズ</span>
+          <select id="displayFontScaleSelect">
+            <option value="0.9">小さめ</option>
+            <option value="1">標準</option>
+            <option value="1.1">大きめ</option>
+            <option value="1.2">さらに大きめ</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>本文の書体</span>
+          <select id="displayWritingFontSelect" aria-describedby="displayWritingFontHelp">
+            <option value="mincho">明朝体</option>
+            <option value="gothic">ゴシック体</option>
+          </select>
+        </label>
+        <p id="displayWritingFontHelp" class="field-help display-writing-font-help">原稿の編集本文、ノートとそのプレビュー、構想メモ本文、作品設定のあらすじ・メモに適用します。原稿プレビューの書体は、原稿の「プレビュー」で別に設定できます。このブラウザに保存します。</p>
+        </div>
+        <label id="clientIdField" class="field">
+          <span>Microsoft アプリケーション（クライアント）ID</span>
+          <input id="clientIdInput" name="clientId" inputmode="text" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </label>
+        <p id="clientIdHelp" class="field-help">アプリ登録の「概要」にある<strong>アプリケーション（クライアント）ID</strong>を、この端末だけに保存します。オブジェクトIDやシークレットIDではありません。</p>
+        <details id="personalSetupHelp" class="setup-help">
+          <summary>個人用OneDriveの登録条件</summary>
+          <ol>
+            <li>対応するアカウントの種類で「個人用Microsoftアカウント」を含む項目を選ぶ</li>
+            <li>プラットフォームは「シングルページ アプリケーション（SPA）」にする</li>
+            <li>リダイレクトURIを、現在表示しているURLと完全に一致させる</li>
+            <li>Microsoft Graphの委任されたアクセス許可に <code>Files.ReadWrite</code> を追加する</li>
+          </ol>
+          <p>Microsoftへ登録するURI：</p>
+          <div class="redirect-uri-box">
+            <code id="redirectUriValue">http://localhost:4173/</code>
+            <button id="copyRedirectUriButton" class="copy-button" type="button">コピー</button>
+          </div>
+          <p><code>127.0.0.1</code>、<code>/index.html</code>、末尾の <code>/</code> の違いにも注意してください。</p>
+        </details>
+        <button id="openGuideFromSettingsButton" class="text-button dialog-guide-link" type="button">もじごとガイドを見る</button>
+        <div class="dialog-actions">
+          <button id="saveConnectionSettingsButton" class="primary-button" value="save">保存</button>
+          <button class="secondary-button" type="submit" value="cancel">閉じる</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="guideDialog" class="settings-dialog guide-dialog" aria-labelledby="guideTitle">
+      <div class="dialog-content guide-content"><div class="dialog-heading guide-heading"><div><p class="section-label">GUIDE</p><h2 id="guideTitle">もじごとガイド</h2></div><button id="closeGuideButton" class="icon-button" type="button" aria-label="ガイドを閉じる">閉じる</button></div>
+        <div class="guide-scroll-content"><div id="loginGuideContent" hidden><p class="guide-lead">ログインから作品を開くまで、3ステップ。</p><ol class="guide-start-steps"><li><strong>もじごとにログイン</strong><p>利用申請時に登録したメールアドレスでログインします。</p></li><li><strong>クラウドへ接続</strong><p>作品のあるOneDriveまたはGoogle Drive、Dropboxへ接続します。ログインとクラウド接続は別の操作です。</p></li><li><strong>作品フォルダを選ぶ</strong><p>クラウド内の原稿・ノートを開いて編集します。</p></li></ol><p class="guide-footer">作品データはもじごとのサーバーには保存されません。<a href="./privacy/">データの取り扱い</a>／<a href="./contact/">お問い合わせ</a></p></div><div id="appGuideContent"><p class="guide-lead">知りたい項目を開いて確認できます。</p><nav class="guide-page-toc guide-quicklinks" aria-label="ガイドの目次"><a href="#guide-section-1">はじめる</a><a href="#guide-search">検索・置換</a><a href="#guide-saving">保存・同期</a><a href="#guide-section-6">困ったとき</a></nav><div class="guide-sections"><details class="guide-topic" data-guide-section="guide-section-1"><summary>接続して作品を開く</summary><div>
+    <ol class="guide-steps"><li>HOMEでクラウドを選び、接続を許可します。</li><li>作品フォルダ、または作品をまとめた親フォルダを選びます。</li><li>作品を開き、原稿・プロット・資料・構想メモを選びます。</li></ol>
+    <p>Google Driveは<a href="./google-drive-setup.html">専用登録ページ</a>から接続・登録します。初回はパソコンでの操作がおすすめです。</p>
+    <details class="guide-more"><summary>Google Driveでファイルが見つからないとき</summary><div><p>既存作品は、使うファイルと子フォルダへのアクセス許可が必要です。VS Codeで追加・作り直した項目は、HOMEの「登録済み作品の追加ファイルを許可」から許可してください。</p><p><a href="./google-drive-setup.html#setupFolderExamples">作品フォルダの選び方を見る</a></p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-section-2"><summary>編集とプレビュー</summary><div>
+    <p>作品内のメニューで画面を切り替えます。「履歴」から前回開いていた一覧や編集画面へ戻れます。</p>
+    <p>歯車の上段はよく使う操作、下段は保存設定やガイドです。</p>
+    <dl class="guide-icon-legend"><div><dt>雲</dt><dd>接続設定</dd></div><div><dt>虫眼鏡</dt><dd>検索・置換</dd></div><div><dt>キーボード</dt><dd>入力補助</dd></div><div><dt>本</dt><dd>ノートの参照</dd></div><div><dt>時計</dt><dd>バックアップ</dd></div></dl>
+    <details class="guide-more"><summary>ノートや関連作品を参照する</summary><div><p>原稿の本アイコンから、原稿を編集したままプロット・資料を選んで確認できます。ノート画面は「プレビュー」、構想メモは本アイコンまたはSOURCEから開きます。</p><p>作品設定の「関連作品を設定」で登録した作品も参照できます。同じクラウド・作品ルート内が対象です。「参照元・表示設定」を閉じると本文を広く表示できます。</p></div></details>
+    <details class="guide-more"><summary>原稿・フォルダの名前を変える</summary><div><p>原稿一覧の「名前変更」から変更します。原稿の拡張子（.txt・.md）は保持されます。</p></div></details>
+    <details class="guide-more"><summary>原稿全体を読む</summary><div><p>原稿一覧の歯車→「全体プレビュー」、または原稿画面の「プレビュー」→「全体」から開きます。目次で原稿を選び、「続きを読む」「前を読む」で順に読めます。</p><p>プレビューの「表示設定」で縦横・書体・文字サイズを変更が可能です。<br>「ページ」と設定を共用し、原稿画面の「表示設定」をから変更できます。<br>「編集」からプレビュー表示中の原稿を開けます。</p><p>別原稿へ移る際は未保存の内容を保存し、保存に失敗した場合は移動しません。読み込みを中止した場合は目次から開き直してください。</p></div></details>
+    <details class="guide-more"><summary>文字サイズ・書体を変える</summary><div><p>接続設定で画面と入力欄の文字サイズ・書体を選びます。原稿の「プレビュー」では、本文とは別に書体・横書き／縦書き・行間を設定できます。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-section-3"><summary>入力補助とショートカット</summary><div>
+    <p>キーボードのアイコンから、字下げ・記号・見出し・ルビ・傍点を挿入できます。</p><p>文字を選んでから押すと記法を付けます。「解除」は、選択範囲に付いた括弧・ルビ・傍点の記法を外します。</p>
+    <details class="guide-more" data-guide-section="guide-section-5"><summary>キーボードで操作する</summary><div><dl class="guide-shortcuts"><div><dt>Ctrl + S／Command + S</dt><dd>保存</dd></div><div><dt>Esc</dt><dd>メニューやポップアップを閉じる</dd></div><div><dt>Alt + 1〜6／Option + 1〜6</dt><dd>作品・原稿・プロット・資料・構想・作品設定へ切り替え</dd></div></dl></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-search"><summary>検索・置換</summary><div>
+    <ol class="guide-steps"><li>歯車の虫眼鏡を押し、検索する文字を入力します。</li><li>結果の場所を押すと、該当箇所へ移動します。</li><li>変更するときは「置換する」をONにし、変更後を確認して実行します。</li></ol>
+    <div class="guide-search-scopes"><section data-guide-section="guide-manuscript-search"><h3>原稿</h3><p>編集中の1ファイルの本文が対象です。</p></section><section data-guide-section="guide-note-search"><h3>ノート</h3><p>編集中の1ノートの名称・項目詳細が対象です。項目メモは「条件」でONにします。</p></section><section data-guide-section="guide-concept-search"><h3>構想メモ</h3><p>一覧の歯車から、作品内の全メモのタイトル・本文を検索します。絞り込みで隠れたメモも対象です。</p></section></div>
+    <details class="guide-more"><summary>置換の範囲と取り消し</summary><div><p>1箇所、または選択した候補をまとめて置換できます。空欄への置換は削除です。ルビ・傍点内は検索・移動のみ対応し、リスト・TODOの行構造やチェック記号を変える置換は止めます。</p><p>置換後は通常の保存設定に従います。保存後も「直前の置換を戻す」を使えますが、対象を後から編集した場合や、別の編集画面へ移動・再読み込みした場合は戻せません。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-saving"><summary>保存と同期</summary><div>
+    <span class="guide-anchor" data-guide-section="guide-section-4"></span><p>「保存」でクラウドへ保存します。歯車の「自動保存」をONにすると、入力後しばらくして保存します。</p>
+    <div class="guide-callout"><strong>「保存済み」を確認してから移動</strong><p>反映中・バックアップ中の表示がある間は、完了を待ってください。</p></div>
+    <details class="guide-more"><summary>VS Codeでも編集するとき</summary><div><p>同じクラウドの作品フォルダを使います。別の画面や端末でも変更した場合は、内容を確認してから保存してください。競合時は自動で上書きしません。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-auto-reflect"><summary>項目メモと構想メモの連携</summary><div>
+    <p><strong>自動保存</strong>は編集中の内容を保存し、<strong>自動反映</strong>は保存したメモを連携先へ反映します。自動保存とは別なので、手動保存時に自動反映することもできます。</p>
+    <ol class="guide-steps"><li>ノート・構想メモの歯車で、反映する方向の「全体の既定」をONにします。</li><li>項目メモを保存すると、構想メモの作成・連携も行います。</li><li>構想メモの変更も反映したいときは、逆方向もONにします。</li></ol>
+    <details class="guide-more"><summary>個別設定と、反映が止まったとき</summary><div><p>項目メモ内やSOURCEで「全体設定に従う／このメモはON／このメモはOFF」を選べます。個別指定が優先されます。全体設定は、このブラウザの利用者・クラウド・作品ルートごとに使います。</p><p>両方に変更がある場合は自動反映を止めます。残したい側から「構想メモへ反映」または「項目メモへ反映」を押してください。出典のない構想メモには反映先を自動作成しません。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-backup"><summary>バックアップと復元</summary><div>
+    <p>原稿・ノートは編集画面の歯車、構想メモは一覧の歯車にある時計アイコンから開きます。</p>
+    <ul><li>手動保存、履歴の比較・保護・復元ができます。</li><li>自動バックアップの間隔も履歴画面で設定できます。</li></ul>
+    <div class="guide-callout"><strong>構想メモの復元は、作品内の全メモが対象です。</strong><p>原稿・ノートはファイル単位です。復元前の内容も履歴に残ります。</p></div>
+    <details class="guide-more"><summary>対象と履歴の保持</summary><div><p>対象は原稿フォルダ内の .txt／.md、プロット・資料ノート、構想メモです。作品設定や画像などは含みません。履歴は対象ごとに50件まで、自動履歴は90日で整理されます。保護した履歴は残ります。</p><p>Google Driveでは、VS Codeで作成したバックアップとその中身への追加許可が必要です。作品全体の保全には、作品フォルダのコピーも利用してください。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-file-import"><summary>ファイルから読み込む</summary><div>
+    <ol class="guide-steps"><li>「新規原稿」または「新規ノート」を開きます。</li><li>ファイルを選ぶか、作成画面へ1つドロップします。</li><li>プレビュー・名前・作成先を確認して実行します。</li></ol><p>原稿はUTF-8の .txt／.md、ノートは .md（10MB以下）に対応します。</p>
+    <details class="guide-more"><summary>VS Codeのノートを取り込む</summary><div><p>Dashboard → 保存設定の「Web読込用Markdown」で生成したファイルを使います。「原本を開く」は共有ノートを編集、「新しいコピーを作成」は別ノートを作成します。「既存ノートに上書き」は差分と保存先を確認して実行してください。</p><p>画像は関連付けだけを取り込みます。別作品へ移す場合は .mojigoto/note-images の画像もコピーしてください。呼び名一覧は参照用に表示します。構想メモの連携ID・自動反映設定はコピーへ引き継ぎません。</p></div></details></div></details>
+<details class="guide-topic" data-guide-section="guide-section-6"><summary>困ったとき</summary><div>
+    <details class="guide-more"><summary>作品・ファイルが見つからない</summary><div><p>作品フォルダとクラウド接続を確認してください。Google Driveは<a href="./google-drive-setup.html">登録・追加許可</a>も確認します。</p></div></details>
+    <details class="guide-more"><summary>読み込みが終わらない・更新が見えない</summary><div><ol class="guide-steps"><li>未保存の入力を保存します。保存できない場合は、本文をコピーして控えます。</li><li>接続設定 →「再読み込み」を試します。</li><li>改善しない場合は「アプリのキャッシュを削除して再読み込み」を使います。作品データ・ログイン情報・履歴・設定は残ります。</li></ol></div></details>
+    <details class="guide-more"><summary>競合・反映失敗と表示される</summary><div><p>残したい内容を確認してから、最新版の読み込みや手動反映を選びます。通信エラーが続く場合はクラウドへ再接続してください。</p></div></details>
+    <p>解決しない場合は<a href="./contact/">お問い合わせ</a>へ。</p></div></details>
+<details class="guide-topic" data-guide-section="guide-section-7"><summary>データとアカウント</summary><div>
+    <span class="guide-anchor" data-guide-section="guide-section-8"></span><span class="guide-anchor" data-guide-section="guide-section-9"></span><p>作品データは接続したクラウドに保存され、もじごとのサーバーには保存されません。共用端末では、利用後にクラウド接続を解除し、ログアウトしてください。</p><p>VS CodeとWebは同じ作品フォルダを開き、対応する最新版を使ってください。</p>
+    <p>登録メールアドレスはログインや運営からの連絡に使います。変更は<a href="./contact/">お問い合わせ</a>、利用解除は<a href="./apply/">利用・解除申込</a>へ。詳しくは<a href="./privacy/">プライバシーポリシー</a>をご確認ください。</p></div></details></div><p class="guide-footer"><a href="./guide.html" target="_blank" rel="noopener">別タブでガイドを開く</a></p></div></div>
+      </div>
+    </dialog>
+
+    <dialog id="newFileDialog" class="settings-dialog small-dialog">
+      <form id="newFileForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">NEW MANUSCRIPT</p>
+            <h2>新規原稿</h2>
+          </div>
+          <button class="icon-button" type="button" value="cancel" aria-label="閉じる">閉じる</button>
+        </div>
+        <label class="field">
+          <span>ファイル名</span>
+          <input id="newFileNameInput" name="fileName" autocomplete="off" placeholder="01. 新しい章">
+        </label>
+        <label class="field compact-field">
+          <span>形式</span>
+          <select id="newFileExtension" name="extension">
+            <option value=".txt">テキスト（.txt）</option>
+            <option value=".md">Markdown（.md）</option>
+          </select>
+        </label>
+        <p id="newFileError" class="form-error" role="alert"></p>
+        <div class="template-import">
+          <div id="newFileImportDropZone" class="template-import-dropzone">
+          <label class="field">
+            <span>ファイルから読み込む（任意）</span>
+            <input id="newFileImportInput" type="file" accept=".txt,.md,text/plain,text/markdown">
+          </label>
+          <p class="field-help">ここへファイルを1つドロップするか、選択してください。</p>
+          </div>
+          <p class="field-help">UTF-8のtxt／md・10MB以下。<br>本文をそのまま読み込みます。「作成して開く」を押すまで保存されません。</p>
+          <p id="newFileImportStatus" class="template-import-status" role="status"></p>
+          <p id="newFileImportWarnings" class="template-import-warnings"></p>
+          <details id="newFileImportPreview" hidden>
+            <summary>読込プレビュー（冒頭）</summary>
+            <pre id="newFileImportText" class="template-import-text"></pre>
+          </details>
+          <button id="newFileImportClear" type="button" class="text-button" hidden>読込を取り消す</button>
+          <button class="text-button" type="button" data-editor-guide="guide-file-import">ファイル読込ガイド</button>
+        </div>
+        <div class="dialog-actions end-actions">
+          <button id="createFileButton" class="primary-button" type="submit" value="create">作成して開く</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="newFolderDialog" class="settings-dialog small-dialog">
+      <form id="newFolderForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">NEW FOLDER</p>
+            <h2>新規フォルダ</h2>
+          </div>
+          <button class="icon-button" type="button" value="cancel" aria-label="閉じる">閉じる</button>
+        </div>
+        <label class="field">
+          <span>フォルダ名</span>
+          <input id="newFolderNameInput" name="folderName" autocomplete="off" placeholder="例：第一章">
+        </label>
+        <p id="newFolderError" class="form-error" role="alert"></p>
+        <div class="dialog-actions end-actions">
+          <button id="createFolderButton" class="primary-button" type="submit" value="create">作成して開く</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="renameManuscriptDialog" class="settings-dialog small-dialog" aria-labelledby="renameManuscriptTitle">
+      <form id="renameManuscriptForm" method="dialog">
+        <div class="dialog-heading">
+          <h2 id="renameManuscriptTitle">名前を変更</h2>
+          <button id="cancelRenameManuscriptButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <label class="field" for="renameManuscriptInput">名前</label>
+        <div class="manuscript-rename-input">
+          <input id="renameManuscriptInput" name="name" autocomplete="off" required aria-describedby="renameManuscriptHelp renameManuscriptExtension">
+          <span id="renameManuscriptExtension"></span>
+        </div>
+        <p id="renameManuscriptHelp" class="field-help"></p>
+        <p id="renameManuscriptError" class="form-error" role="alert"></p>
+        <div class="dialog-actions end-actions">
+          <button id="renameManuscriptButton" class="primary-button" type="submit" value="rename">変更</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="moveFileDialog" class="settings-dialog move-file-dialog" aria-labelledby="moveFileTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">MOVE MANUSCRIPT</p>
+            <h2 id="moveFileTitle">原稿を移動</h2>
+          </div>
+          <button id="closeMoveFileButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <p id="moveFileName" class="move-file-name"></p>
+        <p class="field-help">作品の原稿フォルダ内から移動先を選んでください。</p>
+        <div id="moveFileDestinations" class="move-file-destinations" aria-live="polite"></div>
+      </div>
+    </dialog>
+
+    <dialog id="newNoteDialog" class="settings-dialog small-dialog">
+      <form id="newNoteForm" method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <h2 id="newNoteDialogTitle">新規ノート</h2>
+          </div>
+          <button class="icon-button" type="button" value="cancel" aria-label="閉じる">閉じる</button>
+        </div>
+        <label class="field" id="newNoteTitleField">
+          <span>ノート名</span>
+          <input id="newNoteTitleInput" autocomplete="off" placeholder="例：登場人物">
+        </label>
+        <p id="newNoteError" class="form-error" role="alert"></p>
+        <div class="template-import">
+          <div id="newNoteImportDropZone" class="template-import-dropzone">
+          <label class="field">
+            <span>Markdownから読み込む（任意）</span>
+            <input id="newNoteImportInput" type="file" accept=".md,text/markdown">
+          </label>
+          <p class="field-help">ここへファイルを1つドロップするか、選択してください。</p>
+          </div>
+          <p id="newNoteImportStatus" class="template-import-status" role="status"></p>
+          <p id="newNoteImportWarnings" class="template-import-warnings"></p>
+          <fieldset id="newNoteImportDestinationField" class="template-destinations" hidden>
+            <legend>どう読み込みますか？</legend>
+            <select id="newNoteImportDestination" hidden aria-hidden="true" tabindex="-1"></select>
+            <div id="newNoteImportChoices"></div>
+          </fieldset>
+          <div id="newNoteImportReplacePanel" class="template-replace-panel" hidden>
+            <label class="field"><span>上書きするノート</span><select id="newNoteImportReplaceTarget"><option value="">選択してください</option></select></label>
+            <p>選んだノートを読み込んだ内容で置き換え、上書き前にバックアップします。最新版の専用Markdownは項目メモ・タグ・ふりがな・関連リンク・画像の関連付け・呼び名一覧の取込版も含みます。旧形式や通常Markdownに含まれない情報は引き継ぎません。</p>
+            <label><input id="newNoteImportReplaceConfirmed" type="checkbox"> 選んだノートを置き換えることを確認しました</label>
+          </div>
+          <details id="newNoteImportComparison" class="template-comparison" hidden>
+            <summary id="newNoteImportComparisonSummary">Webの内容と比較</summary>
+            <p class="field-help">ファイル選択時のWebのノートと、読み込む内容を比較します。最新版の専用Markdownでは項目メモ・タグ・ふりがな・関連リンク・画像の関連付け・呼び名一覧の取込版も比較します。共通部分は前後2行。画像ファイル本体は含みません。</p>
+            <div id="newNoteImportComparisonRows" tabindex="0" role="region" aria-label="WebとMarkdownの内容比較"></div>
+            <div class="template-comparison-pages">
+              <button id="newNoteImportComparisonPrevious" type="button" class="text-button">前へ</button>
+              <span id="newNoteImportComparisonPage"></span>
+              <button id="newNoteImportComparisonNext" type="button" class="text-button">次へ</button>
+            </div>
+          </details>
+          <details id="newNoteImportPreview" hidden>
+            <summary>読込プレビュー（冒頭）</summary>
+            <pre id="newNoteImportText" class="template-import-text"></pre>
+          </details>
+          <button id="newNoteImportClear" type="button" class="text-button" hidden>読込を取り消す</button>
+          <details class="template-import-help">
+            <summary>読み込める内容・読込先が見つからないとき</summary>
+            <button class="text-button" type="button" data-editor-guide="guide-file-import">ファイル読込ガイドを開く</button>
+            <p>以前の読込先が表示されない場合は、Google Driveで追加許可してから読み直してください。既存ノートの名前は変更しません。</p>
+          </details>
+        </div>
+        <div class="dialog-actions end-actions template-import-actions">
+          <p id="newNoteImportResult">内容を確認してから実行してください。</p>
+          <button id="createNoteButton" class="primary-button" type="submit" value="create">作成して開く</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="relatedNoteDialog" class="settings-dialog related-dialog">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">RELATED NOTES</p>
+            <h2>関連ノートを追加</h2>
+          </div>
+          <button id="closeRelatedNoteButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <label class="note-search">
+          <span class="visually-hidden">関連先を検索</span>
+          <input id="relatedNoteSearchInput" type="search" placeholder="ノート名・分類・項目を検索">
+        </label>
+        <div id="relatedNoteResults" class="related-results"></div>
+      </div>
+    </dialog>
+
+    <dialog id="workRecentViewsDialog" class="settings-dialog" aria-labelledby="workRecentViewsTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <h2 id="workRecentViewsTitle">最近開いた画面</h2>
+          <button id="closeWorkRecentViewsButton" class="icon-button" type="button" aria-label="最近開いた画面を閉じる">閉じる</button>
+        </div>
+        <p class="muted">この作品の画面を最大2件ピン留めできます。<br>ピン留めは先頭に残り、その下に最近開いた画面を5件表示します。</p>
+        <div id="workRecentViewsList" class="recent-views-list"></div>
+      </div>
+    </dialog>
+
+    <dialog id="relatedPreviewDialog" class="settings-dialog related-preview-dialog">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p id="relatedPreviewType" class="section-label">RELATED NOTE</p>
+            <h2 id="relatedPreviewTitle">関連ノート</h2>
+          </div>
+          <button id="closeRelatedPreviewButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <p id="relatedPreviewPath" class="muted"></p>
+        <p id="relatedPreviewNotice" class="muted" role="status">対象ノートを開くと、現在の画面から編集画面へ移動します。</p>
+        <button id="openRelatedPreviewNoteButton" class="secondary-button" type="button" disabled>対象ノートを開く</button>
+        <div id="relatedPreviewContent" class="related-preview-content"></div>
+      </div>
+    </dialog>
+
+    <dialog id="addressBookDialog" class="settings-dialog address-book-dialog">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">ADDRESS BOOK</p>
+            <h2>呼び名一覧</h2>
+          </div>
+          <button id="closeAddressBookButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <p id="addressBookMeta" class="muted"></p>
+        <div id="addressBookContent" class="address-book-content"></div>
+      </div>
+    </dialog>
+
+    <dialog id="wholeManuscriptDialog" class="settings-dialog whole-manuscript-dialog" aria-labelledby="wholeManuscriptTitle">
+      <div class="dialog-content whole-manuscript-layout">
+        <div class="dialog-heading whole-manuscript-heading"><div><p class="section-label">MANUSCRIPT</p><h2 id="wholeManuscriptTitle">原稿全体の目次</h2></div><div id="wholeBodyNavigation" class="whole-body-navigation" hidden><button id="wholeBodyBack" class="text-button whole-body-back" type="button" aria-label="目次へ">目次</button>          <details id="wholeBodySettings" class="whole-body-settings"><summary>表示設定</summary><div class="whole-body-settings-panel"><p id="wholeBodyFileInfo" class="whole-body-file-info"></p><div class="whole-body-setting-fields">
+            <label>方向<select id="wholeBodyMode"><option value="horizontal">横書き</option><option value="vertical">縦書き</option></select></label>
+            <label>書体<select id="wholeBodyFont"><option value="mincho">明朝</option><option value="gothic">ゴシック</option></select></label>
+            <label>文字サイズ<select id="wholeBodyFontSize"><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option></select></label>
+            <div id="wholeBodyVerticalSettings" class="whole-body-vertical-settings" hidden>
+              <label class="whole-body-fit"><input id="wholeBodyAutoFit" type="checkbox" checked>画面に合わせる</label>
+              <label>一行の文字数<input id="wholeBodyLineCharacters" type="number" min="10" max="40" value="40"></label>
+              <label>行間<select id="wholeBodyLineHeight"><option value="1.6">狭い</option><option value="1.9">標準</option><option value="2.2">広い</option><option value="2.5">さらに広い</option></select></label>
+            </div>
+          </div></div></details><button id="wholeBodyEdit" class="text-button" type="button" aria-label="表示中の原稿を開く" title="表示中の原稿を編集">編集</button></div><button id="closeWholeManuscriptButton" class="icon-button" type="button" aria-label="全体プレビューを閉じる" title="閉じる">✕</button></div>
+        <p id="wholeManuscriptHelp" class="field-help">目次から原稿を選ぶか、先頭から読めます。</p>
+        <div id="wholeManuscriptToolbar" class="whole-manuscript-toolbar"><p id="wholeManuscriptStatus" role="status"></p><div><button id="wholeBodyOpen" class="secondary-button compact-button" type="button" disabled>先頭から読む</button><button id="stopWholeManuscriptButton" class="secondary-button compact-button" type="button">読み込みを中止</button><button id="retryWholeManuscriptButton" class="secondary-button compact-button" type="button" hidden>未取得を再試行</button><button id="refreshWholeManuscriptButton" class="text-button" type="button">更新</button></div></div>
+        <p id="wholeManuscriptNotice" class="field-help" role="alert" hidden></p>
+        <section id="wholeBodyPane" class="whole-body-pane" aria-label="原稿全体プレビュー" hidden>
+          <div id="wholeBodyContent" class="whole-body-content" tabindex="0" aria-label="原稿本文"></div>
+          <div class="whole-body-footer">
+            <button id="wholeBodyPrevious" class="text-button" type="button" aria-label="前を読む" title="前を読む" disabled>←</button>
+            <div class="whole-body-progress"><p id="wholeBodyStatus" role="status"></p><span id="wholeBodySource" class="whole-body-source-badge" hidden>未保存の内容</span></div>
+            <div class="whole-body-footer-actions"><button id="wholeBodyStop" class="text-button" type="button" aria-label="読込中止" hidden>中止</button><button id="wholeBodyRetry" class="text-button" type="button" hidden>再試行</button><button id="wholeBodyNext" class="secondary-button compact-button" type="button" aria-label="続きを読む" title="続きを読む" disabled>次へ →</button></div>
+          </div>
+        </section>
+        <ol id="wholeManuscriptList" class="whole-manuscript-list" aria-label="原稿全体の目次"></ol>
+        <div id="wholeManuscriptPagination" class="whole-manuscript-pagination"><button id="wholeManuscriptPrev" class="text-button" type="button">前へ</button><span id="wholeManuscriptPage">1 / 1</span><button id="wholeManuscriptNext" class="text-button" type="button">次へ</button></div>
+      </div>
+    </dialog>
+
+    <dialog id="manuscriptPreviewDialog" class="settings-dialog manuscript-preview-dialog">
+      <div class="dialog-content manuscript-preview-dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">MANUSCRIPT PREVIEW</p>
+            <h2 id="manuscriptPreviewTitle">原稿プレビュー</h2>
+          </div>
+          <button id="closeManuscriptPreviewButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <div id="manuscriptPreviewContent" class="manuscript-preview-content" aria-live="polite"></div>
+      </div>
+    </dialog>
+
+    <dialog id="progressShareDialog" class="settings-dialog progress-share-dialog">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div><p class="section-label">SNS PROGRESS</p><h2>進捗画像</h2></div>
+          <button id="closeProgressShareButton" class="icon-button" type="button" aria-label="進捗画像を閉じる">閉じる</button>
+        </div>
+        <p class="muted">画像に表示する内容を選びます。<br>表示中のプレビューと同じPNGを保存・コピー・共有します。</p>
+        <div class="progress-share-layout">
+          <fieldset id="progressShareOptions" class="progress-share-options">
+            <legend>表示項目</legend>
+            <label class="progress-share-date-field"><span>まとめ方</span><select id="progressShareMode"><option value="daily">日別（直近7日）</option><option value="monthly">月間（直近6か月）</option><option value="annual">年間（指定年1～12月）</option></select></label>
+            <label id="progressShareDateField" class="progress-share-date-field"><span>対象日</span><input id="progressShareDateSelect" type="date"></label>
+            <label id="progressShareYearField" class="progress-share-date-field" hidden><span>対象年</span><input id="progressShareYearSelect" type="number" min="2000" max="2100" step="1"></label>
+            <details class="progress-share-retention-help"><summary aria-label="年間集計の保存期間について">？</summary><div>年間集計は保存されている進捗履歴だけが対象です。<br>保持期間を過ぎた履歴は集計できません。<br>VS CodeのDashboardにある「保存設定」→「進捗・更新ファイル履歴保持」を確認し、365日の場合は400日程度へ変更してください。<br>Webからは保持日数を確認・変更できません。</div></details>
+            <details class="progress-share-display-options">
+              <summary>表示ON/OFF</summary>
+              <div>
+                <label><input type="checkbox" value="title" checked>作品名</label>
+                <label><input type="checkbox" value="graph" checked><span id="progressShareGraphLabel">7日間グラフ</span></label>
+                <label class="progress-share-daily-only"><input type="checkbox" value="total" checked>総文字数</label>
+                <label class="progress-share-daily-only"><input type="checkbox" value="today" checked>対象日の進捗</label>
+                <label class="progress-share-daily-only"><input type="checkbox" value="week" checked>7日間の合計</label>
+                <label><input type="checkbox" value="notes" checked>ノート更新数</label>
+                <label><input type="checkbox" value="concepts" checked>構想メモ更新数</label>
+                <label class="progress-share-monthly-only" hidden><input type="checkbox" value="works" checked>作品ごとの月間差分</label>
+                <label class="progress-share-annual-only" hidden><input type="checkbox" value="annualWorks" checked>作品ごとの年間差分</label>
+              </div>
+            </details>
+          </fieldset>
+          <div class="progress-share-preview"><canvas id="progressShareCanvas" width="720" height="900" aria-label="SNS進捗画像のプレビュー"></canvas></div>
+        </div>
+        <div class="progress-share-footer">
+          <span id="progressShareStatus" class="muted" aria-live="polite">幅720px・内容に合わせた縦長PNGです。</span>
+          <div>
+            <button id="copyProgressShareTextButton" class="secondary-button progress-share-action" type="button" aria-label="SNS投稿文をコピー" title="SNS投稿文をコピー"><span class="progress-share-action-icon" aria-hidden="true">文</span><span>投稿文</span></button>
+            <button id="saveProgressShareButton" class="secondary-button progress-share-action" type="button" aria-label="PNG画像を保存" title="PNG画像を保存"><span class="progress-share-action-icon" aria-hidden="true">↓</span><span>保存</span></button>
+            <button id="copyProgressShareButton" class="secondary-button progress-share-action" type="button" aria-label="進捗画像をコピー" title="進捗画像をコピー"><span class="progress-share-action-icon" aria-hidden="true">▣</span><span>コピー</span></button>
+            <button id="shareProgressButton" class="primary-button progress-share-action" type="button" aria-label="進捗画像と投稿文を共有" title="進捗画像と投稿文を共有" hidden><span class="progress-share-action-icon" aria-hidden="true">↗</span><span>共有</span></button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="manuscriptBackupDialog" class="settings-dialog manuscript-backup-dialog">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div><p class="section-label">BACKUP HISTORY</p><h2 id="manuscriptBackupTitle">バックアップ</h2></div>
+          <button id="closeManuscriptBackupButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <div class="manuscript-backup-toolbar">
+          <p id="manuscriptBackupStatus" class="muted" aria-live="polite"></p>
+          <div class="manuscript-backup-actions">
+          <label class="backup-interval-field"><span>自動間隔</span><select id="backupIntervalSelect"><option value="0">使用しない</option><option value="5">5分</option><option value="15">15分</option><option value="30">30分</option><option value="60">1時間</option></select></label>
+          <button id="createManuscriptBackupButton" class="primary-button compact-button" type="button">現在の内容をバックアップ</button>
+          </div>
+        </div>
+        <div id="manuscriptBackupNotice" class="backup-panel-notice" role="status" hidden><span id="manuscriptBackupNoticeText"></span><button id="closeManuscriptBackupNotice" class="text-button" type="button" aria-label="バックアップのお知らせを閉じる">閉じる</button></div>
+        <p class="field-help"><strong>対象は 現在開いている原稿、ノート、または 作品の構想メモ です。</strong><br>構想メモは作品内の全メモをまとめて復元します。保存後は設定した間隔で変更内容を自動バックアップします。<br>対象ごとに50件まで・自動履歴は90日で整理されます。「保護」した履歴は残ります。<br>件数未記録のバックアップは、比較を開くと内容から件数を表示します。</p>
+        <section id="manuscriptBackupComparison" class="manuscript-backup-comparison" hidden>
+          <div class="manuscript-backup-comparison-heading"><strong>比較内容の確認</strong><button id="closeManuscriptBackupComparisonButton" class="text-button" type="button">キャンセル</button></div>
+          <div class="manuscript-backup-comparison-context">
+            <div class="is-backup"><span>復元候補</span><strong id="backupComparisonOldTitle">バックアップ</strong></div>
+            <div class="is-current"><span>現在</span><strong id="backupComparisonCurrentTitle">現在の内容</strong></div>
+          </div>
+          <div class="manuscript-backup-diff-toolbar">
+            <span id="backupComparisonSummary" class="muted" aria-live="polite"></span>
+            <div>
+              <button id="backupDiffPreviousButton" class="text-button" type="button">↑ 前の差分</button>
+              <button id="backupDiffNextButton" class="text-button" type="button">↓ 次の差分</button>
+              <button id="backupDiffViewToggle" class="text-button" type="button">全文表示</button>
+            </div>
+          </div>
+          <div class="manuscript-backup-diff-head" aria-hidden="true">
+            <span>バックアップ（復元候補）</span><span>現在の内容</span>
+          </div>
+          <div id="backupComparisonDiff" class="manuscript-backup-diff" role="table" aria-label="バックアップと現在の原稿の行単位差分"></div>
+          <div class="manuscript-backup-comparison-actions">
+            <button id="restoreComparedBackupButton" class="primary-button" type="button">このバックアップを復元</button>
+            <button id="cancelComparedBackupButton" class="text-button" type="button">キャンセル</button>
+          </div>
+        </section>
+        <div id="manuscriptBackupList" class="manuscript-backup-list"></div>
+      </div>
+    </dialog>
+
+    <dialog id="notePreviewDialog" class="settings-dialog note-preview-dialog" aria-labelledby="notePreviewTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="section-label">NOTE PREVIEW</p>
+            <h2 id="notePreviewTitle">ノートプレビュー</h2>
+          </div>
+          <button id="closeNotePreviewButton" class="icon-button" type="button" aria-label="閉じる">閉じる</button>
+        </div>
+        <details id="notePreviewOptions" class="note-preview-options">
+          <summary>
+            <span class="note-preview-options-line"><span>参照元・表示設定</span><span id="notePreviewOptionsLoading" class="reference-source-loading note-preview-options-loading" role="status" hidden>関連作品を読み込み中…</span></span>
+            <span id="notePreviewSelectionSummary" class="note-preview-selection-summary">この作品・編集中</span>
+          </summary>
+          <div class="note-preview-options-body">
+        <div class="reader-note-reference-controls note-preview-controls">
+          <label class="note-preview-source">
+              <span class="reference-source-heading"><span>参照元作品</span><span id="notePreviewSourceLoading" class="reference-source-loading" role="status" hidden>関連作品を読み込み中…</span></span>
+              <select id="notePreviewWorkSelect" aria-label="参照元作品" aria-busy="false"><option value="">この作品</option></select>
+              <span id="notePreviewSourceLoadingHelp" class="reference-source-loading-help" hidden>この作品のノートは操作できます。関連作品への切替は読み込み完了後に利用できます。</span>
+            </label>
+          <label><span>種類</span><select id="notePreviewTypeSelect"><option value="current">編集中</option><option value="plot">プロット</option><option value="reference">資料</option></select></label>
+          <label><span>ノート</span><select id="notePreviewSelect" disabled><option value="">編集中のノート</option></select></label>
+        </div>
+        <p id="notePreviewReferenceStatus" class="reader-note-reference-status" role="status"></p>
+        <p id="notePreviewHelp" class="muted">大分類は開閉できます。区分・項目を選ぶと編集位置へ移動し、編集欄に重なるプレビューは閉じます。</p>
+          </div>
+        </details>
+        <div id="notePreviewContent" class="note-preview-content"></div>
+      </div>
+    </dialog>
+
+    <dialog id="tagHistoryDialog" class="settings-dialog small-dialog" aria-labelledby="tagHistoryTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div><p class="section-label">TAG HISTORY</p><h2 id="tagHistoryTitle">タグ履歴</h2></div>
+          <button id="closeTagHistoryButton" class="icon-button" type="button">閉じる</button>
+        </div>
+        <p class="muted">追加するタグを選択してください。</p>
+        <div id="tagHistoryList" class="tag-history-list"></div>
+      </div>
+    </dialog>
+
+    <dialog id="editorListDialog" class="settings-dialog editor-list-dialog" aria-labelledby="editorListTitle">
+      <div class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p id="editorListType" class="section-label">FILES</p>
+            <h2 id="editorListTitle">一覧</h2>
+          </div>
+          <button id="closeEditorListButton" class="icon-button" type="button" aria-label="一覧を閉じる">閉じる</button>
+        </div>
+        <label id="conceptEditorListPreference" class="autosave-control" hidden><input id="conceptEditorListToggle" type="checkbox"><span>一覧プレビューを常時表示</span></label>
+        <div id="editorListContent" class="editor-list-content" aria-live="polite"></div>
+      </div>
+    </dialog>
+
+    <dialog id="memoAutoReflectDialog" class="settings-dialog small-dialog" aria-labelledby="memoAutoReflectDialogTitle">
+      <form method="dialog" class="dialog-content">
+        <h2 id="memoAutoReflectDialogTitle">メモの全体設定</h2>
+        <p>接続中の作品ルート内の全作品に適用します。個別のON／OFFは優先されます。</p>
+        <p>既存メモにも適用しますか？「今後のメモだけ」は、読み込める既存メモの未指定設定をOFFとして保存します。未保存の編集がある場合は先に保存してください。</p>
+        <div class="conflict-actions"><button value="all" type="submit" class="primary-button">既存メモにも適用</button>
+        <button value="future" type="submit" class="secondary-button">今後のメモだけ</button>
+        <button value="cancel" type="submit" class="text-button" autofocus>キャンセル</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="conceptSwitchDialog" class="settings-dialog small-dialog" aria-labelledby="conceptSwitchTitle">
+      <form method="dialog" class="dialog-content">
+        <h2 id="conceptSwitchTitle">未保存の変更があります</h2>
+        <p>現在のメモを保存してから切り替えますか？</p>
+        <div class="conflict-actions">
+          <button value="save" class="primary-button">保存して切り替え</button>
+          <button value="discard" class="danger-button">保存せず切り替え</button>
+          <button value="cancel" class="text-button" autofocus>キャンセル</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="conflictDialog" class="settings-dialog small-dialog">
+      <div class="conflict-content">
+        <p class="section-label">SAVE CONFLICT</p>
+        <h2>別の場所で更新されています</h2>
+        <p id="conflictCloudMessage" class="muted">スマホで編集中の本文は消していません。コピーして残すか、接続中のクラウドの最新版を読み直してください。</p>
+        <div class="conflict-actions">
+          <button id="copyDraftButton" class="secondary-button" type="button">編集中本文をコピー</button>
+          <button id="reloadLatestButton" class="danger-button" type="button">最新版を読み直す</button>
+          <button id="closeConflictButton" class="text-button" type="button">閉じる</button>
+        </div>
+      </div>
+    </dialog>
+
+    <template id="emptyTemplate">
+      <div class="empty-state">
+        <span>まだ表示するものがありません</span>
+      </div>
+    </template>
+
+    <script type="module" src="./app.mjs?v=1.0.282"></script>
+  </body>
+</html>
+

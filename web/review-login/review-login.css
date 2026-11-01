@@ -1,0 +1,6 @@
+.review-login-action { margin: 28px 0; }
+.review-login-button { display: inline-flex; justify-content: center; align-items: center; min-height: 48px; padding: 12px 22px; border-radius: 12px; color: var(--surface); background: var(--ink); font-weight: 700; text-decoration: none; }
+.review-login-button:hover { opacity: .85; }
+.review-login-button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.review-login-help { color: var(--muted); font-size: .9rem; }
+@media (max-width: 600px) { .review-login-button { width: 100%; } }

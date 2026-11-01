@@ -1,0 +1,13 @@
+.guide-document-root, .guide-document { overflow-x: clip; }
+.guide-document > .topbar { flex-wrap: wrap; gap: 10px; }
+.guide-document .guide-page-nav { flex: 0 0 auto; }
+.guide-page { max-width: 800px; margin: 28px auto; padding: 0 24px 48px; }
+.guide-page-header { margin-bottom: 10px; }
+.guide-page-header h1 { margin: 0; font-size: clamp(1.4rem, 4vw, 1.8rem); }
+.guide-page .guide-lead { margin: 12px 0 18px; }
+.guide-page-nav { display: flex; align-items: center; gap: 10px; }
+.guide-page-nav button { min-height: 40px; padding: 8px 14px; }
+.guide-page .guide-sections [id], .guide-page .guide-sections details { scroll-margin-top: calc(var(--guide-header-height, 90px) + 14px); }
+.guide-page .guide-sections > details > div { font-size: .9rem; }
+#guideCloseStatus { scroll-margin-top: calc(var(--guide-header-height, 90px) + 14px); }
+@media (max-width: 600px) { .guide-page { margin-top: 20px; padding: 0 14px 32px; } }

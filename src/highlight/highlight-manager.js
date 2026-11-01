@@ -4,6 +4,7 @@ const {
   readHighlightGroups,
   makeDecorationOptions,
   collectHighlightMatches,
+  parseHeadingLine,
 } = require("./highlight-core");
 
 function readHighlightsEnabled() {
@@ -145,6 +146,7 @@ class HighlightManager {
 
     this.lastDetails = groups.map((g) => {
       const m = matchMap.get(g.name);
+      const detailLimit = g.name === "heading" ? 500 : 50;
 
       return {
         name: g.name,
@@ -152,8 +154,10 @@ class HighlightManager {
         count: m ? m.count : 0,
         countable: g.countable !== false,
         items: m
-          ? m.ranges.slice(0, 50).map((range) => {
+          ? m.ranges.slice(0, detailLimit).map((range) => {
               const line = editor.document.lineAt(range.start.line);
+              const heading =
+                g.name === "heading" ? parseHeadingLine(line.text) : null;
               return {
                 line: range.start.line + 1,
                 preview: line.text,
@@ -161,6 +165,8 @@ class HighlightManager {
                 startCharacter: range.start.character,
                 endLine: range.end.line,
                 endCharacter: range.end.character,
+                headingLevel: heading?.level || 0,
+                headingText: heading?.text || "",
               };
             })
           : [],

@@ -1,36 +1,27 @@
+const { createConceptMemoListQuery } = require("./list-query");
+
 function getConceptMemoListScript() {
   return `
+    const conceptMemoListQuery = (${createConceptMemoListQuery.toString()})({
+      conceptNoteOrder,
+      compareText: (a, b) => compareText(a, b),
+      getTimeValue: (value) => getTimeValue(value),
+      normalizeMemoFolderIds: (memo) => normalizeMemoFolderIds(memo),
+      getMemoSearchText: (memo) => getMemoSearchText(memo),
+    });
+
+    function getFilteredMemos() {
+      return conceptMemoListQuery.getFilteredMemos({
+        memos: currentState?.data?.memos,
+        folders: getMemoFolders(),
+        activeFolderIds, activeTagFilters, activeQuickFilters, searchQuery,
+        conceptNoteIndex, activeNoteFilter, sortField, sortDirection,
+      });
+    }
+
     function sortMemosForList(memos) {
-      return [...memos].sort((a, b) => {
-        const aPinned = a?.isPinned ? 1 : 0;
-        const bPinned = b?.isPinned ? 1 : 0;
-
-        if (aPinned !== bPinned) {
-          return bPinned - aPinned;
-        }
-
-        const field = sortField || "updated";
-        const direction = sortDirection || "desc";
-
-        if (field === "title") {
-          const compared = compareText(
-            a?.title || "無題メモ",
-            b?.title || "無題メモ",
-          );
-          return direction === "asc" ? compared : -compared;
-        }
-
-        const aValue =
-          field === "created"
-            ? getTimeValue(a?.createdAt)
-            : getTimeValue(a?.updatedAt);
-
-        const bValue =
-          field === "created"
-            ? getTimeValue(b?.createdAt)
-            : getTimeValue(b?.updatedAt);
-
-        return direction === "asc" ? aValue - bValue : bValue - aValue;
+      return conceptMemoListQuery.sortMemosForList(memos, {
+        sortField, sortDirection, conceptNoteIndex, activeNoteFilter,
       });
     }
 
@@ -43,6 +34,7 @@ function getConceptMemoListScript() {
       if (fieldSelect && fieldSelect.value !== sortField) {
         fieldSelect.value = sortField;
       }
+      if (fieldSelect) fieldSelect.title = sortField === "noteOrder" ? "ピン留めよりノートの項目順を優先します。関連なし・参照不可のメモは末尾です。" : "並び順";
 
       if (directionRadio) {
         directionRadio.checked = true;
@@ -60,7 +52,8 @@ function getConceptMemoListScript() {
           'input[name="memoSortDirection"]:checked',
         );
 
-        sortDirection = checkedDirection?.value || "desc";
+        const enteringNoteOrder = sortField !== "noteOrder" && fieldSelect?.value === "noteOrder";
+        sortDirection = enteringNoteOrder ? "asc" : checkedDirection?.value || "desc";
         sortField = fieldSelect?.value || "updated";
 
         localStorage.setItem(getSortDirectionStorageKey(), sortDirection);
@@ -84,6 +77,7 @@ function getConceptMemoListScript() {
     }
 
     function getSortModeLabel() {
+      if (sortField === "noteOrder") return "並び順: ノートの項目順" + (sortDirection === "desc" ? "（逆順）" : "");
       if (sortField === "title") {
         return sortDirection === "asc"
           ? "並び順: タイトル昇順"
@@ -106,91 +100,6 @@ function getConceptMemoListScript() {
       return !typeFilter || typeFilter === "text";
     }
 
-    function memoMatchesTypeFilter(memo) {
-      const typeFilter = String(activeQuickFilters?.type || "");
-      if (!typeFilter) return true;
-      return String(memo?.type || "text") === typeFilter;
-    }
-
-    function memoMatchesStateFilter(memo) {
-      const states = Array.isArray(activeQuickFilters?.state)
-        ? activeQuickFilters.state
-        : [];
-
-      const wantsArchived = states.includes("archived");
-
-      // 通常表示では、保管中メモは出さない
-      if (!wantsArchived && Boolean(memo?.isArchived)) {
-        return false;
-      }
-
-      if (!states.length) return true;
-
-      return states.every((state) => {
-        if (state === "dashboard") return Boolean(memo?.showInDashboard);
-        if (state === "archived") return Boolean(memo?.isArchived);
-        if (state === "pinned") return Boolean(memo?.isPinned);
-        return true;
-      });
-    }
-
-    function memoMatchesSourceFilter(memo) {
-      const sourceFilter = String(activeQuickFilters?.source || "");
-      if (!sourceFilter) return true;
-
-      if (sourceFilter === "hasSource") {
-        const sourceKind = String(memo?.source?.kind || "");
-        return sourceKind === "noteItem" || sourceKind === "writingMemo";
-      }
-
-      if (sourceFilter === "cleared") {
-        return String(memo?.source?.status || "") === "cleared";
-      }
-
-      if (sourceFilter === "missing") {
-        return String(memo?.source?.status || "") === "missing";
-      }
-
-      return true;
-    }
-
-    function getFilteredMemos() {
-      const memos = Array.isArray(currentState?.data?.memos)
-        ? currentState.data.memos
-        : [];
-      const folderFilterExists =
-        activeFolderId === "" ||
-        getMemoFolders().some((folder) => folder.id === activeFolderId);
-
-      const visibleByQuickFilter = memos.filter((memo) => {
-        return (
-          memoMatchesTypeFilter(memo) &&
-          memoMatchesStateFilter(memo) &&
-          memoMatchesSourceFilter(memo)
-        );
-      });
-
-      const visibleByFolder = activeFolderId === "__all__" || !folderFilterExists
-        ? visibleByQuickFilter
-        : visibleByQuickFilter.filter(
-            (memo) => String(memo?.folderId || "") === activeFolderId,
-          );
-
-      const visibleByTag = activeTagFilter
-        ? visibleByFolder.filter((memo) => {
-            const tags = Array.isArray(memo?.tags) ? memo.tags : [];
-            return tags.includes(activeTagFilter);
-          })
-        : visibleByFolder;
-
-      const query = String(searchQuery || "").trim().toLowerCase();
-      const filtered = !query
-        ? visibleByTag
-        : visibleByTag.filter((memo) => getMemoSearchText(memo).includes(query));
-
-      return sortMemosForList(filtered);
-    }
-
     function getActiveQuickFilterSummaryLabel() {
       const labels = [];
 
@@ -209,10 +118,15 @@ function getConceptMemoListScript() {
       if (activeQuickFilters.source === "hasSource") labels.push("出典あり");
       if (activeQuickFilters.source === "cleared") labels.push("元メモなし");
       if (activeQuickFilters.source === "missing") labels.push("リンク切れ");
-      if (activeFolderId === "") labels.push("未分類");
-      if (activeFolderId !== "__all__" && activeFolderId !== "") {
-        const folderName = getMemoFolderName(activeFolderId);
-        if (folderName) labels.push("フォルダ: " + folderName);
+      if (activeNoteFilter) labels.push("ノート: " + (activeNoteFilter === "__unlinked__" ? "関連なし・参照不可" : conceptNoteIndex.find((note) => note.key === activeNoteFilter)?.title || "対象ノート"));
+      if (Array.isArray(activeTagFilters) && activeTagFilters.length) {
+        labels.push("タグ: " + activeTagFilters.join("、"));
+      }
+      if (Array.isArray(activeFolderIds) && activeFolderIds.length) {
+        const folderLabels = activeFolderIds.map((folderId) =>
+          folderId === "" ? "未分類" : getMemoFolderName(folderId),
+        ).filter(Boolean);
+        if (folderLabels.length) labels.push("フォルダ: " + folderLabels.join("、"));
       }
 
       return labels.length ? "絞り込み: " + labels.join(" / ") : "絞り込み: なし";
@@ -248,9 +162,9 @@ function getConceptMemoListScript() {
 
       const counts = getMemoCounts();
       const hasFilter =
-        Boolean(searchQuery) ||
-        Boolean(activeTagFilter) ||
-        activeFolderId !== "__all__" ||
+        Boolean(searchQuery) || Boolean(activeNoteFilter) ||
+        (Array.isArray(activeTagFilters) && activeTagFilters.length > 0) ||
+        (Array.isArray(activeFolderIds) && activeFolderIds.length > 0) ||
         Boolean(activeQuickFilters.type) ||
         (Array.isArray(activeQuickFilters.state) && activeQuickFilters.state.length > 0) ||
         Boolean(activeQuickFilters.source);
@@ -270,52 +184,85 @@ function getConceptMemoListScript() {
         getSortModeLabel() + " / " + getActiveQuickFilterSummaryLabel();
     }
 
-    function setActiveTagFilter(tag) {
-      activeTagFilter = String(tag || "").trim();
+    function toggleActiveTagFilter(tag) {
+      const value = String(tag || "").trim();
+      if (!value) return;
+      activeTagFilters = activeTagFilters.includes(value)
+        ? activeTagFilters.filter((item) => item !== value)
+        : [...activeTagFilters, value];
 
       const visible = getFilteredMemos();
       if (visible.length && !visible.some((memo) => memo.id === selectedMemoId)) {
         selectedMemoId = visible[0].id;
       }
+      if (!visible.length) selectedMemoId = "";
 
       renderAll();
-      showToast("タグで絞り込みました: " + activeTagFilter);
-    }
-
-    function clearActiveTagFilter() {
-      activeTagFilter = "";
-
-      const visible = getFilteredMemos();
-      if (visible.length && !visible.some((memo) => memo.id === selectedMemoId)) {
-        selectedMemoId = visible[0].id;
-      }
-
-      renderAll();
-      showToast("タグ絞り込みを解除しました。");
+      showToast(activeTagFilters.length
+        ? "タグで絞り込みました: " + activeTagFilters.join("、")
+        : "タグ絞り込みを解除しました。");
     }
 
     function renderTagFilter() {
-      const tagFilterBox = document.getElementById("tagFilterBox");
-      const activeTagFilterLabel = document.getElementById("activeTagFilterLabel");
-
-      if (!tagFilterBox || !activeTagFilterLabel) return;
-
-      if (!activeTagFilter) {
-        tagFilterBox.style.display = "none";
-        activeTagFilterLabel.textContent = "";
-        return;
-      }
-
-      tagFilterBox.style.display = "";
-      activeTagFilterLabel.textContent = activeTagFilter;
+      const row = document.getElementById("memoTagFilterRow");
+      if (!row) return;
+      const tags = [...new Set(
+        (Array.isArray(currentState?.data?.memos) ? currentState.data.memos : [])
+          .flatMap((memo) => Array.isArray(memo?.tags) ? memo.tags : [])
+          .map((tag) => String(tag || "").trim())
+          .filter(Boolean),
+      )].sort((left, right) => compareText(left, right));
+      activeTagFilters = activeTagFilters.filter((tag) => tags.includes(tag));
+      row.innerHTML = tags.length
+        ? tags.map((tag) =>
+            '<button type="button" class="filterChip' +
+              (activeTagFilters.includes(tag) ? ' isActive' : '') +
+              '" data-tag-filter-option="' + escapeHtml(tag) + '">' +
+              escapeHtml(tag) + '</button>',
+          ).join("")
+        : '<span class="muted">タグはまだありません。</span>';
     }
 
     function bindTagFilterActions() {
-      const clearTagFilterButton = document.getElementById("clearTagFilterButton");
-      if (!clearTagFilterButton) return;
+      document.getElementById("memoTagFilterRow")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-tag-filter-option]");
+        if (!button) return;
+        event.stopPropagation();
+        toggleActiveTagFilter(button.dataset.tagFilterOption || "");
+      });
+    }
 
-      clearTagFilterButton.addEventListener("click", () => {
-        clearActiveTagFilter();
+    function requestConceptNoteIndex() {
+      if (conceptNoteIndexLoading) return;
+      conceptNoteIndexLoading = true;
+      renderNoteFilter();
+      vscode.postMessage({ type: "requestConceptNoteIndex" });
+    }
+
+    function renderNoteFilter() {
+      const select = document.getElementById("memoNoteFilter");
+      if (!select) return;
+      select.innerHTML = '<option value="">すべてのノート</option><option value="__unlinked__">関連なし・参照不可</option>'
+        + conceptNoteIndex.map((note) => '<option value="' + escapeHtml(note.key) + '">' + escapeHtml(getNoteTypeLabel(note.type) + " / " + note.title) + '</option>').join("");
+      if (activeNoteFilter && activeNoteFilter !== "__unlinked__" && !conceptNoteIndex.some((note) => note.key === activeNoteFilter)) {
+        const option = document.createElement("option");
+        option.value = activeNoteFilter;
+        option.textContent = "対象ノート（未取得・参照不可）";
+        select.append(option);
+      }
+      select.value = activeNoteFilter;
+      select.disabled = conceptNoteIndexLoading;
+      const status = document.getElementById("memoNoteFilterStatus");
+      if (status && conceptNoteIndexLoading) status.textContent = "ノートを確認中…";
+    }
+
+    function bindNoteFilterActions() {
+      document.getElementById("memoNoteFilter")?.addEventListener("change", (event) => {
+        activeNoteFilter = event.target.value;
+        renderAll();
+      });
+      ["openSortPanelButton", "openFilterPanelButton"].forEach((id) => {
+        document.getElementById(id)?.addEventListener("click", requestConceptNoteIndex);
       });
     }
 
@@ -356,7 +303,8 @@ function getConceptMemoListScript() {
 
     function bindQuickFilter() {
       document.querySelectorAll("[data-filter-group]").forEach((button) => {
-        button.addEventListener("click", () => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
           const group = button.dataset.filterGroup || "";
           const value = button.dataset.filterValue || "";
 
@@ -394,12 +342,16 @@ function getConceptMemoListScript() {
 
       const clearButton = document.getElementById("clearQuickFilterButton");
       if (clearButton) {
-        clearButton.addEventListener("click", () => {
+        clearButton.addEventListener("click", (event) => {
+          event.stopPropagation();
           activeQuickFilters = {
             type: "",
             state: [],
             source: "",
           };
+          activeTagFilters = [];
+          activeNoteFilter = "";
+          activeFolderIds = [];
 
           const visible = getFilteredMemos();
           if (visible.length && !visible.some((memo) => memo.id === selectedMemoId)) {
@@ -555,6 +507,7 @@ function getConceptMemoListScript() {
         movedCount += 1;
         return {
           ...memo,
+          folderIds: targetFolderId ? [targetFolderId] : [],
           folderId: targetFolderId,
           updatedAt,
         };
@@ -685,14 +638,18 @@ function getConceptMemoListScript() {
           "openBulkDeletePanelButton",
         ];
 
+        const eventPath = typeof event.composedPath === "function"
+          ? event.composedPath()
+          : [];
+
         const clickedInsidePanel = panelIds.some((id) => {
           const el = document.getElementById(id);
-          return el && el.contains(event.target);
+          return el && (eventPath.includes(el) || el.contains(event.target));
         });
 
         const clickedButton = buttonIds.some((id) => {
           const el = document.getElementById(id);
-          return el && el.contains(event.target);
+          return el && (eventPath.includes(el) || el.contains(event.target));
         });
 
         if (!clickedInsidePanel && !clickedButton) {
@@ -729,7 +686,7 @@ function getConceptMemoListScript() {
         const title = memo?.title || "無題メモ";
         const typeLabel = getMemoTypeLabel(memo?.type || "text");
         const tags = Array.isArray(memo?.tags) ? memo.tags : [];
-        const folderName = getMemoFolderName(memo?.folderId || "");
+        const folderNames = getMemoFolderNames(memo);
         const sourceSummary = getSourceSummaryShort(memo);
         const sourceStatusBadgeHtml = getSourceStatusBadgeHtml(memo);
         const isSelectedClass = memo.id === selectedMemoId ? " isSelected" : "";
@@ -774,7 +731,7 @@ function getConceptMemoListScript() {
 
         const tagsHtml = tags.length
           ? '<div class="tagList">' + tags.map((tag) => {
-              const activeClass = tag === activeTagFilter ? ' style="font-weight:600;"' : '';
+              const activeClass = activeTagFilters.includes(tag) ? ' style="font-weight:600;"' : '';
               return '<span class="tagChip isClickable" data-tag-filter="' + escapeHtml(tag) + '"' + activeClass + ' title="タグで絞り込み">' + escapeHtml(tag) + '</span>';
             }).join("") + '</div>'
           : "";
@@ -801,7 +758,7 @@ function getConceptMemoListScript() {
           statusRowHtml +
           '<div class="memoMetaRow">' +
             '<span class="memoTypeLabel memoTypeLabel-' + escapeHtml(String(memo?.type || "text")) + '">' + escapeHtml(typeLabel) + '</span>' +
-            (folderName ? '<span class="memoFolderBadge">' + escapeHtml(folderName) + '</span>' : '') +
+            folderNames.map((folderName) => '<span class="memoFolderBadge">' + escapeHtml(folderName) + '</span>').join("") +
             todoMeta +
             updatedAtHtml +
           '</div>' +
@@ -825,7 +782,7 @@ function getConceptMemoListScript() {
       listEl.querySelectorAll("[data-tag-filter]").forEach((el) => {
         el.addEventListener("click", (event) => {
           event.stopPropagation();
-          setActiveTagFilter(el.dataset.tagFilter || "");
+          toggleActiveTagFilter(el.dataset.tagFilter || "");
         });
       });
 

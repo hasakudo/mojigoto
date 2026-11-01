@@ -35,7 +35,7 @@ function createCountsStatusController(context, deps) {
   itemChap.text = "$(file-directory) -";
   itemFile.text = "$(file) -";
 
-  context.subscriptions.push(itemTotal, itemChap, itemFile);
+  context.subscriptions.push({ dispose });
 
   itemTotal.command = "mojigoto.selectCountMode";
   itemChap.command = "mojigoto.selectCountMode";
@@ -43,6 +43,7 @@ function createCountsStatusController(context, deps) {
 
   let timer = null;
   let seq = 0;
+  let disposed = false;
 
   function updateTooltips(modeLabel, meta = {}) {
     const tooltipSuffix = `\n現在の方式: ${modeLabel}\nクリックで変更`;
@@ -56,6 +57,7 @@ function createCountsStatusController(context, deps) {
   }
 
   function updateVisibility() {
+    if (disposed) return;
     const enabled = typeof isEnabled === "function" ? !!isEnabled() : true;
 
     if (enabled) {
@@ -207,6 +209,7 @@ function createCountsStatusController(context, deps) {
   }
 
   async function recalcAll(reason = "") {
+    if (disposed) return;
     const mySeq = ++seq;
     const modeLabel = getCountModeLabel();
 
@@ -273,6 +276,7 @@ function createCountsStatusController(context, deps) {
 
         if (reason === "save") {
           await context.globalState.update(chapKey, chapCount);
+          if (mySeq !== seq) return;
         }
       }
 
@@ -293,6 +297,7 @@ function createCountsStatusController(context, deps) {
 
       if (reason === "save") {
         await context.globalState.update(totalKey, totalCount);
+        if (mySeq !== seq) return;
       }
     }
 
@@ -309,8 +314,10 @@ function createCountsStatusController(context, deps) {
   }
 
   function scheduleRecalc(reason = "") {
+    if (disposed) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
+      timer = null;
       recalcAll(reason);
     }, 400);
   }
@@ -338,13 +345,18 @@ function createCountsStatusController(context, deps) {
   }
 
   function initialize() {
+    if (disposed) return;
     updateVisibility();
     registerEventHandlers();
     scheduleRecalc("init");
   }
 
   function dispose() {
+    if (disposed) return;
+    disposed = true;
+    seq += 1;
     if (timer) clearTimeout(timer);
+    timer = null;
     itemFile.dispose();
     itemChap.dispose();
     itemTotal.dispose();

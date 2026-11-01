@@ -2,14 +2,16 @@
   "name": "mojigoto",
   "displayName": "もじごと",
   "description": "VS Codeで小説や長文を書くための執筆補助拡張。原稿管理、縦書きプレビュー、プロット・資料ノート、構想メモ、執筆メモ、文字数集計、書き出しに対応。",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "publisher": "hasakudo",
   "engines": {
     "vscode": "^1.80.0"
   },
   "main": "./extension.js",
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js test/*.test.mjs",
+    "sheets:package": "pwsh -NoProfile -File scripts/package-google-sheets.ps1",
+    "web:dev": "node server/web-dev.mjs",
     "vsix:list": "vsce ls --tree",
     "vsix:package": "vsce package"
   },
@@ -25,6 +27,13 @@
   "activationEvents": [
     "onLanguage:markdown",
     "onLanguage:plaintext",
+    "onWebviewPanel:mojigoto.noteEditor",
+    "onWebviewPanel:mojigoto.noteDisplay",
+    "onWebviewPanel:mojigotoConceptMemos",
+    "onWebviewPanel:mojigoto.stats",
+    "onWebviewPanel:mojigoto.preview",
+    "onWebviewPanel:mojigoto.addressBook",
+    "onWebviewPanel:mojigoto.settingsEditor",
     "onStartupFinished"
   ],
   "contributes": {
@@ -123,6 +132,24 @@
           "category": "もじごと:執筆",
           "order": 20
         },
+        "mojigoto.backupIntervalMinutes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1440,
+          "markdownDescription": "原稿・ノート・構想メモの保存後に自動バックアップを作成する最短間隔（分）です。\n\n初期値の `0` は自動バックアップOFFです。手動バックアップと復元直前の退避は引き続き利用できます。",
+          "category": "もじごと:執筆",
+          "order": 21
+        },
+        "mojigoto.backupMaxPerFile": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 50,
+          "markdownDescription": "1ファイルごとに保持するバックアップ数です（1～50件）。原稿・各ノート・作品の構想メモ保存ファイルに適用します。\n\n新しいバックアップを作成した際に古いものから整理します。保護した履歴は件数に含めません。Web側の保持条件とは別です。",
+          "category": "もじごと:執筆",
+          "order": 22
+        },
         "mojigoto.countMode": {
           "type": "string",
           "default": "default",
@@ -144,7 +171,22 @@
           ],
           "markdownDescription": "文字数カウント方式を切り替えます。",
           "category": "もじごと:執筆",
-          "order": 21
+          "order": 22
+        },
+        "mojigoto.rubyDefaultMode": {
+          "type": "string",
+          "default": "group",
+          "enum": [
+            "group",
+            "mono"
+          ],
+          "enumDescriptions": [
+            "グループ：選択した範囲全体へルビを付けます。",
+            "単一：一文字ずつルビを入力します。"
+          ],
+          "markdownDescription": "新規挿入の種類です。\n\nグループは原稿内の「よみ」を選択し、単一は小さな入力欄で読みを / 区切りで指定します。既存ルビは変更しません。「ルビを編集…」で種類や対応を変更できます。",
+          "category": "もじごと:執筆",
+          "order": 23
         },
         "mojigoto.rubyPipeStyle": {
           "type": "string",
@@ -159,28 +201,36 @@
           ],
           "markdownDescription": "ルビ挿入コマンドで使う記号を選びます。`half` は `|`、`full` は `｜` です。",
           "category": "もじごと:執筆",
-          "order": 22
+          "order": 23
         },
         "mojigoto.autoIndentEnabled": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "改行時に次の行へ全角スペースを自動挿入します。Shift を押しながらの改行では挿入しません。",
           "category": "もじごと:執筆",
-          "order": 23
+          "order": 24
         },
         "mojigoto.autoCloseAssistEnabled": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "`「` と `（` の閉じ記号を自動補完する機能の ON / OFF です。",
           "category": "もじごと:執筆",
-          "order": 24
+          "order": 25
         },
         "mojigoto.writingMemoDecorationsEnabled": {
           "type": "boolean",
           "default": true,
           "description": "エディタ上で執筆メモの下線表示を有効にします。",
           "category": "もじごと:執筆",
-          "order": 25
+          "order": 26
+        },
+        "mojigoto.confirmWritingMemoConceptOverwrite": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "執筆メモから構想メモの既存内容を更新するとき、毎回比較確認を表示します。\n\nOFFでも「既存を更新／新しく作成」と更新先の選択は表示されます。ONに戻すと比較確認を再表示します。全作品共通の設定です。",
+          "category": "もじごと:執筆",
+          "order": 27
         },
         "mojigoto.highlightsEnabled": {
           "type": "boolean",
@@ -255,19 +305,12 @@
             "advanced"
           ]
         },
-        "mojigoto.dashboardShowTextMemos": {
-          "type": "boolean",
-          "default": false,
-          "description": "ダッシュボードで通常メモを表示する",
-          "category": "もじごと:ダッシュボード",
-          "order": 40
-        },
         "mojigoto.dashboardShowProgressGraph": {
           "type": "boolean",
           "default": true,
           "description": "ダッシュボードの作品概要に進捗グラフを表示する",
           "category": "もじごと:ダッシュボード",
-          "order": 39
+          "order": 40
         },
         "mojigoto.dashboardProgressGraphMode": {
           "type": "string",
@@ -282,44 +325,42 @@
           "default": "daily",
           "description": "ダッシュボードの進捗グラフに表示する内容",
           "category": "もじごと:ダッシュボード",
-          "order": 39
+          "order": 41
+        },
+        "mojigoto.dashboardShowTextMemos": {
+          "type": "boolean",
+          "default": false,
+          "description": "ダッシュボードで通常メモを表示する",
+          "category": "もじごと:ダッシュボード",
+          "order": 42
         },
         "mojigoto.dashboardShowListMemos": {
           "type": "boolean",
           "default": false,
           "description": "ダッシュボードでリストメモを表示する",
           "category": "もじごと:ダッシュボード",
-          "order": 41
+          "order": 43
         },
         "mojigoto.dashboardShowTodoMemos": {
           "type": "boolean",
           "default": true,
           "description": "ダッシュボードでTODOメモを表示する",
           "category": "もじごと:ダッシュボード",
-          "order": 42
+          "order": 44
         },
         "mojigoto.dashboardShowCommonTodo": {
           "type": "boolean",
           "default": true,
           "description": "ダッシュボードで作品共通TODOを表示する",
           "category": "もじごと:ダッシュボード",
-          "order": 43
-        },
-        "mojigoto.webviewFontScalePercent": {
-          "type": "number",
-          "default": 100,
-          "minimum": 80,
-          "maximum": 160,
-          "description": "ノート・ノートプレビュー・プレビューボード・全画面ボード・構想メモ・原稿構成エディタの入力欄と本文表示の文字倍率（%）\n\n操作ボタンの文字サイズには適用しません。作品ツリーはVS Code標準UIのため対象外です。",
-          "category": "もじごと:表示",
-          "order": 44
+          "order": 45
         },
         "mojigoto.webviewAutoSaveEnabled": {
           "type": "boolean",
           "default": true,
           "description": "ノート・構想メモ・作品設定の自動保存を有効にします。無効時は手動保存するまで未保存状態になります。",
           "category": "もじごと:保存",
-          "order": 45
+          "order": 46
         },
         "mojigoto.webviewAutoSaveDelaySeconds": {
           "type": "number",
@@ -328,12 +369,43 @@
           "maximum": 30,
           "description": "ノート・構想メモ・作品設定で、最後の変更から自動保存するまでの秒数。",
           "category": "もじごと:保存",
-          "order": 46
+          "order": 47
+        },
+        "mojigoto.defaultManuscriptFontFamily": {
+          "type": "string",
+          "default": "\"Source Han Serif JP\",\"Noto Serif JP\",\"Hiragino Mincho ProN\",\"Yu Mincho\",serif",
+          "scope": "application",
+          "description": "全作品共通の縦書きプレビュー・原稿書き出しの既定フォント。フォント名またはカンマ区切りの候補を指定します。作品ごとに変更する場合はプレビュー設定の「共通の既定フォントを使う」をOFFにしてください。既存の個別フォント指定は維持します。",
+          "category": "もじごと:表示",
+          "order": 47.5
+        },
+        "mojigoto.webviewFontScalePercent": {
+          "type": "number",
+          "default": 100,
+          "minimum": 80,
+          "maximum": 160,
+          "description": "ノート・ノートプレビュー・プレビューボード・全画面ボード・構想メモ・原稿構成エディタの入力欄と本文表示の文字倍率（%）\n\n操作ボタンの文字サイズには適用しません。作品ツリーはVS Code標準UIのため対象外です。",
+          "category": "もじごと:表示",
+          "order": 48
+        },
+        "mojigoto.noteMemoAutoSyncEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "個別設定のない項目メモを、ノート保存時に構想メモへ自動反映します。項目ごとのON/OFFが優先されます。",
+          "category": "もじごと:保存",
+          "order": 49
+        },
+        "mojigoto.conceptMemoAutoSyncEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "個別設定のない出典付き構想メモを、保存時に元の項目メモへ自動反映します。メモごとのON/OFFが優先されます。",
+          "category": "もじごと:保存",
+          "order": 49.5
         },
         "mojigoto.exportRoot": {
           "type": "string",
           "default": "",
-          "description": "書き出し先兼倉庫フォルダ。Singleでは原稿フォルダと同じ階層、Multiでは作品フォルダと同じ階層に置くと作品ツリーへ表示します。\n\n別の場所では従来どおり書き出し先としてのみ使用します。",
+          "description": "書き出し先兼倉庫フォルダ。Single／Multiとも、設定した既存フォルダを作品ツリーの「倉庫」に表示します。開いているフォルダの外や別ドライブも指定できます。\n\nワークスペースやWork Root自体ではなく、書き出し専用のフォルダを指定してください。",
           "category": "もじごと:書き出し",
           "order": 50
         },
@@ -369,6 +441,13 @@
           "category": "もじごと:書き出し",
           "order": 52
         },
+        "mojigoto.useTypographyAdjustments": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "縦書きプレビューと原稿書き出しで、ぶら下げ・追い込みなどの自動体裁調整を使用します。OFFでは本文の並びを優先し、自動調整を行いません。",
+          "category": "もじごと:書き出し",
+          "order": 53
+        },
         "mojigoto.verticalPunctuationLayout": {
           "type": "string",
           "default": "hanging",
@@ -382,13 +461,6 @@
           ],
           "markdownDescription": "縦書きHTML書き出し時の句読点・閉じ括弧の配置方法を切り替えます。",
           "category": "もじごと:書き出し",
-          "order": 53
-        },
-        "mojigoto.useTypographyAdjustments": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "縦書きプレビューと原稿書き出しで、ぶら下げ・追い込みなどの自動体裁調整を使用します。OFFでは本文の並びを優先し、自動調整を行いません。",
-          "category": "もじごと:書き出し",
           "order": 54
         },
         "mojigoto.exportIncludeFolderName": {
@@ -398,75 +470,82 @@
           "category": "もじごと:書き出し",
           "order": 55
         },
+        "mojigoto.exportIncludeSubtitle": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "作品設定の書き出しに補助タイトルを含めます。",
+          "category": "もじごと:書き出し",
+          "order": 56
+        },
         "mojigoto.exportIncludeGenre": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しにジャンルを含めます。",
           "category": "もじごと:書き出し",
-          "order": 56
+          "order": 57
         },
         "mojigoto.exportIncludeTargetChars": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しに目標文字数を含めます。",
           "category": "もじごと:書き出し",
-          "order": 57
+          "order": 58
         },
         "mojigoto.exportIncludeDeadline": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しに締切日を含めます。",
           "category": "もじごと:書き出し",
-          "order": 58
+          "order": 59
         },
         "mojigoto.exportIncludePenName": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "作品設定のHTML書き出しにペンネームを含めます。",
           "category": "もじごと:書き出し",
-          "order": 59
+          "order": 60
         },
         "mojigoto.exportIncludeMemo": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しにメモを含めます。",
           "category": "もじごと:書き出し",
-          "order": 60
+          "order": 61
         },
         "mojigoto.exportIncludeUpdatedAt": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "作品設定のHTML書き出しに更新日時を含めます。単一書き出しのみ",
           "category": "もじごと:書き出し",
-          "order": 61
+          "order": 62
         },
         "mojigoto.sheetsEnabled": {
           "type": "boolean",
           "default": false,
           "description": "執筆記録をGoogle Sheetsへ記録する機能を有効にする（Webhook送信/シート作成/送信ボタン等）",
           "category": "もじごと:統計送信",
-          "order": 60
+          "order": 70
         },
         "mojigoto.projectName": {
           "type": "string",
           "default": "",
           "description": "統計送信用の作品名（Sheets側の「作品」列に入る名前）空なら現在の作品名を自動使用（設定には保存しません）",
           "category": "もじごと:統計送信",
-          "order": 61
+          "order": 71
         },
         "mojigoto.webhookUrl": {
           "type": "string",
           "default": "",
           "description": "Apps Script WebアプリのURL",
           "category": "もじごと:統計送信",
-          "order": 62
+          "order": 72
         },
         "mojigoto.webhookSecret": {
           "type": "string",
           "default": "",
           "description": "Apps Script用のSECRET",
           "category": "もじごと:統計送信",
-          "order": 63
+          "order": 73
         },
         "mojigoto.webhookProgressMode": {
           "type": "string",
@@ -481,7 +560,7 @@
           "default": "onSave",
           "description": "Progress（進捗）を送るタイミング",
           "category": "もじごと:統計送信",
-          "order": 64
+          "order": 74
         },
         "mojigoto.webhookEventsMode": {
           "type": "string",
@@ -498,7 +577,7 @@
           "default": "off",
           "description": "日時ログ（Daily_Log）を送るタイミング。ボタンでの送信は執筆記録から行う。",
           "category": "もじごと:統計送信",
-          "order": 66
+          "order": 76
         },
         "mojigoto.eventLogIntervalMinutes": {
           "type": "number",
@@ -513,7 +592,7 @@
           "default": 5,
           "description": "日時ログを保存する最小間隔（分）。0=毎回保存",
           "category": "もじごと:統計",
-          "order": 70
+          "order": 80
         },
         "mojigoto.webhookEventsRemindMode": {
           "type": "string",
@@ -530,28 +609,28 @@
           "default": "off",
           "description": "日時ログ（Daily_Log）の送信忘れ通知。最後の送信からの日数（未送信がある場合に通知）",
           "category": "もじごと:統計",
-          "order": 71
+          "order": 81
         },
         "mojigoto.eventsMaxCount": {
           "type": "number",
           "default": 4000,
           "description": "日時ログの最大保存件数。超えた分は古い順に削除します。",
           "category": "もじごと:統計",
-          "order": 72
+          "order": 82
         },
         "mojigoto.eventsRetentionDays": {
           "type": "number",
           "default": 90,
           "description": "日時ログの保持日数。0=無制限。件数制限より前でも、保持日数を過ぎたデータは削除します。",
           "category": "もじごと:統計",
-          "order": 73
+          "order": 83
         },
         "mojigoto.dailyRetentionDays": {
           "type": "number",
-          "default": 365,
+          "default": 400,
           "description": "進捗データ・更新ファイル履歴の保持日数。0=無制限。",
           "category": "もじごと:統計",
-          "order": 74
+          "order": 84
         },
         "mojigoto.statusBarCountsEnabled": {
           "type": "boolean",
@@ -591,6 +670,24 @@
         "command": "mojigoto.openPreviewBeside",
         "title": "縦書きプレビューを開く",
         "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.openAddressBook",
+        "title": "呼び名一覧を開く",
+        "category": "もじごと",
+        "icon": "$(account)"
+      },
+      {
+        "command": "mojigoto.createManuscriptBackup",
+        "title": "原稿のバックアップを作成",
+        "category": "もじごと",
+        "icon": "$(save-all)"
+      },
+      {
+        "command": "mojigoto.openManuscriptBackupHistory",
+        "title": "原稿のバックアップ履歴を開く",
+        "category": "もじごと",
+        "icon": "$(history)"
       },
       {
         "command": "mojigoto.serverStop",
@@ -638,6 +735,11 @@
         "category": "もじごと"
       },
       {
+        "command": "mojigoto.testSheetsConnection",
+        "title": "Google Sheets連携を確認",
+        "category": "もじごと"
+      },
+      {
         "command": "mojigoto.refreshHighlights",
         "title": "ハイライトを更新",
         "category": "もじごと"
@@ -665,6 +767,16 @@
       {
         "command": "mojigoto.createEmptyConceptMemos",
         "title": "構想メモを開く",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.searchManuscriptFolder",
+        "title": "原稿フォルダー内を検索…",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.searchChapterFolder",
+        "title": "この章の中を検索…",
         "category": "もじごと"
       },
       {
@@ -839,7 +951,7 @@
       },
       {
         "command": "mojigoto.exportMergedManuscript",
-        "title": "View 原稿ファイルを結合して書き出し",
+        "title": "View 原稿を書き出し（全体／章ごと）",
         "category": "もじごと",
         "icon": "$(combine)"
       },
@@ -933,6 +1045,16 @@
         "category": "もじごと"
       },
       {
+        "command": "mojigoto.editRubyFromSelection",
+        "title": "- ルビを編集…",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.insertOppositeRubyFromSelection",
+        "title": "- 反対の種類でルビを挿入／変更",
+        "category": "もじごと"
+      },
+      {
         "command": "mojigoto.insertSideDotsFromSelection",
         "title": "- 傍点を挿入",
         "category": "もじごと"
@@ -1000,6 +1122,11 @@
       {
         "command": "mojigoto.insertHeading3",
         "title": "小見出し（### ）を挿入",
+        "category": "もじごと"
+      },
+      {
+        "command": "mojigoto.removeLeadingHalfWidthSpaces",
+        "title": "行頭の半角スペースを除去",
         "category": "もじごと"
       }
     ],
@@ -1140,6 +1267,16 @@
           "command": "mojigoto.toggleCurrentViewChapterFolders",
           "when": "view == mojigoto.workTree && viewItem == currentViewManuscriptRoot",
           "group": "inline@3"
+        },
+        {
+          "command": "mojigoto.searchManuscriptFolder",
+          "when": "view == mojigoto.workTree && viewItem =~ /^(currentViewManuscriptRoot|manuscriptRoot|manuscriptFile)$/",
+          "group": "4_search@1"
+        },
+        {
+          "command": "mojigoto.searchChapterFolder",
+          "when": "view == mojigoto.workTree && viewItem == chapterFolder",
+          "group": "4_search@1"
         },
         {
           "command": "mojigoto.treeExportItem",
@@ -1334,6 +1471,16 @@
       ],
       "editor/context": [
         {
+          "command": "mojigoto.createManuscriptBackup",
+          "when": "editorTextFocus && resourceExtname =~ /\\.(txt|md)$/",
+          "group": "navigation@0"
+        },
+        {
+          "command": "mojigoto.openManuscriptBackupHistory",
+          "when": "editorTextFocus && resourceExtname =~ /\\.(txt|md)$/",
+          "group": "navigation@0"
+        },
+        {
           "command": "mojigoto.insertEllipsis",
           "when": "editorTextFocus",
           "group": "navigation@1"
@@ -1345,8 +1492,18 @@
         },
         {
           "command": "mojigoto.insertRubyFromSelection",
-          "when": "editorTextFocus && editorHasSelection",
+          "when": "editorTextFocus",
           "group": "navigation@3"
+        },
+        {
+          "command": "mojigoto.editRubyFromSelection",
+          "when": "editorTextFocus",
+          "group": "navigation@3.1"
+        },
+        {
+          "command": "mojigoto.insertOppositeRubyFromSelection",
+          "when": "editorTextFocus",
+          "group": "navigation@3.2"
         },
         {
           "command": "mojigoto.insertSideDotsFromSelection",
@@ -1382,6 +1539,11 @@
           "submenu": "mojigoto.submenu.extraWrap",
           "when": "editorTextFocus",
           "group": "navigation@10"
+        },
+        {
+          "command": "mojigoto.removeLeadingHalfWidthSpaces",
+          "when": "editorTextFocus && resourceScheme == file",
+          "group": "navigation@11"
         }
       ],
       "mojigoto.submenu.extraWrap": [
@@ -1448,6 +1610,14 @@
         },
         {
           "command": "mojigoto.treeOpenSettings",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.searchManuscriptFolder",
+          "when": "false"
+        },
+        {
+          "command": "mojigoto.searchChapterFolder",
           "when": "false"
         },
         {
@@ -1604,7 +1774,15 @@
         },
         {
           "command": "mojigoto.insertRubyFromSelection",
-          "when": "false"
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "mojigoto.editRubyFromSelection",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "mojigoto.insertOppositeRubyFromSelection",
+          "when": "editorTextFocus"
         },
         {
           "command": "mojigoto.insertSideDotsFromSelection",
@@ -1661,6 +1839,10 @@
         {
           "command": "mojigoto.insertHeading3",
           "when": "false"
+        },
+        {
+          "command": "mojigoto.removeLeadingHalfWidthSpaces",
+          "when": "false"
         }
       ]
     },
@@ -1668,6 +1850,12 @@
       {
         "key": "ctrl+alt+v",
         "command": "mojigoto.openPreviewBeside"
+      },
+      {
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
+        "command": "mojigoto.openAddressBook",
+        "when": "editorTextFocus"
       },
       {
         "key": "ctrl+alt+s",
@@ -1680,7 +1868,12 @@
       {
         "key": "alt+r",
         "command": "mojigoto.insertRubyFromSelection",
-        "when": "editorTextFocus && editorHasSelection"
+        "when": "editorTextFocus"
+      },
+      {
+        "key": "alt+shift+r",
+        "command": "mojigoto.insertOppositeRubyFromSelection",
+        "when": "editorTextFocus"
       },
       {
         "key": "alt+b",

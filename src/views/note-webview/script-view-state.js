@@ -1,5 +1,9 @@
-function getViewStateScript() {
+function getViewStateScript({ skipEditorScrollRestore = false } = {}) {
   return `
+    let editorScrollClaimedByNavigation = ${skipEditorScrollRestore === true};
+    let previewScrollClaimedByNavigation = false;
+    function claimEditorScrollForNavigation() { editorScrollClaimedByNavigation = true; }
+    function claimPreviewScrollForNavigation() { previewScrollClaimedByNavigation = true; }
     function loadPreviewMode() {
       try {
         const saved = localStorage.getItem(previewModeStorageKey);
@@ -93,10 +97,11 @@ function getViewStateScript() {
         const parsed = JSON.parse(raw);
         if (!parsed) return;
 
-        const restoreScrollTop = (el, value) => {
+        const restoreScrollTop = (el, value, editor = false) => {
           if (!el || typeof value !== "number") return;
 
           const apply = () => {
+            if (editor ? editorScrollClaimedByNavigation : previewScrollClaimedByNavigation) return;
             const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
             const nextTop = Math.max(0, Math.min(value, maxScroll));
             el.scrollTop = nextTop;
@@ -113,7 +118,7 @@ function getViewStateScript() {
           const editorScrollEl = getEditorScrollEl();
           const previewScrollEl = getPreviewScrollEl();
 
-          restoreScrollTop(editorScrollEl, parsed.editor);
+          restoreScrollTop(editorScrollEl, parsed.editor, true);
           restoreScrollTop(previewScrollEl, parsed.preview);
         });
       } catch (error) {

@@ -1,0 +1,11 @@
+{
+  "deploymentMode": "managed",
+  "microsoftClientId": "",
+  "googleClientId": "Google OAuthウェブクライアントID",
+  "googleApiKey": "Google Picker用APIキー",
+  "googleAppId": "Google Cloudプロジェクト番号",
+  "loginRequired": true,
+  "authApiBase": "./api/auth",
+  "turnstileSiteKey": "Cloudflare Turnstileサイトキー",
+  "loginProviders": ["microsoft", "google"]
+}

@@ -89,7 +89,7 @@ function getNavigationScript() {
     function openItemMemoFromPreview(itemId) {
       openGroupMoreMenuId = "";
       openItemMoreMenuId = "";
-      openItemMemoId = itemId;
+      setNoteItemMemoOpen(itemId, true);
       renderGroups();
       renderPreview();
 
@@ -103,6 +103,7 @@ function getNavigationScript() {
 
     function openItemMemoById(groupId, itemId) {
       if (!itemId) return;
+      if (typeof claimEditorScrollForNavigation === "function") claimEditorScrollForNavigation();
 
       revealEditorPaneBeforeJump(() => {
         if (groupId) {
@@ -111,7 +112,7 @@ function getNavigationScript() {
 
         openGroupMoreMenuId = "";
         openItemMoreMenuId = "";
-        openItemMemoId = itemId;
+        setNoteItemMemoOpen(itemId, true);
 
         renderGroups();
         renderPreview();
@@ -162,8 +163,9 @@ function getNavigationScript() {
       return openGroup(groupId);
     }
 
-    function scrollToEditorNavId(navId) {
+    function scrollToEditorNavId(navId, options = {}) {
       if (!navId) return;
+      if (typeof claimEditorScrollForNavigation === "function") claimEditorScrollForNavigation();
 
       revealEditorPaneBeforeJump(() => {
         const groupId = getGroupIdForNavId(navId);
@@ -175,10 +177,7 @@ function getNavigationScript() {
 
           const align = String(navId).startsWith("group:") ? "start" : "center";
 
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: align,
-          });
+          scrollEditorElementIntoView(target, align, options.immediate ? "instant" : "smooth");
 
           target.classList.remove("editorJumpHighlight");
           void target.offsetWidth;
@@ -361,6 +360,7 @@ function getNavigationScript() {
 
     function scrollToPreviewNavId(navId) {
       if (!navId) return;
+      if (typeof claimPreviewScrollForNavigation === "function") claimPreviewScrollForNavigation();
 
       const tryScroll = (retryCount = 0) => {
         if (previewMode === "board") {
@@ -463,6 +463,7 @@ function getNavigationScript() {
     }
 
     function jumpToEditorTarget(selector, options = {}) {
+      if (typeof claimEditorScrollForNavigation === "function") claimEditorScrollForNavigation();
       const {
         groupId = "",
         align = "center",
@@ -496,6 +497,7 @@ function getNavigationScript() {
 
     function scrollToEditorItem(itemId) {
       if (!itemId) return;
+      if (typeof claimEditorScrollForNavigation === "function") claimEditorScrollForNavigation();
 
       revealEditorPaneBeforeJump(() => {
         const target = groupsRoot.querySelector(\`[data-item-id="\${itemId}"]\`);

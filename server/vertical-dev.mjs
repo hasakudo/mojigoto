@@ -11,12 +11,16 @@
 // ===============================
 
 import fs from "node:fs";
+import fontDefaults from "../src/preview/font-defaults.js";
 import path from "node:path";
 import http from "node:http";
 import { URL, fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import verticalLayoutCore from "../src/preview/vertical-layout-core.js";
 import displayNamesModule from "../src/reorder/reorder-display-names.js";
+
+const { safeFontFamily, usesDefaultFont, resolveManuscriptFont } = fontDefaults;
+let defaultFontFamily = safeFontFamily(process.env.MOJIGOTO_DEFAULT_FONT_FAMILY);
 
 const {
   splitTextIntoDisplayLines,
@@ -156,7 +160,8 @@ const CFG = {
   verticalPunctuationLayout: "hanging",
   useTypographyAdjustments: false,
 
-  fontFamily: `"Source Han Serif JP","Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif`,
+  fontFamily: defaultFontFamily,
+  useDefaultFont: true,
 
   // 禁則処理
   kinsokuLineStart: new Set(
@@ -244,7 +249,6 @@ if (saved?.layout) {
 
 if (saved?.font) {
   const s = Number(saved.font.sizePx);
-  const f = String(saved.font.family ?? "").trim();
 
   if (Number.isFinite(s)) {
     CFG.fontSizePx = clampInt(
@@ -255,7 +259,8 @@ if (saved?.font) {
     );
   }
 
-  if (f) CFG.fontFamily = f;
+  CFG.useDefaultFont = usesDefaultFont(saved.font);
+  CFG.fontFamily = resolveManuscriptFont(saved.font, defaultFontFamily);
 }
 
 if (saved?.spacing) {
@@ -341,7 +346,7 @@ function setLayout(charsPerLine, linesPerPage) {
 
 function setFont(sizePx, family) {
   const sIn = Number(sizePx);
-  const fam = String(family ?? "").trim();
+  const fam = safeFontFamily(family, "");
 
   let changed = false;
 
@@ -360,6 +365,10 @@ function setFont(sizePx, family) {
   }
 
   if (fam) {
+    if (CFG.useDefaultFont) {
+      CFG.useDefaultFont = false;
+      changed = true;
+    }
     if (CFG.fontFamily !== fam) {
       CFG.fontFamily = fam;
       changed = true;
@@ -372,6 +381,7 @@ function setFont(sizePx, family) {
   cur.font = {
     sizePx: CFG.fontSizePx,
     family: CFG.fontFamily,
+    useDefault: CFG.useDefaultFont,
   };
   writeRootConfig(cur);
   return true;
@@ -432,6 +442,13 @@ function applySettingsPatch(data = {}) {
   const layout = data.layout || {};
   const font = data.font || {};
   const spacing = data.spacing || {};
+  let defaultChanged = false;
+  if (Object.hasOwn(data, "defaultFontFamily")) {
+    const next = safeFontFamily(data.defaultFontFamily);
+    defaultChanged = next !== defaultFontFamily;
+    defaultFontFamily = next;
+    if (CFG.useDefaultFont && CFG.fontFamily !== next) { CFG.fontFamily = next; defaultChanged = true; }
+  }
 
   if (layout.charsPerLine || layout.linesPerPage) {
     const cIn = Number(layout.charsPerLine);
@@ -471,35 +488,26 @@ function applySettingsPatch(data = {}) {
     };
   }
 
-  if (font.sizePx || font.family) {
+  if (font.sizePx || Object.hasOwn(font, "family") || Object.hasOwn(font, "useDefault")) {
     const sIn = Number(font.sizePx);
-    const fam = String(font.family ?? "").trim();
-
     if (Number.isFinite(sIn)) {
-      const s = clampInt(
-        sIn,
-        LIMITS.fontSizePx.min,
-        LIMITS.fontSizePx.max,
-        CFG.fontSizePx,
-      );
-
-      if (CFG.fontSizePx !== s) {
-        CFG.fontSizePx = s;
-        changed = true;
-      }
+      const size = clampInt(sIn, LIMITS.fontSizePx.min, LIMITS.fontSizePx.max, CFG.fontSizePx);
+      if (CFG.fontSizePx !== size) { CFG.fontSizePx = size; changed = true; }
     }
-
-    if (fam) {
-      if (CFG.fontFamily !== fam) {
-        CFG.fontFamily = fam;
-        changed = true;
-      }
+    const nextFont = { ...(cur.font || {}) };
+    if (Object.hasOwn(font, "useDefault")) nextFont.useDefault = font.useDefault === true;
+    if (Object.hasOwn(font, "family")) {
+      nextFont.family = safeFontFamily(font.family, CFG.fontFamily);
+      // Older clients that explicitly send a family still select a custom font.
+      if (!Object.hasOwn(font, "useDefault")) nextFont.useDefault = false;
     }
-
-    cur.font = {
-      sizePx: CFG.fontSizePx,
-      family: CFG.fontFamily,
-    };
+    const useDefault = usesDefaultFont(nextFont);
+    const family = resolveManuscriptFont(nextFont, defaultFontFamily);
+    if (useDefault !== CFG.useDefaultFont || family !== CFG.fontFamily) changed = true;
+    CFG.useDefaultFont = useDefault;
+    CFG.fontFamily = family;
+    cur.font = { sizePx: CFG.fontSizePx, useDefault };
+    if (!useDefault) cur.font.family = family;
   }
 
   if (spacing.lineAdvanceEm) {
@@ -558,14 +566,14 @@ function applySettingsPatch(data = {}) {
     cur.useTypographyAdjustments = CFG.useTypographyAdjustments;
   }
 
-  writeRootConfig(cur);
+  if (Object.keys(data).some(key => key !== "defaultFontFamily")) writeRootConfig(cur);
 
   console.log("[settings applied]", {
     verticalPunctuationLayout: CFG.verticalPunctuationLayout,
     useTypographyAdjustments: CFG.useTypographyAdjustments,
     configPath: SETTINGS_PATH,
   });
-  return changed;
+  return changed || defaultChanged;
 }
 
 // ===============================
@@ -814,7 +822,7 @@ const server = http.createServer(async (req, res) => {
           },
           font: {
             sizePx: CFG.fontSizePx,
-            family: CFG.fontFamily,
+            family: CFG.fontFamily, useDefault: CFG.useDefaultFont,
           },
           spacing: {
             lineAdvanceEm: CFG.lineAdvanceEm,
@@ -865,7 +873,7 @@ const server = http.createServer(async (req, res) => {
             charsPerLine: CFG.charsPerLine,
             linesPerPage: CFG.linesPerPage,
           },
-          font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily },
+          font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily, useDefault: CFG.useDefaultFont },
           spacing: { lineAdvanceEm: CFG.lineAdvanceEm },
           theme: CFG.theme,
           verticalPunctuationLayout: CFG.verticalPunctuationLayout,
@@ -886,7 +894,7 @@ const server = http.createServer(async (req, res) => {
             charsPerLine: CFG.charsPerLine,
             linesPerPage: CFG.linesPerPage,
           },
-          font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily },
+          font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily, useDefault: CFG.useDefaultFont },
           spacing: { lineAdvanceEm: CFG.lineAdvanceEm },
         }),
       );
@@ -916,7 +924,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({
          ok: true, selected: state.selectedChapter ,
         layout: { charsPerLine: CFG.charsPerLine, linesPerPage: CFG.linesPerPage },
-        font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily }
+        font: { sizePx: CFG.fontSizePx, family: CFG.fontFamily, useDefault: CFG.useDefaultFont }
       }));
       return;
     }
@@ -1382,6 +1390,11 @@ function renderIndexHtml() {
           max-width: 60vw;
         }
 
+        #useDefaultFont{
+          width: auto;
+          flex: 0 0 auto;
+        }
+
         .preview-wrap{
           position:relative;
         }
@@ -1564,6 +1577,7 @@ function renderIndexHtml() {
 
               <div class="settings-row-break"></div>
 
+              <label class="pill" title="共通フォントはVS Code設定の Default Manuscript Font Family で変更できます"><input id="useDefaultFont" type="checkbox">共通の既定フォントを使う</label>
               <label class="pill">フォント：
                 <select id="fontPreset">
                   <option value="">（プリセット）</option>
@@ -1578,17 +1592,6 @@ function renderIndexHtml() {
               <label class="pill">自由入力：
                 <input id="fontFamily" type="text" placeholder='"Yu Mincho", serif'>
               </label>
-              
-              <label class="pill">体裁調整を使う：
-                <input id="useTypographyAdjustments" type="checkbox">
-              </label>
-
-              <label class="pill">体裁：
-                <select id="verticalPunctuationLayout">
-                  <option value="hanging">ぶら下げ</option>
-                  <option value="pushout">追い込み</option>
-                </select>
-              </label>
 
               <label class="pill">配色：
                 <select id="theme">
@@ -1601,6 +1604,17 @@ function renderIndexHtml() {
                   <option value="navy">ダークブルー</option>
                   <option value="deep-green">深緑</option>
                   <option value="deep-brown">濃茶</option>
+                </select>
+              </label>
+
+              <label class="pill">体裁調整を使う：
+                <input id="useTypographyAdjustments" type="checkbox">
+              </label>
+
+              <label class="pill">体裁：
+                <select id="verticalPunctuationLayout">
+                  <option value="hanging">ぶら下げ</option>
+                  <option value="pushout">追い込み</option>
                 </select>
               </label>
 
@@ -1736,6 +1750,12 @@ function renderIndexHtml() {
           var $fontSize = document.getElementById("fontSize");
           var $lineAdvance = document.getElementById("lineAdvance");
           var $fontFamily = document.getElementById("fontFamily");
+          var $useDefaultFont = document.getElementById("useDefaultFont");
+          function updateFontControls(){
+            $fontFamily.disabled = $useDefaultFont.checked;
+            document.getElementById("fontPreset").disabled = $useDefaultFont.checked;
+          }
+          $useDefaultFont.addEventListener("change", updateFontControls);
           var $theme = document.getElementById("theme");
           var $verticalPunctuationLayout = document.getElementById("verticalPunctuationLayout");
           var $useTypographyAdjustments = document.getElementById("useTypographyAdjustments");
@@ -1764,7 +1784,7 @@ function renderIndexHtml() {
               headers: {"Content-Type":"application/json"},
               body: JSON.stringify({
                 layout: { charsPerLine: cols, linesPerPage: lines },
-                font: { sizePx: size, family: fam },
+                font: { sizePx: size, family: fam, useDefault: $useDefaultFont.checked },
                 theme: ($theme && $theme.value) || "light",
                 spacing: { lineAdvanceEm: lineAdvance },
                 verticalPunctuationLayout: punctuationLayout,
@@ -1827,6 +1847,8 @@ function renderIndexHtml() {
               if (data.font){
                 $fontSize.value = data.font.sizePx ?? "";
                 $fontFamily.value = data.font.family ?? "";
+                $useDefaultFont.checked = data.font.useDefault !== false;
+                updateFontControls();
               }
               if (data.spacing){
                 $lineAdvance.value = data.spacing.lineAdvanceEm ?? "";
@@ -2923,6 +2945,32 @@ function buildHtmlFromRenderPages(pages) {
       line-height: 1;
       white-space: nowrap;
       letter-spacing: 0em;
+      pointer-events: none;
+    }
+    ruby.mjm-ruby-mono {
+      width: auto;
+      inline-size: var(--rubyAdvance);
+      block-size: 1em;
+      margin: 0;
+      padding: 0;
+      letter-spacing: 0;
+    }
+    ruby.mjm-ruby-mono rb {
+      display: block;
+      width: auto;
+      inline-size: 100%;
+      text-align: center;
+      letter-spacing: 0;
+    }
+    ruby.mjm-ruby-mono rt {
+      position: absolute;
+      top: var(--mjm-mono-position, 50%);
+      left: 100%;
+      transform: translateY(-50%);
+      font-size: var(--mjm-mono-font, .5em);
+      line-height: 1;
+      white-space: nowrap;
+      letter-spacing: 0;
       pointer-events: none;
     }
     .mjm-bouten {

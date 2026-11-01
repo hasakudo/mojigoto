@@ -1,6 +1,6 @@
 const vscode = require("vscode");
+const { getResolvedManuscriptRoot } = require("./src/core/mojigoto-context");
 const { registerEncodingWarning } = require("./src/editor/encoding-warning");
-const path = require("path");
 const { HighlightManager } = require("./src/highlight/highlight-manager");
 const { readHighlightGroups } = require("./src/highlight/highlight-core");
 const { MojigotoWorkTreeProvider } = require("./src/tree/work-tree-provider");
@@ -9,6 +9,7 @@ const { createWorkStatusController } = require("./src/statusbar/work-status");
 const { getCurrentWorkDisplayName } = require("./src/work/work-settings");
 const { registerAutoIndent } = require("./src/editor/auto-indent");
 const { registerInputAssist } = require("./src/editor/input-assist");
+const { registerTextCleanupCommands } = require("./src/editor/text-cleanup");
 const { registerRubyCommands } = require("./src/editor/ruby-tools");
 const { registerPreviewCommands } = require("./src/preview/preview-commands");
 const { registerWorkCommands } = require("./src/work/work-commands");
@@ -17,7 +18,7 @@ const { registerReorderCommands } = require("./src/reorder/reorder-commands");
 const { createBuildStatsState } = require("./src/stats/stats-state");
 const { createStatsPanelController } = require("./src/stats/stats-panel");
 const { registerStatsCommands } = require("./src/stats/stats-commands");
-const { maybeRemindEventsSend } = require("./src/stats/stats-reminder");
+const { startStartupSequence } = require("./src/setup/startup-sequence");
 const { nowJstParts, gsGet } = require("./src/stats/stats-utils");
 const { getOrPickExportRoot } = require("./src/export/manuscript-export");
 const { registerAppCommands } = require("./src/commands/app-commands");
@@ -26,6 +27,7 @@ const { openGuideWebview } = require("./src/views/guide-webview");
 const {
   openNoteWebview,
   createNoteSerializer,
+  createNoteDisplaySerializer,
   notifyNoteUpdated,
   registerNoteWebviewCommands,
 } = require("./src/views/note-webview");
@@ -52,9 +54,6 @@ const {
   detectChapter,
 } = require("./src/core/manuscript-helpers");
 const {
-  registerMojigotoTreeCommands,
-} = require("./src/tree/work-tree-commands");
-const {
   registerTreeRefreshWatchers,
 } = require("./src/tree/work-tree-watchers");
 const {
@@ -63,8 +62,10 @@ const {
 } = require("./src/setup/setup-commands.js");
 const {
   logOnSave,
+  refreshAllSharedWorkMetrics,
   sendUnsyncedMojigotoEventsToWebhook,
   sendInitialProgressToWebhook,
+  testSheetsWebhookConnection,
   ensureProjectNameFilled,
 } = require("./src/stats/stats-service");
 const {
@@ -121,11 +122,27 @@ const {
 const {
   registerWorkCopyCommand,
 } = require("./src/work/work-copy");
+const {
+  registerSharedWritingRecords,
+} = require("./src/stats/shared-writing-records");
+const { writeNoteIndex } = require("./src/data/note-index");
+const { registerSharedNoteWatchers } = require("./src/stats/shared-note-watchers");
+const { registerMemoAutoSyncSettings } = require("./src/data/memo-auto-sync-settings");
+const { registerAddressBookWebview } = require("./src/views/address-book-webview");
+const { createSettingsSerializer } = require("./src/views/settings-webview");
+const { registerManuscriptBackupCommands } = require("./src/backup/manuscript-backup");
+const { getMojigotoDirForSingle, getMojigotoDirForWork } = require("./src/core/mojigoto-paths");
+const { repairCopiedWorkspacePaths } = require("./src/core/workspace-path-repair");
 
-let scheduleRecalc = () => {};
 let previewStateRef = null;
 
-function activate(context) {
+async function activate(context) {
+  let scheduleRecalc = () => {};
+  let importSharedWritingRecords = async () => ({ imported: 0 });
+  await repairCopiedWorkspacePaths();
+  registerMemoAutoSyncSettings(context);
+  registerAddressBookWebview(context);
+  registerManuscriptBackupCommands(context);
   const highlightManager = new HighlightManager();
   context.subscriptions.push({
     dispose: () => highlightManager.dispose(),
@@ -143,20 +160,16 @@ function activate(context) {
   registerTreeRefreshWatchers(context, treeProvider);
   registerWorkCopyCommand(context, treeProvider);
 
-  (async () => {
-    await registerMojigotoTreeCommands(context, treeProvider, workTreeView);
-    await firstRunSetup(context);
-    setTimeout(() => {
-      vscode.commands.executeCommand("mojigoto.workTree.focus").then(undefined, () => {});
-    }, 250);
-    await maybeRemindEventsSend(context, "activate");
-  })().catch((e) => {
-    console.error("Mojigoto activate error:", e);
+  startStartupSequence(context, {
+    treeProvider,
+    workTreeView,
+    importSharedWritingRecords: () => importSharedWritingRecords(),
   });
 
   registerAutoIndent(context);
   registerRubyCommands(context);
   registerInputAssist(context);
+  registerTextCleanupCommands(context);
   registerSetupCommands(context);
   registerWritingMemoCommands(context);
   registerNoteImportCommands(context, treeProvider);
@@ -250,6 +263,13 @@ function activate(context) {
 
   const refreshStatsPanel = () => statsPanelController.refresh();
 
+  const sharedWritingRecords = registerSharedWritingRecords(context, async ({ imported }) => {
+    scheduleRecalc("webWritingRecords");
+    refreshStatsPanel();
+    vscode.window.setStatusBarMessage(`もじごと: Webの執筆記録を${imported}件取り込みました。`, 3500);
+  });
+  importSharedWritingRecords = () => sharedWritingRecords.run();
+
   const workStatusController = createWorkStatusController(context, {
     getCurrentWorkName: () =>
       String(
@@ -291,6 +311,7 @@ function activate(context) {
     previewState,
     refreshStatsPanel,
     scheduleRecalc: (reason) => scheduleRecalc(reason),
+    importSharedWritingRecords,
   });
 
   context.subscriptions.push(
@@ -347,23 +368,7 @@ function activate(context) {
       ).trim(),
     listWorkDirectories,
     getWorkManuscriptRoot,
-    getManuscriptRoot: () => {
-      try {
-        const conf = vscode.workspace.getConfiguration("mojigoto");
-        const mode = String(conf.get("mode", "") || "").trim();
-        const workRoot = String(conf.get("workRoot", "") || "").trim();
-        const mr = String(conf.get("manuscriptRoot", "") || "").trim();
-
-        if (mode === "single") return mr;
-        if (workRoot) return path.join(workRoot, "_WORK", "manuscript");
-        if (mr) return mr;
-
-        const wf = vscode.workspace.workspaceFolders?.[0];
-        return wf ? path.join(wf.uri.fsPath, "_WORK", "manuscript") : "";
-      } catch {
-        return "";
-      }
-    },
+    getManuscriptRoot: getResolvedManuscriptRoot,
   });
 
   countsStatusController.initialize();
@@ -371,7 +376,9 @@ function activate(context) {
 
   context.subscriptions.push(
     createNoteSerializer(context, treeProvider),
+    createNoteDisplaySerializer(context, treeProvider),
     createConceptMemoSerializer(context, treeProvider),
+    createSettingsSerializer(context, treeProvider),
   );
 
   const writingMemoDecorationController =
@@ -477,6 +484,7 @@ function activate(context) {
     sheetsEnabled,
     webhookEventsMode,
     sendPendingMojigotoEvents,
+    testSheetsWebhookConnection,
     getPreviewUrl: () => {
       const port = previewState.serverPort;
       return previewState.serverUrl || (port ? `http://127.0.0.1:${port}` : "");
@@ -486,22 +494,19 @@ function activate(context) {
 
   registerEncodingWarning(context);
 
-  // ---- Events ----
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() =>
-      scheduleRecalc("activeEditor"),
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => logOnSave(context, doc)),
-  );
+  registerSharedNoteWatchers(context);
 
   writingMemoDecorationController.refreshWritingMemoDecorations(
     vscode.window.activeTextEditor,
   );
 
   scheduleRecalc("init");
+  refreshAllSharedWorkMetrics(context);
+  if (vscode.workspace.getConfiguration("mojigoto").get("mode", "single") === "multi") {
+    for (const work of listWorkDirectories()) writeNoteIndex(getMojigotoDirForWork(work.fsPath));
+  } else {
+    writeNoteIndex(getMojigotoDirForSingle());
+  }
   highlightManager.refreshActiveEditor();
   refreshStatsPanel();
 }

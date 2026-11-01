@@ -28,13 +28,29 @@ const {
   keyEventsLastLoggedAt,
 } = require("./stats-keys");
 
-const { countLikeCountChars } = require("../core/text-count");
+const { countLikeCountChars, getCountMode } = require("../core/text-count");
 const {
   getCurrentWorkDisplayName,
   getWorkId,
   getCurrentWorkGoal,
+  getCurrentWorkSettingsPath,
   diffKeyForWork,
 } = require("../work/work-settings");
+const { writeSharedWorkMetrics } = require("./shared-work-metrics");
+const { getProcessedSharedWritingEventIds } = require("./shared-writing-records");
+const {
+  createEventId,
+  createPingPayload,
+  createProgressPayload,
+  createEventPayload,
+  createEventsBatchPayload,
+  chunkSheetsEvents,
+} = require("./sheets-protocol");
+const {
+  listWorkDirectories,
+  getWorkManuscriptRoot,
+  getSettingsPathForWork,
+} = require("../core/mojigoto-paths");
 
 function safeRead(filePath) {
   try {
@@ -236,7 +252,7 @@ async function logOnSave(context, doc) {
     const eventLogIntervalMs = eventLogIntervalMinutes * 60 * 1000;
     
     // -------------------------------
-    // daily（進捗データ）: 365日などで整理
+    // daily（進捗データ）: 400日などで整理
     // -------------------------------
     const dailyRaw = gsGet(context, keyDaily(context), {});
     const daily = pruneDateMapByRetentionDays(dailyRaw, dailyRetentionDays);
@@ -272,6 +288,14 @@ async function logOnSave(context, doc) {
     row.updatedAtJst = dateTimeJst;
 
     await gsSet(context, keyDaily(context), daily);
+    writeSharedWorkMetrics(getCurrentWorkSettingsPath(context), {
+      totalChars: totalCount,
+      countMode: getCountMode(),
+      reason: "manuscript",
+      now: new Date(nowMs),
+      dailyRecords: daily,
+      includedWebEventIds: getProcessedSharedWritingEventIds(context),
+    });
 
     // -------------------------------
     // Progress は毎回送信
@@ -285,16 +309,14 @@ async function logOnSave(context, doc) {
       if (url && secret && projectName) {
         const dailyValue = row.deltaTotal ?? 0;
 
-        const okPr = await postJsonToUrl(url, {
-          type: "progress",
-          secret,
+        const okPr = await postJsonToUrl(url, createProgressPayload(secret, {
           project: projectName,
           projectKey,
           date: dateJst,
           total: totalCount,
           daily: dailyValue,
           updatedAt: Date.now(),
-        });
+        }));
 
         if (!okPr) {
           try {
@@ -305,7 +327,7 @@ async function logOnSave(context, doc) {
     }
 
     // -------------------------------
-    // files（更新ファイル履歴）: 365日などで整理
+    // files（更新ファイル履歴）: 400日などで整理
     // -------------------------------
     const filesRaw = gsGet(context, keyFiles(context), {});
     const files = pruneDateMapByRetentionDays(filesRaw, dailyRetentionDays);
@@ -330,7 +352,7 @@ async function logOnSave(context, doc) {
     );
 
     if (shouldStoreEvent) {
-      events.push({
+      const storedEvent = {
         savedAtJst: dateTimeJst,
         dateJst,
         file: rel,
@@ -340,7 +362,13 @@ async function logOnSave(context, doc) {
         deltaChap,
         chapTotalSaved: chapTotal,
         sent: false,
+      };
+      storedEvent.eventId = createEventId({
+        ...storedEvent,
+        project: getProjectName(context),
+        projectKey: getWorkId(context),
       });
+      events.push(storedEvent);
 
       await gsSet(context, keyEventsLastLoggedAt(context), nowMs);
 
@@ -353,21 +381,11 @@ async function logOnSave(context, doc) {
           const projectKey = getWorkId(context);
 
           if (url && secret && projectName) {
-            const payloadEv = {
-              type: "mojigoto_event",
-              secret,
+            const payloadEv = createEventPayload(secret, {
+              ...storedEvent,
               project: projectName,
               projectKey,
-
-              savedAtJst: dateTimeJst,
-              dateJst,
-              file: rel,
-              chapter: chap,
-              deltaTotal,
-              totalSaved: totalCount,
-              deltaChap,
-              chapTotalSaved: chapTotal,
-            };
+            });
 
             const okEv = await postJsonToUrl(url, payloadEv);
 
@@ -451,21 +469,32 @@ async function sendUnsyncedMojigotoEventsToWebhook(context) {
   const events = gsGet(context, keyEvents(context), []);
   if (!Array.isArray(events) || events.length === 0) return { sent: 0 };
 
+  const pending = events.filter((event) => event && event.sent !== true);
+  for (const event of pending) {
+    event.eventId = createEventId({ ...event, project: projectName, projectKey });
+  }
+
   let sent = 0;
-  for (const ev of events) {
-    if (ev && ev.sent === true) continue;
+  for (const chunk of chunkSheetsEvents(pending)) {
+    const batch = createEventsBatchPayload(secret, chunk, { project: projectName, projectKey });
+    const batchResult = await postJsonRequest(url, batch);
+    if (batchResult.ok) {
+      for (const event of chunk) event.sent = true;
+      sent += chunk.length;
+      continue;
+    }
 
-    const ok = await postJsonToUrl(url, {
-      type: "mojigoto_event",
-      secret,
-      project: projectName,
-      projectKey,
-      ...ev,
-    });
-
-    if (ok) {
-      ev.sent = true;
-      sent++;
+    // v1 Apps Script は一括形式を知らないため、1件ずつの従来送信へ戻す。
+    for (const event of chunk) {
+      const ok = await postJsonToUrl(url, createEventPayload(secret, {
+        ...event,
+        project: projectName,
+        projectKey,
+      }));
+      if (ok) {
+        event.sent = true;
+        sent += 1;
+      }
     }
   }
 
@@ -501,16 +530,14 @@ async function sendInitialProgressToWebhook(context) {
   const localDailyValue = Number(daily?.[dateJst]?.deltaTotal || 0);
   const dailyValue = Number.isFinite(localDailyValue) ? localDailyValue : 0;
 
-  const sent = await postJsonToUrl(url, {
-    type: "progress",
-    secret,
+  const sent = await postJsonToUrl(url, createProgressPayload(secret, {
     project: projectName,
     projectKey,
     date: dateJst,
     total: totalCount,
     daily: dailyValue,
     updatedAt: nowMs,
-  });
+  }));
 
   if (!sent) {
     throw new Error("Webhookから正常な応答を受信できませんでした");
@@ -526,12 +553,91 @@ async function sendInitialProgressToWebhook(context) {
   };
 }
 
+async function testSheetsWebhookConnection() {
+  const url = getWebhookUrl();
+  const secret = getWebhookSecret();
+  if (!url || !secret) {
+    throw new Error("webhookUrl / webhookSecret が未設定です");
+  }
+  const result = await postJsonRequest(url, createPingPayload(secret));
+  if (!result.ok) {
+    const reason = String(result.body?.error || `HTTP ${result.status || "接続失敗"}`);
+    throw new Error(reason === "Unknown type"
+      ? "接続先は連携v2に未対応です。m_progress_v2.gsへ更新してください。"
+      : reason);
+  }
+  return {
+    protocolVersion: Number(result.body?.protocolVersion || 1),
+    capabilities: Array.isArray(result.body?.capabilities) ? result.body.capabilities : [],
+  };
+}
+
 async function calcTotalCount(root) {
   let sum = 0;
   for (const f of listTextFiles(root)) {
     sum += countChars(safeRead(f));
   }
   return sum;
+}
+
+async function refreshSharedWorkMetrics(context, reason = "startup") {
+  try {
+    const root = String(
+      vscode.workspace.getConfiguration("mojigoto").get("manuscriptRoot", "") || "",
+    ).trim();
+    if (!root || !fs.existsSync(root)) return false;
+    const totalChars = await calcTotalCount(root);
+    const manuscriptUpdatedAt = listTextFiles(root).reduce((latest, filePath) => {
+      try {
+        const value = fs.statSync(filePath).mtime.toISOString();
+        return !latest || value > latest ? value : latest;
+      } catch {
+        return latest;
+      }
+    }, "");
+    return writeSharedWorkMetrics(getCurrentWorkSettingsPath(context), {
+      totalChars,
+      countMode: getCountMode(),
+      reason,
+      manuscriptUpdatedAt,
+      dailyRecords: gsGet(context, keyDaily(context), {}),
+      includedWebEventIds: getProcessedSharedWritingEventIds(context),
+    });
+  } catch {
+    return false;
+  }
+}
+
+function newestManuscriptModifiedAt(root) {
+  return listTextFiles(root).reduce((latest, filePath) => {
+    try {
+      const value = fs.statSync(filePath).mtime.toISOString();
+      return !latest || value > latest ? value : latest;
+    } catch {
+      return latest;
+    }
+  }, "");
+}
+
+async function refreshAllSharedWorkMetrics(context) {
+  try {
+    const mode = String(vscode.workspace.getConfiguration("mojigoto").get("mode", "single") || "single");
+    if (mode !== "multi") return refreshSharedWorkMetrics(context, "startup");
+    const works = listWorkDirectories();
+    await Promise.all(works.map(async (work) => {
+      const root = getWorkManuscriptRoot(work.fsPath);
+      if (!root || !fs.existsSync(root)) return;
+      writeSharedWorkMetrics(getSettingsPathForWork(work.fsPath), {
+        totalChars: await calcTotalCount(root),
+        countMode: getCountMode(),
+        reason: "startup",
+        manuscriptUpdatedAt: newestManuscriptModifiedAt(root),
+      });
+    }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function calcChapterTotal(root, chap) {
@@ -558,7 +664,7 @@ async function calcChapterTotal(root, chap) {
   return sum;
 }
 
-async function postJsonToUrl(url, payload) {
+async function postJsonRequest(url, payload) {
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -584,13 +690,22 @@ async function postJsonToUrl(url, payload) {
     }
 
     // HTTP成功 かつ GAS本文の ok が true のときだけ成功扱い
-    return !!res.ok && !!json?.ok;
+    return {
+      ok: !!res.ok && !!json?.ok,
+      status: res.status,
+      body: json,
+    };
   } catch (e) {
     if (isDebug()) {
       console.log("[mojigoto] postJsonToUrl error:", String(e));
     }
-    return false;
+    return { ok: false, status: 0, body: null };
   }
+}
+
+async function postJsonToUrl(url, payload) {
+  const result = await postJsonRequest(url, payload);
+  return result.ok;
 }
 
 function getProjectName(context) {
@@ -630,7 +745,10 @@ module.exports = {
   logOnSave,
   sendUnsyncedMojigotoEventsToWebhook,
   sendInitialProgressToWebhook,
+  testSheetsWebhookConnection,
   calcTotalCount,
+  refreshSharedWorkMetrics,
+  refreshAllSharedWorkMetrics,
   calcChapterTotal,
   getCurrentWorkGoal,
   getProjectName,

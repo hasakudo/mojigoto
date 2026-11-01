@@ -6,6 +6,7 @@ node_modules/
 
 # Packaged extensions
 *.vsix
+release/*.zip
 
 # Generated preview
 vertical-preview.html
@@ -14,6 +15,13 @@ vertical-preview.html
 .env
 .env.*
 !.env.example
+web/api/auth/config.php
+web/api/auth/data/*.json
+web/api/auth/data/*.jsonl
+web/api/auth/data/*.lock
+web/api/auth/data/.users-*
+web/api/auth/data/.audit-*
+web/api/auth/data/.forms-*
 
 # Editor and operating-system files
 .vscode-test/
@@ -27,3 +35,25 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Local configuration backups
+/.local-config/
+
+# Generated web upload packages
+release/mojigoto-web-update-*/
+
+# Local source snapshots and review test output
+/.review-baseline/
+
+# Temporary investigation files
+/.tmp-web-investigation/
+
+# Local Web configuration and authentication runtime data
+/web/config.json
+/web/api/auth/config*.php
+!/web/api/auth/config.example.php
+/web/api/auth/data/*
+!/web/api/auth/data/.htaccess
+
+# Generated distribution files and expanded upload folders
+/release/

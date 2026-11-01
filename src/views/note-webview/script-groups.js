@@ -4,13 +4,12 @@ function getGroupsScript() {
     let openImagePreview = null;
     let isAllImagesGalleryOpen = false;
 
-    function touchAutoSyncedItemMemos(items) {
-      const updatedAt = new Date().toISOString();
-      for (const item of Array.isArray(items) ? items : []) {
-        if (item?.memo?.autoSyncToConceptMemo) {
-          item.memo.updatedAt = updatedAt;
-        }
+    function isItemMemoAutoSyncEnabled(memo) {
+      if (typeof memo?.autoSyncToConceptMemoOverride === "boolean") {
+        return memo.autoSyncToConceptMemoOverride;
       }
+      if (memo?.autoSyncToConceptMemo === true) return true;
+      return Boolean(initial?.noteMemoAutoSyncDefault);
     }
 
     function getGroupTitleForMove(group, index) {
@@ -60,22 +59,25 @@ function getGroupsScript() {
     function toggleItemMemo(groupId, itemId) {
       openGroupMoreMenuId = "";
       openItemMoreMenuId = "";
-      openItemMemoId = openItemMemoId === itemId ? "" : itemId;
+      setNoteItemMemoOpen(itemId, !isNoteItemMemoOpen(itemId));
       renderGroups();
+      renderPreview();
     }
 
     function openItemMemoAndScroll(groupId, itemId) {
       openGroupMoreMenuId = "";
       openItemMoreMenuId = "";
 
-      if (openItemMemoId === itemId) {
-        openItemMemoId = "";
+      if (isNoteItemMemoOpen(itemId)) {
+        setNoteItemMemoOpen(itemId, false);
         renderGroups();
+        renderPreview();
         return;
       }
 
-      openItemMemoId = itemId;
+      setNoteItemMemoOpen(itemId, true);
       renderGroups();
+      renderPreview();
 
       requestAnimationFrame(() => {
         const panelEl = groupsRoot.querySelector(
@@ -758,6 +760,7 @@ function getGroupsScript() {
     }
 
     function renderGroups() {
+      if (typeof syncNoteReplaceQuery === "function") syncNoteReplaceQuery();
       groupsRoot.innerHTML = "";
 
       const visibleGroups = getVisibleGroupsForSearch();
@@ -800,6 +803,7 @@ function getGroupsScript() {
           if (kind === "divider") {
             return \`
               <section class="itemCard dividerCard" data-nav-id="item:\${item.id}" data-item-id="\${item.id}">
+              <div class="noteSearchResults" data-search-group="\${esc(group.id)}" data-search-item="\${esc(item.id)}">\${renderNoteSearchMatches(item)}</div>
                 <div class="row">
                   <label class="label">区分 \${itemIndex + 1}</label>
                   <input type="text" class="dividerLabelInput" data-field="dividerLabel" data-group-id="\${group.id}" data-item-id="\${item.id}" value="\${esc(item.label || "")}">
@@ -925,7 +929,7 @@ function getGroupsScript() {
 
           const isItemMoreMenuOpen = openItemMoreMenuId === item.id;
           const memoUpdatedAt = String(item?.memo?.updatedAt || "").trim();
-          const isItemMemoOpen = openItemMemoId === item.id;
+          const isItemMemoOpen = isNoteItemMemoOpen(item.id);
 
           const itemMoreMenuHtml = \`
             <div class="itemMoreMenuWrap">
@@ -1013,6 +1017,7 @@ function getGroupsScript() {
 
           return \`
             <section class="itemCard" data-nav-id="item:\${item.id}" data-item-id="\${item.id}">
+              <div class="noteSearchResults" data-search-group="\${esc(group.id)}" data-search-item="\${esc(item.id)}">\${renderNoteSearchMatches(item)}</div>
               <div class="row rowItemHeading">
                 <label class="label">
                   項目 \${itemIndex + 1}
@@ -1209,7 +1214,7 @@ function getGroupsScript() {
                             data-field="itemMemoAutoSync"
                             data-group-id="\${group.id}"
                             data-item-id="\${item.id}"
-                            \${item?.memo?.autoSyncToConceptMemo ? "checked" : ""}
+                            \${isItemMemoAutoSyncEnabled(item?.memo) ? "checked" : ""}
                           >
                           <span>自動反映</span>
                         </label>
@@ -1475,6 +1480,7 @@ function getGroupsScript() {
 
         const groupHtml = \`
           <div class="groupSticky">
+          <div class="noteSearchResults" data-search-group="\${esc(group.id)}">\${renderNoteSearchMatches(group, true)}</div>
           <div class="row">
             <label class="label">大分類 \${groupIndex + 1}</label>
             <input type="text" data-field="groupTitle" data-group-id="\${group.id}" value="\${esc(group.title || "")}">
@@ -1537,7 +1543,6 @@ function getGroupsScript() {
 
           if (field === "groupTitle") {
             group.title = event.target.value;
-            touchAutoSyncedItemMemos(group.items);
             markDirty();
             renderPreview();
             renderNoteToc();
@@ -1549,7 +1554,6 @@ function getGroupsScript() {
 
           if (field === "itemHeading") {
             item.heading = event.target.value;
-            touchAutoSyncedItemMemos([item]);
           } else if (field === "itemHeadingRuby") {
             item.headingRuby = event.target.value;
           } else if (field === "itemBody") {
@@ -1613,10 +1617,12 @@ function getGroupsScript() {
                 linkedConceptMemoIds: [],
                 autoSyncToConceptMemo: false,
                 conceptMemoSyncedAt: "",
+                conceptMemoSyncFingerprint: "",
               };
             }
 
             item.memo.autoSyncToConceptMemo = Boolean(event.target.checked);
+            item.memo.autoSyncToConceptMemoOverride = Boolean(event.target.checked);
             item.memo.updatedAt = new Date().toISOString();
             markDirty();
             refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
@@ -2070,7 +2076,7 @@ function getGroupsScript() {
             if (!item || item.kind !== "entry") return;
 
             const memoBody = String(item?.memo?.body || "").trim();
-            if (!memoBody) {
+            if (!memoBody && !(item?.memo?.linkedConceptMemoIds || []).length) {
               setStatus("メモ本文が空のためコピーできません。", true);
               return;
             }
@@ -2088,7 +2094,8 @@ function getGroupsScript() {
                 memoBody: String(item?.memo?.body || ""),
                 memoType: String(item?.memo?.type || "text"),
                 memoTags: Array.isArray(item?.memo?.tags) ? item.memo.tags : [],
-                autoSyncToConceptMemo: Boolean(item?.memo?.autoSyncToConceptMemo),
+                autoSyncToConceptMemo: isItemMemoAutoSyncEnabled(item?.memo),
+                linkedConceptMemoIds: Array.isArray(item?.memo?.linkedConceptMemoIds) ? item.memo.linkedConceptMemoIds : [],
               },
             });
           });
@@ -2126,7 +2133,7 @@ function getGroupsScript() {
                 itemId,
                 heading: String(item?.heading || ""),
               conceptMemoIds: linkedIds,
-              autoSyncToConceptMemo: Boolean(item?.memo?.autoSyncToConceptMemo),
+              autoSyncToConceptMemo: isItemMemoAutoSyncEnabled(item?.memo),
               editorPosition: captureEditorPosition(itemId),
               },
             });
@@ -2204,18 +2211,21 @@ function getGroupsScript() {
               return;
             }
 
+            const linkedIds = Array.isArray(item.memo.linkedConceptMemoIds)
+              ? item.memo.linkedConceptMemoIds
+              : [];
+
             item.memo = {
               ...item.memo,
               body: "",
               updatedAt: "",
               tags: [],
+              linkedConceptMemoIds: [],
               autoSyncToConceptMemo: false,
+              autoSyncToConceptMemoOverride: false,
               conceptMemoSyncedAt: "",
+              conceptMemoSyncFingerprint: "",
             };
-
-            const linkedIds = Array.isArray(item.memo.linkedConceptMemoIds)
-              ? item.memo.linkedConceptMemoIds
-              : [];
 
             if (linkedIds.length) {
               vscode.postMessage({

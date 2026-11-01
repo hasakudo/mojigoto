@@ -1,4 +1,6 @@
+const { safeFontFamily } = require("../preview/font-defaults");
 const vscode = require("vscode");
+const { getMonoRubyAdvance, positionMonoRubyAnnotations, getMonoRubyStyle } = require('../preview/ruby-spacing');
 
 const {
   renderMergedManuscriptTxt,
@@ -702,6 +704,10 @@ function renderDisplayTokenHtml(token) {
     token.hanging && /[！？!?]/.test(ch) ? " mjm-hanging-emphasis" : "";
 
   if (token.type === "ruby") {
+    const monoAdvance = getMonoRubyAdvance(token);
+    if (monoAdvance) {
+      return `<span class="mjm-ruby mjm-ruby-mono${hangingClass}${punctuationClass}" style="--mjm-mono-advance:${monoAdvance.toFixed(3)}em;${getMonoRubyStyle(token)}"><span class="mjm-ruby-base">${escapeHtml(token.displayText)}</span><span class="mjm-ruby-text">${escapeHtml(token.rubyText)}</span></span>`;
+    }
     const rubyMetrics = getRubyTokenMetrics(token);
     const typographyAdjustmentsDisabled =
       token.typographyAdjustmentsDisabled === true;
@@ -751,7 +757,7 @@ function renderDisplayLineHtml(line) {
     ? " mjm-line-tail-pushed"
     : "";
 
-  return `<div class="mjm-line${rubyClass}${hangingEmphasisClass}${pushoutTailClass}">${tokens
+  return `<div class="mjm-line${rubyClass}${hangingEmphasisClass}${pushoutTailClass}">${positionMonoRubyAnnotations(tokens)
     .map((token) => renderDisplayTokenHtml(token))
     .join("")}</div>`;
 }
@@ -874,6 +880,8 @@ function estimatePageRubySlackPx(page, layoutOptions = {}) {
 
 function renderMergedManuscriptPrintPagesHtml(pages, layoutOptions = {}) {
   const printLayoutMode = String(layoutOptions.printLayoutMode || "single");
+  const paperStart = layoutOptions.printPreview ? '<div class="a4PreviewPaper">' : "";
+  const paperEnd = layoutOptions.printPreview ? "</div>" : "";
   const sheets = buildPrintSheetsFromPages(pages, {
     printLayoutMode,
   });
@@ -890,7 +898,7 @@ function renderMergedManuscriptPrintPagesHtml(pages, layoutOptions = {}) {
 ${sheets
   .map(
     (sheet) => `
-  <section class="printSheet printSheet-2up">
+  ${paperStart}<section class="printSheet printSheet-2up">
     ${sheet.pages
       .map(
         (page) => `
@@ -904,7 +912,7 @@ ${sheets
     </section>`,
       )
       .join("\n")}
-  </section>`,
+  </section>${paperEnd}`,
   )
   .join("\n")}
 </div>`.trim();
@@ -917,12 +925,12 @@ ${pages
     const rubySlackPx = estimatePageRubySlackPx(page, layoutOptions);
 
     return `
-  <section class="printPage">
+  ${paperStart}<section class="printPage">
     <div class="printPageBody" style="--page-ruby-slack-px:${rubySlackPx}px;">
       ${page.items.map((item) => renderPrintPageItemHtml(item, layoutOptions)).join("\n")}
       ${renderPageNumberHtml(page)}
     </div>
-  </section>`;
+  </section>${paperEnd}`;
   })
   .join("\n")}
 </div>`.trim();
@@ -1173,7 +1181,7 @@ function getMergedManuscriptBrowserHtmlStyle(options = {}) {
 body {
   margin: 0;
   padding: 32px;
-  font-family: "${fontFamily}";
+  font-family: ${safeFontFamily(fontFamily)};
   font-size: ${previewFontSizePx}px;
   line-height: ${previewScreenLineHeight};
   color: #222;
@@ -1369,6 +1377,25 @@ ${
   pointer-events: none;
 }
 
+.mjm-ruby-mono {
+  inline-size: var(--mjm-mono-advance);
+  block-size: 1em;
+  margin: 0;
+  padding: 0;
+  letter-spacing: 0;
+}
+.mjm-ruby-mono .mjm-ruby-base {
+  display: block;
+  inline-size: 100%;
+  text-align: center;
+  letter-spacing: 0;
+}
+.mjm-ruby-mono .mjm-ruby-text {
+  inset-inline-start: var(--mjm-mono-position, 50%);
+  font-size: var(--mjm-mono-font, 0.5em);
+  letter-spacing: 0;
+}
+
 .mjm-bouten {
   /* 本文は通常の一字位置に置き、ゴマだけを行外へ配置する。 */
   position: relative;
@@ -1428,15 +1455,16 @@ ${
 
 @media screen {
   .printPageBody {
-    zoom: ${previewFitScale};
+    zoom: ${options.printPreview ? 1 : previewFitScale};
   }
 
   .printSheet-2up .printPageBody {
-    zoom: ${previewFitScale};
+    zoom: ${options.printPreview ? 1 : previewFitScale};
   }
 }
 
-@media print {
+/* 印刷プレビューも実際の印刷と同じ本文・余白の計算を使う。 */
+@media ${options.printPreview ? "all" : "print"} {
   @page {
     size: ${fallbackPrintPageSizeCss};
     margin: ${fallbackPrintMarginCss};
@@ -1705,6 +1733,23 @@ ${
     gap: 16px;
   }
 }
+${options.printPreview && isVertical ? `
+body { margin: 0; padding: 16px; background: #e4e4e4; }
+.exportDocument { max-width: none; margin: 0; }
+.printPages, .printSheets-2up { display: grid; justify-content: center; gap: 24px; }
+.a4PreviewPaper {
+  box-sizing: border-box;
+  width: ${isTwoUpPrint ? 297 : normalPrintPaperWidthMm}mm;
+  height: ${isTwoUpPrint ? 210 : normalPrintPaperHeightMm}mm;
+  padding: ${fallbackPrintMarginCss};
+  background: #fff;
+  outline: 1px solid #bbb;
+  box-shadow: 0 3px 12px #0002;
+  overflow: hidden;
+}
+.printPage { padding: 0 !important; }
+.printSheet-2up { gap: 14px; }
+` : ""}
 `.trim();
 }
 
@@ -1741,6 +1786,7 @@ function renderMergedManuscriptBrowserHtml(mergedData, options = {}) {
 
   const htmlOptions = {
     ...resolvedHtmlOptions,
+    printPreview: options.printPreview === true,
 
     // パネル側の簡易印刷設定は resolveMergedManuscriptHtmlOptions 側で
     // 落ちる可能性があるため、ここで明示的に戻す。

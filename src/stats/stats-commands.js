@@ -36,8 +36,9 @@ function registerStatsCommands(context, options) {
 
     vscode.workspace.onDidSaveTextDocument((doc) => logOnSave(context, doc)),
 
-    vscode.commands.registerCommand("mojigoto.openStats", async () => {
-      panelController.open();
+    vscode.commands.registerCommand("mojigoto.openStats", async (options) => {
+      if (options?.section === "saveSettings") await panelController.openSaveSettings();
+      else await panelController.open();
     }),
 
     vscode.commands.registerCommand("mojigoto.refreshStats", async () => {

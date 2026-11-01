@@ -55,7 +55,7 @@ async function pickExportEntry(item) {
   const picks = [
     {
       label: "原稿：書き出し",
-      description: "Viewの原稿を結合して書き出します",
+      description: "Viewの原稿を全体／章ごとにまとめて書き出します",
       value: "merged_manuscript",
     },
     {

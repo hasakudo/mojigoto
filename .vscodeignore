@@ -1,14 +1,26 @@
 .agents/**
+.review-baseline/**
+.local-config/**
 .git/**
 .github/**
 .vscode/**
 .vscode-test/**
 node_modules/**
 test/**
+old_release/**
+release/mojigoto-web-update-*/**
 
 .env
 .env.*
+web/config.json
+web/api/auth/config.php
+web/api/auth/data/*.json
+web/api/auth/data/*.jsonl
+web/api/auth/data/*.lock
+web/api/auth/data/.users-*
+web/api/auth/data/.audit-*
 *.vsix
+mojigoto-web-*.zip
 *.log
 vertical-preview.html
 
@@ -17,8 +29,29 @@ images/**
 !images/favicon.ico
 !images/icon.png
 !images/mojigoto.png
+!images/logo.png
 !images/mojigoto.svg
 
 .gitignore
 .vscodeignore
 PUBLISHING.md
+
+# Detailed development history is kept separately from public release notes.
+docs/development-changelog.md
+
+# Local investigation and generated release artifacts
+.tmp-web-investigation/**
+release/**
+
+# Authentication runtime data; keep only its directory protection rule
+web/api/auth/data/**
+!web/api/auth/data/.htaccess
+
+# Development documentation and build tools are kept in Git, not in the extension
+docs/**
+scripts/**
+server/web-dev.mjs
+
+# Include only the PHP configuration example, never local backup variants
+web/api/auth/config*.php
+!web/api/auth/config.example.php

@@ -40,6 +40,17 @@ async function openFirstRunBoardWebview(context, handlers = {}) {
           return;
         }
 
+        if (command === "openSaveSettings") {
+          await vscode.commands.executeCommand("mojigoto.openStats", { section: "saveSettings" });
+          panel.dispose();
+          return;
+        }
+
+        if (command === "openBackupSettings") {
+          await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:hasakudo.mojigoto backup");
+          return;
+        }
+
         if (command === "close") {
           panel.dispose();
           return;
@@ -266,6 +277,23 @@ function getFirstRunBoardHtml(webview) {
       <p class="note">原稿ファイルは <code>.txt</code> または <code>.md</code> を使用してください。</p>
     </section>
 
+    <section class="callout">
+      <h2>保存とメモの自動反映</h2>
+      <p>ノート・構想メモ・作品設定は自動保存が初期ONです。OFFでは手動保存が必要です。原稿本文のVS Code標準Auto Saveとは異なる設定になります。</p>
+      <p>項目メモと構想メモをリンクすると、保存時に片道または相互反映できます。<br>方向ごとの自動反映の既定は初期がOFFで、各メモの個別ON／OFFを優先します。</p>
+      <p class="note">Dashboardの「保存設定」と、ノート上部の「︙」からも項目メモ→構想メモの既定を変更できます。</p>
+      <p>Dashboardの保存設定で「Web読込用Markdown」をONにすると、この作品の保存済みノートを最新版1ファイルずつ自動生成します。初期OFF。生成先は作品の <code>.mojigoto/web-import</code> 内です。世代別バックアップや双方向同期とは別の機能です。</p>
+      <button class="secondary" id="openSaveSettingsButton">Dashboardの保存設定を開く</button>
+    </section>
+
+    <section class="settings-intro">
+      <h2>バックアップを使う</h2>
+      <p>原稿・ノート・構想メモを作品内の <code>.mojigoto/backups</code> へ保存し、以前の内容と比較・復元できます。構想メモは作品の全メモをまとめて復元します。</p>
+      <p>自動バックアップは初期OFF（0分）です。必要な場合に間隔を設定してください。手動作成と復元直前の退避はOFFでも使えます。</p>
+      <p class="note">保持件数は1ファイルごとに1～50件（初期50件）で変更できます。新しいバックアップを作成したときに整理し、保護した履歴は残します。自動履歴の保持期限は90日です。Web側の設定とは別です。</p>
+      <button class="secondary" id="openBackupSettingsButton">バックアップ設定を開く</button>
+    </section>
+
     <h2>利用時の補足</h2>
 
     <ul>
@@ -295,6 +323,14 @@ function getFirstRunBoardHtml(webview) {
 
     document.getElementById("openGuideButton")?.addEventListener("click", () => {
       vscode.postMessage({ command: "openGuide" });
+    });
+
+    document.getElementById("openSaveSettingsButton")?.addEventListener("click", () => {
+      vscode.postMessage({ command: "openSaveSettings" });
+    });
+
+    document.getElementById("openBackupSettingsButton")?.addEventListener("click", () => {
+      vscode.postMessage({ command: "openBackupSettings" });
     });
 
     document.getElementById("closeButton")?.addEventListener("click", () => {

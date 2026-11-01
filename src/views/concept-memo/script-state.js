@@ -1,5 +1,9 @@
+const { getWebviewNoticeScript } = require("../shared/webview-notice");
+
 function getConceptMemoStateScript() {
   return `
+    ${getWebviewNoticeScript()}
+    const conceptNotice = createWebviewNotice(document.getElementById("toastMessage"));
     function persistUiState() {
       vscode.setState({
         filePath: currentState?.filePath || "",
@@ -10,8 +14,11 @@ function getConceptMemoStateScript() {
         sortField,
         sortDirection,
         activeQuickFilters,
-        activeTagFilter,
-        activeFolderId,
+        activeTagFilters,
+        activeNoteFilter,
+        activeTagFilter: activeTagFilters[0] || "",
+        activeFolderIds,
+        activeFolderId: activeFolderIds[0] ?? "__all__",
         isFolderManagerOpen,
         isSidebarCollapsed,
         isOverviewCollapsed,
@@ -34,8 +41,11 @@ function getConceptMemoStateScript() {
         sortField,
         sortDirection,
         activeQuickFilters,
-        activeTagFilter,
-        activeFolderId,
+        activeTagFilters,
+        activeNoteFilter,
+        activeTagFilter: activeTagFilters[0] || "",
+        activeFolderIds,
+        activeFolderId: activeFolderIds[0] ?? "__all__",
         isFolderManagerOpen,
         isSidebarCollapsed,
         isOverviewCollapsed,
@@ -57,6 +67,7 @@ function getConceptMemoStateScript() {
         vscode.postMessage({
           type: "scheduleConceptMemosSave",
           payload: {
+            storageRevision: currentState.data.storageRevision,
             selectedMemoId,
             memos: currentState.data.memos,
             folders: currentState.data.folders,
@@ -86,23 +97,7 @@ function getConceptMemoStateScript() {
     }
 
     function showToast(message, options = {}) {
-      const toastEl = document.getElementById("toastMessage");
-      if (!toastEl) return;
-
-      const isError = Boolean(options.isError);
-
-      toastEl.textContent = String(message || "");
-      toastEl.classList.toggle("isError", isError);
-      toastEl.classList.add("isVisible");
-
-      if (toastTimer) {
-        clearTimeout(toastTimer);
-      }
-
-      toastTimer = setTimeout(() => {
-        toastEl.classList.remove("isVisible");
-        toastEl.classList.remove("isError");
-      }, options.duration || 1800);
+      conceptNotice.show(message, options);
     }
 
     function saveCurrentMemos(options = {}) {
@@ -119,6 +114,7 @@ function getConceptMemoStateScript() {
       vscode.postMessage({
         type: "saveConceptMemos",
         payload: {
+          storageRevision: currentState.data.storageRevision,
           selectedMemoId,
           memos: currentState.data.memos,
           folders: currentState.data.folders,

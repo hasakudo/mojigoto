@@ -2,6 +2,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
+const { isForbiddenExportRoot: isForbiddenRoot } = require("../core/export-root");
 const { sanitizeFolderName } = require("../core/path-utils");
 const {
   getCurrentWorkDisplayName,
@@ -12,6 +13,7 @@ function getExportFieldDefaults() {
   const config = vscode.workspace.getConfiguration("mojigoto");
 
   return {
+    includeSubtitle: config.get("exportIncludeSubtitle", true),
     includeFolderName: config.get("exportIncludeFolderName", false),
     includeGenre: config.get("exportIncludeGenre", true),
     includeTargetChars: config.get("exportIncludeTargetChars", true),
@@ -27,6 +29,11 @@ function getEffectiveExportOptions(settings) {
   const local = settings?.exportOptions || {};
 
   return {
+    includeSubtitle:
+      typeof local.includeSubtitle === "boolean"
+        ? local.includeSubtitle
+        : defaults.includeSubtitle,
+
     includeFolderName:
       typeof local.includeFolderName === "boolean"
         ? local.includeFolderName
@@ -88,32 +95,15 @@ function isDirectChildPath(parentPath, childPath) {
   return path.dirname(child).toLowerCase() === parent.toLowerCase();
 }
 
-function isSamePath(leftPath, rightPath) {
-  if (!leftPath || !rightPath) return false;
-
-  try {
-    return (
-      path.resolve(String(leftPath)).toLowerCase() ===
-      path.resolve(String(rightPath)).toLowerCase()
-    );
-  } catch {
-    return false;
-  }
-}
-
 function isForbiddenExportRoot(cfg, candidatePath) {
   const workspaceRoot =
     vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "";
-  const workRoot = String(cfg.get("workRoot", "") || "").trim();
-
-  return [workspaceRoot, workRoot]
-    .filter(Boolean)
-    .some((rootPath) => isSamePath(rootPath, candidatePath));
+  return isForbiddenRoot(cfg, candidatePath, workspaceRoot);
 }
 
 async function confirmRepickForbiddenExportRoot() {
   const answer = await vscode.window.showWarningMessage(
-    "ワークスペースまたは作品ルート自体は、書き出し先の親フォルダに指定できません。ルート直下に「書き出し」などの専用フォルダを作成し、そのフォルダを選択してください。",
+    "ワークスペースまたは作品ルート自体は、書き出し先の親フォルダに指定できません。「書き出し」などの専用フォルダを作成し、そのフォルダを選択してください。開いているフォルダの外でも選べます。",
     { modal: true },
     "フォルダを選び直す",
   );
@@ -155,26 +145,13 @@ async function offerToExcludeExportRoot(cfg, exportRoot) {
   }
 }
 
-function isWarehouseCompatibleExportRoot(cfg, exportRoot) {
-  const mode = String(cfg.get("mode", "single") || "single").trim();
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath || "";
-  const workRoot = String(cfg.get("workRoot", "") || "").trim();
-  const manuscriptRoot = String(cfg.get("manuscriptRoot", "") || "").trim();
-  const expectedParent = mode === "multi"
-    ? workRoot
-    : manuscriptRoot
-      ? path.dirname(manuscriptRoot)
-      : workspaceRoot;
-
-  return Boolean(expectedParent && isDirectChildPath(expectedParent, exportRoot));
-}
-
 async function getOrPickExportRoot(context) {
   const cfg = vscode.workspace.getConfiguration("mojigoto");
 
   let root = String(cfg.get("exportRoot", "") || "").trim();
 
-  const hasExistingRoot = root && fs.existsSync(root);
+  let hasExistingRoot = false;
+  try { hasExistingRoot = Boolean(root && fs.statSync(root).isDirectory()); } catch {}
   const hasForbiddenExistingRoot =
     hasExistingRoot && isForbiddenExportRoot(cfg, root);
 
@@ -187,7 +164,7 @@ async function getOrPickExportRoot(context) {
     if (!shouldRepick) return "";
   } else {
     const proceed = await vscode.window.showInformationMessage(
-      "書き出し先の親フォルダを選択します。Singleでは原稿フォルダと同じ階層、Multiでは作品フォルダと同じ階層のフォルダを選ぶと、作品ツリーに「倉庫」として表示されます。別の場所も従来どおり書き出し先にできますが、倉庫には表示されません。",
+      "書き出し先の親フォルダを選択します。開いているフォルダの外や別のドライブも選べます。選んだフォルダは作品ツリーの「倉庫」に表示され、書き出したファイルを開けます。",
       { modal: true },
       "フォルダを選択",
     );
@@ -222,9 +199,7 @@ async function getOrPickExportRoot(context) {
     await offerToExcludeExportRoot(cfg, root);
 
     vscode.window.showInformationMessage(
-      isWarehouseCompatibleExportRoot(cfg, root)
-        ? "もじごと: 書き出し先を設定し、作品ツリーの倉庫に追加しました。"
-        : "もじごと: 書き出し先を設定しました。倉庫の表示条件を満たさないため、作品ツリーには追加しません。",
+      "もじごと: 書き出し先を設定し、作品ツリーの倉庫に追加しました。",
     );
   } catch (e) {
     vscode.window.showErrorMessage(

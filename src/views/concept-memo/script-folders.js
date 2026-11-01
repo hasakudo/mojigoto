@@ -13,6 +13,12 @@ function getConceptMemoFoldersScript() {
       return getMemoFolders().find((folder) => folder.id === id)?.name || "";
     }
 
+    function getMemoFolderNames(memo) {
+      return normalizeMemoFolderIds(memo)
+        .map((folderId) => getMemoFolderName(folderId))
+        .filter(Boolean);
+    }
+
     function isProtectedMemoFolder(folderId) {
       return folderId === "writing" || folderId === "note-item";
     }
@@ -25,14 +31,16 @@ function getConceptMemoFoldersScript() {
       let unclassified = 0;
 
       memos.forEach((memo) => {
-        const folderId = String(memo?.folderId || "");
-        if (!folderId) {
+        const folderIds = normalizeMemoFolderIds(memo);
+        if (!folderIds.length) {
           unclassified += 1;
           return;
         }
-        if (byFolder.has(folderId)) {
-          byFolder.set(folderId, byFolder.get(folderId) + 1);
-        }
+        folderIds.forEach((folderId) => {
+          if (byFolder.has(folderId)) {
+            byFolder.set(folderId, byFolder.get(folderId) + 1);
+          }
+        });
       });
 
       return {
@@ -49,8 +57,15 @@ function getConceptMemoFoldersScript() {
       }
     }
 
-    function setActiveMemoFolder(folderId) {
-      activeFolderId = String(folderId ?? "__all__");
+    function toggleActiveMemoFolder(folderId) {
+      const value = String(folderId ?? "__all__");
+      if (value === "__all__") {
+        activeFolderIds = [];
+      } else {
+        activeFolderIds = activeFolderIds.includes(value)
+          ? activeFolderIds.filter((id) => id !== value)
+          : [...activeFolderIds, value];
+      }
       ensureVisibleMemoSelection();
       renderAll();
     }
@@ -112,10 +127,15 @@ function getConceptMemoFoldersScript() {
       }
       currentState.data.folders = getMemoFolders().filter((folder) => folder.id !== folderId);
       currentState.data.folders.forEach((folder, index) => { folder.order = index; });
-      currentState.data.memos = currentState.data.memos.map((memo) =>
-        memo.folderId === folderId ? { ...memo, folderId: "" } : memo,
-      );
-      if (activeFolderId === folderId) activeFolderId = "__all__";
+      currentState.data.memos = currentState.data.memos.map((memo) => {
+        const folderIds = normalizeMemoFolderIds(memo).filter((id) => id !== folderId);
+        return {
+          ...memo,
+          folderIds,
+          folderId: folderIds[0] || "",
+        };
+      });
+      activeFolderIds = activeFolderIds.filter((id) => id !== folderId);
       currentState.data.updatedAt = new Date().toISOString();
       setDirty(true);
       ensureVisibleMemoSelection();
@@ -135,34 +155,67 @@ function getConceptMemoFoldersScript() {
       countElement.textContent = String(Number(count || 0));
       button.append(labelElement, countElement);
       button.title = label + "（" + countElement.textContent + "件）";
-      button.classList.toggle("isActive", activeFolderId === value);
+      button.classList.toggle(
+        "isActive",
+        value === "__all__" ? activeFolderIds.length === 0 : activeFolderIds.includes(value),
+      );
       return button;
+    }
+
+    function getFolderFilterRowCount(quickList) {
+      if (!quickList) return 0;
+      const tops = [];
+      [...quickList.children].forEach((child) => {
+        const top = Math.round(child.offsetTop);
+        if (!tops.some((value) => Math.abs(value - top) <= 2)) tops.push(top);
+      });
+      return tops.length;
+    }
+
+    function updateFolderFilterLayout() {
+      const quickList = document.getElementById("folderQuickList");
+      const overflow = document.getElementById("folderOverflowMenu");
+      if (!quickList || !overflow) return;
+
+      const wasHidden = quickList.hidden;
+      if (wasHidden) {
+        quickList.hidden = false;
+        quickList.classList.add("isMeasuring");
+      }
+      const useSelect = getFolderFilterRowCount(quickList) > 2;
+      quickList.classList.remove("isMeasuring");
+      quickList.hidden = useSelect;
+      overflow.hidden = !useSelect;
+    }
+
+    function scheduleFolderFilterLayout() {
+      requestAnimationFrame(() => updateFolderFilterLayout());
     }
 
     function renderMemoFolders() {
       const quickList = document.getElementById("folderQuickList");
-      const overflow = document.getElementById("folderOverflowSelect");
+      const overflow = document.getElementById("folderOverflowMenu");
+      const overflowLabel = document.getElementById("folderOverflowLabel");
+      const overflowOptions = document.getElementById("folderOverflowOptions");
       const manager = document.getElementById("folderManager");
       const managerList = document.getElementById("folderManagerList");
       const manageButton = document.getElementById("toggleFolderManagerButton");
-      const editorSelect = document.getElementById("memoFolderSelect");
+      const editorOptions = document.getElementById("memoFolderOptions");
       const folders = getMemoFolders();
       const folderCounts = getMemoFolderCounts();
 
-      if (
-        activeFolderId !== "__all__" &&
-        activeFolderId !== "" &&
-        !folders.some((folder) => folder.id === activeFolderId)
-      ) {
-        activeFolderId = "__all__";
-      }
+      const validFolderIds = new Set(folders.map((folder) => folder.id));
+      activeFolderIds = [...new Set(activeFolderIds)].filter(
+        (folderId) => folderId === "" || validFolderIds.has(folderId),
+      );
 
       if (quickList) {
         quickList.innerHTML = "";
+        quickList.hidden = false;
         quickList.appendChild(
           createFolderFilterButton("__all__", "すべて", folderCounts.total),
         );
-        folders.slice(0, 3).forEach((folder) => {
+        folders.forEach((folder) => {
           quickList.appendChild(
             createFolderFilterButton(
               folder.id,
@@ -171,26 +224,42 @@ function getConceptMemoFoldersScript() {
             ),
           );
         });
-        if (folders.length <= 3) {
-          quickList.appendChild(
-            createFolderFilterButton("", "未分類", folderCounts.unclassified),
-          );
-        }
+        quickList.appendChild(
+          createFolderFilterButton("", "未分類", folderCounts.unclassified),
+        );
       }
 
-      if (overflow) {
-        const extraFolders = folders.slice(3);
-        overflow.hidden = extraFolders.length === 0;
-        overflow.innerHTML = '<option value="__more__">その他のフォルダ…</option>' +
-          extraFolders.map((folder) =>
-            '<option value="' + escapeHtml(folder.id) + '"' +
-            (activeFolderId === folder.id ? ' selected' : '') + '>' +
-            escapeHtml(folder.name) + '（' +
-            String(folderCounts.byFolder.get(folder.id) || 0) + '）</option>',
+      if (overflow && overflowOptions && overflowLabel) {
+        overflow.hidden = true;
+        const selectedLabels = activeFolderIds.map((folderId) =>
+          folderId === "" ? "未分類" : getMemoFolderName(folderId),
+        ).filter(Boolean);
+        overflowLabel.textContent = selectedLabels.length === 0
+          ? "すべて"
+          : selectedLabels.length === 1
+            ? selectedLabels[0]
+            : selectedLabels.length + "件選択";
+        overflowOptions.innerHTML =
+          '<button type="button" class="folderOverflowClear" data-folder-filter-clear>すべて解除</button>' +
+          folders.map((folder) =>
+            '<label class="folderOverflowOption">' +
+              '<input type="checkbox" value="' + escapeHtml(folder.id) + '"' +
+              (activeFolderIds.includes(folder.id) ? ' checked' : '') + ' />' +
+              '<span>' + escapeHtml(folder.name) + '</span>' +
+              '<span class="folderOverflowCount">' +
+                String(folderCounts.byFolder.get(folder.id) || 0) +
+              '</span>' +
+            '</label>',
           ).join("") +
-          '<option value=""' + (activeFolderId === "" ? ' selected' : '') +
-          '>未分類（' + String(folderCounts.unclassified) + '）</option>';
+          '<label class="folderOverflowOption">' +
+            '<input type="checkbox" value=""' +
+            (activeFolderIds.includes("") ? ' checked' : '') + ' />' +
+            '<span>未分類</span>' +
+            '<span class="folderOverflowCount">' + String(folderCounts.unclassified) + '</span>' +
+          '</label>';
       }
+
+      scheduleFolderFilterLayout();
 
       if (manager) manager.hidden = !isFolderManagerOpen;
       if (manageButton) {
@@ -213,19 +282,26 @@ function getConceptMemoFoldersScript() {
           : '<div class="muted folderManagerEmpty">フォルダはまだありません。</div>';
       }
 
-      if (editorSelect) {
+      if (editorOptions) {
         const memo = getSelectedMemo();
-        editorSelect.innerHTML = folders.map((folder) =>
-            '<option value="' + escapeHtml(folder.id) + '">' + escapeHtml(folder.name) + '</option>',
-          ).join("") + '<option value="">未分類</option>';
-        editorSelect.value = String(memo?.folderId || "");
-        editorSelect.disabled = !memo;
+        const selected = new Set(normalizeMemoFolderIds(memo));
+        editorOptions.innerHTML = folders.length
+          ? folders.map((folder) =>
+              '<label class="memoFolderOption">' +
+                '<input type="checkbox" value="' + escapeHtml(folder.id) + '"' +
+                (selected.has(folder.id) ? ' checked' : '') +
+                (memo ? '' : ' disabled') + ' />' +
+                '<span>' + escapeHtml(folder.name) + '</span>' +
+              '</label>',
+            ).join("")
+          : '<span class="muted">フォルダはまだありません。</span>';
       }
 
       const folderValue = document.getElementById("memoFolderMenuValue");
       const selectedMemo = getSelectedMemo();
       if (folderValue) {
-        folderValue.textContent = getMemoFolderName(selectedMemo?.folderId || "") || "未分類";
+        const names = getMemoFolderNames(selectedMemo);
+        folderValue.textContent = names.length ? names.join("、") : "未分類";
       }
     }
 
@@ -233,13 +309,34 @@ function getConceptMemoFoldersScript() {
       document.getElementById("folderQuickList")?.addEventListener("click", (event) => {
         const button = event.target.closest("[data-folder-filter]");
         if (!button) return;
-        setActiveMemoFolder(button.dataset.folderFilter ?? "__all__");
+        toggleActiveMemoFolder(button.dataset.folderFilter ?? "__all__");
       });
 
-      document.getElementById("folderOverflowSelect")?.addEventListener("change", (event) => {
-        const folderId = String(event.target.value ?? "__more__");
-        if (folderId !== "__more__") setActiveMemoFolder(folderId);
+      document.getElementById("folderOverflowOptions")?.addEventListener("change", (event) => {
+        const input = event.target.closest('input[type="checkbox"]');
+        if (!input) return;
+        toggleActiveMemoFolder(String(input.value ?? ""));
+        requestAnimationFrame(() => {
+          const menu = document.getElementById("folderOverflowMenu");
+          if (menu) menu.open = true;
+        });
       });
+
+      document.getElementById("folderOverflowOptions")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-folder-filter-clear]");
+        if (!button) return;
+        activeFolderIds = [];
+        ensureVisibleMemoSelection();
+        renderAll();
+      });
+
+      const folderBox = document.querySelector(".memoFolderBox");
+      if (typeof ResizeObserver === "function" && folderBox) {
+        const observer = new ResizeObserver(() => scheduleFolderFilterLayout());
+        observer.observe(folderBox);
+      } else {
+        window.addEventListener("resize", scheduleFolderFilterLayout);
+      }
 
       document.getElementById("toggleFolderManagerButton")?.addEventListener("click", () => {
         isFolderManagerOpen = !isFolderManagerOpen;
@@ -284,8 +381,11 @@ function getConceptMemoFoldersScript() {
         if (button) deleteMemoFolder(button.dataset.folderDelete || "");
       });
 
-      document.getElementById("memoFolderSelect")?.addEventListener("change", (event) => {
-        updateSelectedMemo({ folderId: String(event.target.value || "") });
+      document.getElementById("memoFolderOptions")?.addEventListener("change", () => {
+        const folderIds = [...document.querySelectorAll('#memoFolderOptions input[type="checkbox"]:checked')]
+          .map((input) => String(input.value || ""))
+          .filter(Boolean);
+        updateSelectedMemo({ folderIds, folderId: folderIds[0] || "" });
         renderAll();
       });
     }

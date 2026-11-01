@@ -4,6 +4,7 @@ const {
   getInputAssistToolbarScript,
 } = require("../shared/input-assist-toolbar");
 const { getConceptMemoStyles } = require("./concept-memo-styles");
+const { conceptActionIcon } = require("./concept-memo-icons");
 const { getConceptMemoUtilsScript } = require("./script-utils");
 const { getConceptMemoStateScript } = require("./script-state");
 const { getConceptMemoFoldersScript } = require("./script-folders");
@@ -11,6 +12,8 @@ const { getConceptMemoListScript } = require("./script-list");
 const { getConceptMemoLayoutScript } = require("./script-layout");
 const { getConceptMemoEditorScript } = require("./script-editor");
 const { getConceptMemoEventsScript } = require("./script-events");
+const { getWebviewNoticeCss } = require("../shared/webview-notice");
+const { createConceptNoteOrder } = require("../../../web/lib/concept-note-order");
 
 function getConceptMemoWebviewHtml(webview, bootState) {
   const nonce = String(Date.now());
@@ -33,6 +36,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
   <style>
   ${getConceptMemoStyles()}
   ${getInputAssistToolbarCss()}
+    ${getWebviewNoticeCss()}
   </style>
 </head>
 <body style="--mojigoto-content-font-scale: ${fontScale};">
@@ -43,12 +47,12 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         <h1 class="title">構想メモ</h1>
         <div class="spacer"></div>
         <button class="iconButton pushButton" id="toggleSidebarButton" title="メモ一覧を折りたたむ">←</button>
-        <button class="iconButton pushButton" id="toggleCommonTodoButtonSidebar" title="作品共通TODOを表示">共</button>
+        <button class="iconButton pushButton" id="toggleCommonTodoButtonSidebar" title="作品共通TODOを表示" aria-label="作品共通TODOを表示">${conceptActionIcon("todo")}</button>
         <div class="memoListMenuArea">
-          <button class="iconButton pushButton" id="openSearchPanelButton" title="検索">⌕</button>
-          <button class="iconButton pushButton" id="openSortPanelButton" title="並び順">⇅</button>
-          <button class="iconButton pushButton" id="openFilterPanelButton" title="絞り込み">▤</button>
-          <button class="iconButton pushButton" id="openBulkDeletePanelButton" title="一括操作">☑</button>
+          <button class="iconButton pushButton" id="openSearchPanelButton" title="検索" aria-label="検索">${conceptActionIcon("search")}</button>
+          <button class="iconButton pushButton" id="openSortPanelButton" title="並び順" aria-label="並び順">${conceptActionIcon("sort")}</button>
+          <button class="iconButton pushButton" id="openFilterPanelButton" title="絞り込み" aria-label="絞り込み">${conceptActionIcon("filter")}</button>
+          <button class="iconButton pushButton" id="openBulkDeletePanelButton" title="一括操作" aria-label="一括操作">${conceptActionIcon("bulk")}</button>
 
           <div class="listMenuPopover" id="memoSearchPanel" hidden>
             <div class="row" style="margin-bottom:8px;">
@@ -84,20 +88,21 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                 <option value="updated">更新</option>
                 <option value="created">作成</option>
                 <option value="title">タイトル</option>
+                <option value="noteOrder">ノートの項目順</option>
               </select>
             </div>
           </div>
 
           <div class="listMenuPopover" id="memoFilterPanel" hidden>
             <div class="row" style="margin-bottom:8px;">
-              <label class="muted" for="memoFilterSelect">絞り込み</label>
-            </div>
-            <div class="row" style="margin-bottom:8px;">
               <label class="muted">絞り込み</label>
-              <div class="spacer"></div>
-              <button class="button secondary" id="clearQuickFilterButton">解除</button>
             </div>
 
+            <div class="filterGroup">
+              <label class="filterGroupLabel" for="memoNoteFilter">ノート</label>
+              <select class="input" id="memoNoteFilter" aria-describedby="memoNoteFilterStatus"><option value="">すべてのノート</option></select>
+              <span class="muted" id="memoNoteFilterStatus" role="status"></span>
+            </div>
             <div class="filterGroup">
               <div class="filterGroupLabel">種別</div>
               <div class="filterChipRow" id="memoTypeFilterRow">
@@ -123,6 +128,15 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                 <button type="button" class="filterChip" data-filter-group="source" data-filter-value="cleared">元メモなし</button>
                 <button type="button" class="filterChip" data-filter-group="source" data-filter-value="missing">リンク切れ</button>
               </div>
+            </div>
+
+            <div class="filterGroup">
+              <div class="filterGroupLabel">タグ（複数選択可）</div>
+              <div class="filterChipRow tagFilterChipRow" id="memoTagFilterRow"></div>
+            </div>
+
+            <div class="filterResetRow">
+              <button class="button secondary" id="clearQuickFilterButton">すべて解除</button>
             </div>
           </div>
 
@@ -161,22 +175,16 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           <button class="button secondary folderManageButton" type="button" id="toggleFolderManagerButton">管理</button>
         </div>
         <div id="folderQuickList" class="folderQuickList"></div>
-        <select class="input folderOverflowSelect" id="folderOverflowSelect" hidden></select>
+        <details class="folderOverflowMenu" id="folderOverflowMenu" hidden>
+          <summary><span id="folderOverflowLabel">すべて</span></summary>
+          <div class="folderOverflowOptions" id="folderOverflowOptions"></div>
+        </details>
         <div id="folderManager" class="folderManager" hidden>
           <div class="row folderAddRow">
             <input class="input" id="newFolderNameInput" type="text" maxlength="40" placeholder="新しいフォルダ名" />
             <button class="button secondary" type="button" id="addFolderButton">追加</button>
           </div>
           <div id="folderManagerList" class="folderManagerList"></div>
-        </div>
-      </div>
-
-      <div class="box" id="tagFilterBox" style="display:none;">
-        <div class="row">
-          <span class="muted">タグ絞り込み:</span>
-          <span class="tagChip" id="activeTagFilterLabel"></span>
-          <div class="spacer"></div>
-          <button class="button secondary" id="clearTagFilterButton">解除</button>
         </div>
       </div>
 
@@ -191,16 +199,19 @@ function getConceptMemoWebviewHtml(webview, bootState) {
           <div class="row editorHeaderLeft">
             <button class="iconButton pushButton" id="toggleSidebarButtonMain" title="メモ一覧を折りたたむ">←</button>
             <h2 class="title">編集</h2>
+            <div id="conceptAutoSaveBadge" class="autoSaveBadge"${bootState?.uiSettings?.autoSaveEnabled ? "" : " hidden"}>自動保存 ON</div>
             <div id="statusText" class="saveStatus">保存済み</div>
           </div>
 
           <div class="spacer"></div>
 
           <div class="row editorHeaderActions">
-            <button class="button secondary compactActionButton" id="toggleCommonTodoButton">共通TODO</button>
-            <button class="button secondary compactActionButton" id="pinButton">ピン留め</button>
-            <button class="button secondary compactActionButton" id="archiveButton" title="アーカイブする">保管</button>
-            <button class="button secondary compactActionButton" id="dashboardButton" title="Dashboardの表示">ダッシュボード</button>
+            <button class="button secondary editorActionIconButton" id="refreshConceptMemosButton" title="作品名と構想メモをファイルから読み直す" aria-label="作品名と構想メモをファイルから読み直す">${conceptActionIcon("refresh")}</button>
+            <button class="button secondary editorActionIconButton" id="conceptMemoBackupButton" title="構想メモのバックアップ履歴を開く" aria-label="構想メモのバックアップ履歴を開く">${conceptActionIcon("backup")}</button>
+            <button class="button secondary editorActionIconButton" id="toggleCommonTodoButton" title="作品共通TODOを表示" aria-label="作品共通TODOを表示">${conceptActionIcon("todo")}</button>
+            <button class="button secondary editorActionIconButton" id="pinButton" title="ピン留め" aria-label="ピン留め" aria-pressed="false">${conceptActionIcon("pin")}</button>
+            <button class="button secondary editorActionIconButton" id="archiveButton" title="アーカイブする" aria-label="アーカイブする" aria-pressed="false">${conceptActionIcon("archive")}</button>
+            <button class="button secondary editorActionIconButton" id="dashboardButton" title="Dashboardに表示する" aria-label="Dashboardに表示する" aria-pressed="false">${conceptActionIcon("dashboard")}</button>
           </div>
         </div>
       </div>
@@ -271,8 +282,8 @@ function getConceptMemoWebviewHtml(webview, bootState) {
                 </div>
 
                 <div id="memoFolderSubmenu" class="editorSubmenu" hidden>
-                  <div class="submenuTitle">フォルダ</div>
-                  <select class="input" id="memoFolderSelect"></select>
+                  <div class="submenuTitle">フォルダ（複数選択可）</div>
+                  <div class="memoFolderOptions" id="memoFolderOptions"></div>
                 </div>
               </div>
             </div>
@@ -395,10 +406,20 @@ function getConceptMemoWebviewHtml(webview, bootState) {
         bootState.initialQuickFilters?.source ||
         "",
     };
-    let activeTagFilter = persistedUiState.activeTagFilter || "";
-    let activeFolderId = typeof persistedUiState.activeFolderId === "string"
-      ? persistedUiState.activeFolderId
-      : "__all__";
+    let activeTagFilters = Array.isArray(persistedUiState.activeTagFilters)
+      ? persistedUiState.activeTagFilters.map((tag) => String(tag || "").trim()).filter(Boolean)
+      : persistedUiState.activeTagFilter
+        ? [String(persistedUiState.activeTagFilter).trim()].filter(Boolean)
+        : [];
+    let activeNoteFilter = String(persistedUiState.activeNoteFilter || "");
+    let conceptNoteIndex = [];
+    let conceptNoteIndexLoading = false;
+    const conceptNoteOrder = (${createConceptNoteOrder.toString()})();
+    let activeFolderIds = Array.isArray(persistedUiState.activeFolderIds)
+      ? persistedUiState.activeFolderIds.map((folderId) => String(folderId ?? ""))
+      : typeof persistedUiState.activeFolderId === "string" && persistedUiState.activeFolderId !== "__all__"
+        ? [persistedUiState.activeFolderId]
+        : [];
     let isFolderManagerOpen = Boolean(persistedUiState.isFolderManagerOpen);
     let sortField =
       localStorage.getItem(getSortFieldStorageKey()) ||
@@ -414,7 +435,6 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       persistedUiState.isCommonTodoCollapsed === undefined
         ? (savedCommonTodoCollapsed === null ? window.innerWidth <= 1100 : savedCommonTodoCollapsed === "true")
         : Boolean(persistedUiState.isCommonTodoCollapsed);
-    let toastTimer = null;
     let autoSaveAfterApplyToNote = Boolean(persistedUiState.autoSaveAfterApplyToNote);
 
     let isBulkDeleteMode = false;
@@ -448,6 +468,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
       renderSearchInput();
       renderQuickFilter();
       renderTagFilter();
+      renderNoteFilter();
       renderSortSelect();
       renderMemoCounts();
       renderMemoFolders();
@@ -467,6 +488,7 @@ function getConceptMemoWebviewHtml(webview, bootState) {
     bindQuickFilter();
     bindListPanelActions();
     bindTagFilterActions();
+    bindNoteFilterActions();
     bindMemoFolderActions();
     bindSortActions();
     bindSidebarActions();

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#123f52">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <title>管理画面 | もじごと</title>
+    <link rel="icon" href="../favicon.ico" sizes="any">
+    <script src="../theme-init.js?v=1.0.64"></script>
+    <link rel="stylesheet" href="./admin.css?v=1.0.50">
+    <link rel="stylesheet" href="../theme-palettes.css?v=1.0.0">
+  </head>
+  <body>
+    <header class="admin-topbar">
+      <a class="brand" href="../"><span class="brand-mark" aria-hidden="true">も</span><span>もじごと</span></a>
+      <div class="topbar-actions">
+        <span id="adminAccount" class="admin-account"></span>
+        <a id="reauthenticateLink" class="text-link" href="./login/">再認証</a>
+        <button id="logoutButton" class="text-button" type="button" hidden>ログアウト</button>
+      </div>
+    </header>
+
+    <main class="admin-shell">
+      <section id="loadingPanel" class="state-panel" aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <p>管理者権限を確認しています…</p>
+      </section>
+
+      <section id="accessPanel" class="state-panel" hidden>
+        <p class="eyebrow">ADMIN ACCESS</p>
+        <h1 id="accessTitle">管理画面を開けません</h1>
+        <p id="accessMessage" class="muted"></p>
+        <a id="loginLink" class="primary-button" href="../" hidden>Microsoftでログイン</a>
+        <a class="text-link" href="../">もじごとへ戻る</a>
+      </section>
+
+      <div id="adminContent" hidden>
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">MEMBERS BETA</p>
+            <h1>管理画面</h1>
+            <p class="muted">申込・問い合わせ、招待利用者とWebアプリのお知らせを管理します。</p>
+          </div>
+          <a class="back-link" href="../">もじごとへ戻る</a>
+        </div>
+
+        <section class="summary-grid" aria-label="利用者集計">
+          <article><span>登録</span><strong id="totalCount">0</strong></article>
+          <article><span>有効</span><strong id="activeCount">0</strong></article>
+          <article><span>停止中</span><strong id="disabledCount">0</strong></article>
+          <article><span>管理者</span><strong id="adminCount">0</strong></article>
+        </section>
+
+        <nav class="admin-section-nav" aria-label="管理項目">
+          <a href="#submissionsPanel">申込・問い合わせ</a>
+          <a href="#formSettingsPanel">フォーム設定</a>
+          <a href="#invitePanel">招待</a>
+          <a href="#membersPanel">利用者</a>
+          <a href="#mailPanel">メール</a>
+          <a href="#announcementsPanel">お知らせ</a>
+          <a href="#activityPanel">操作履歴</a>
+          <button id="collapseAllPanelsButton" type="button">すべて閉じる</button>
+        </nav>
+
+        <section id="submissionsPanel" class="admin-panel submissions-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>申込・問い合わせ</h2>
+              <p id="submissionCountLabel" class="muted">未対応0件</p>
+            </div>
+            <button id="reloadSubmissionsButton" class="secondary-button" type="button">再読み込み</button>
+          </div>
+          <p class="admin-retention-note">対応済み情報は完了から90日後に自動削除されます。管理者の受信メールは自動削除されないため、定期整理通知に合わせてメールサービス側も確認してください。</p>
+          <div id="submissionList" class="submission-list" aria-live="polite"></div>
+        </section>
+
+        <section id="formSettingsPanel" class="admin-panel form-settings-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>フォーム設定</h2>
+              <p class="muted">申込・問い合わせの禁止ワードを管理します。</p>
+            </div>
+          </div>
+          <form id="formSettingsForm" class="form-settings-form">
+            <label for="blockedTermsInput">禁止ワード（1行に1つ・最大100件）</label>
+            <textarea id="blockedTermsInput" rows="7" maxlength="8100" placeholder="禁止したい語句&#10;spam.example"></textarea>
+            <p class="form-settings-note">名前・メールアドレス・件名・本文を対象に、全角／半角を揃え、大文字小文字を区別せず部分一致で判定します。一般的な単語は正常な問い合わせも止めるため避けてください。</p>
+            <div><button id="saveFormSettingsButton" class="primary-button" type="submit">禁止ワードを保存</button></div>
+          </form>
+        </section>
+
+        <section id="invitePanel" class="admin-panel invite-panel">
+          <div>
+            <h2>利用者を招待</h2>
+            <p class="muted">MicrosoftまたはGoogleでログインするメールアドレスを登録します。</p>
+          </div>
+          <form id="inviteForm" class="invite-form">
+            <label for="inviteEmail">メールアドレス</label>
+            <div>
+              <input id="inviteEmail" name="email" type="email" maxlength="254" autocomplete="email" required placeholder="user@example.com">
+              <button id="inviteButton" class="primary-button" type="submit">追加</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="membersPanel" class="admin-panel members-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>利用者一覧</h2>
+              <p id="memberCountLabel" class="muted">0件</p>
+            </div>
+            <div class="member-heading-actions">
+              <span class="muted">メールアドレスは常に伏せ字で表示します。</span>
+              <button id="reloadButton" class="secondary-button" type="button">再読み込み</button>
+            </div>
+          </div>
+          <div id="memberList" class="member-list" aria-live="polite"></div>
+          <details class="removed-members">
+            <summary>招待解除済み・Cognito手動削除用 <span id="removedMemberCountLabel">0件</span></summary>
+            <p class="admin-retention-note">解除後90日間は照合情報を確認できます。Cognitoの該当ユーザープールでsubを検索し、属性の完全一致を確認して手動削除してください。この画面からCognitoは削除されません。手動削除後も保存期限までは表示されます。</p>
+            <div id="removedMemberList" class="member-list" aria-live="polite"></div>
+          </details>
+        </section>
+
+        <section id="mailPanel" class="admin-panel mail-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>利用者へのメール</h2>
+              <p id="mailAudienceCount" class="muted">有効利用者0件</p>
+            </div>
+          </div>
+          <form id="adminMailForm" class="admin-mail-form">
+            <label><span>送信先</span><select id="adminMailAudience">
+              <option value="individual">利用者を1人選ぶ</option>
+              <option value="all_active">有効利用者全員</option>
+            </select></label>
+            <label id="adminMailUserField"><span>利用者</span><select id="adminMailUserId" required></select></label>
+            <label class="wide"><span>件名</span><input id="adminMailSubject" type="text" maxlength="100" required></label>
+            <label class="wide"><span>本文</span><textarea id="adminMailMessage" maxlength="5000" required></textarea></label>
+            <p class="mail-privacy-note wide">実際のメールアドレスは画面へ表示せず、サーバー側で利用者IDから取得します。一括送信も1件ずつ別々に送信します。ベータ運営に必要な連絡にのみ使用してください。</p>
+            <label class="mail-confirm wide"><input id="adminMailConfirm" type="checkbox" required><span>送信先と内容を確認しました</span></label>
+            <div class="admin-mail-actions wide"><button id="adminMailSendButton" class="primary-button" type="submit">メールを送信</button></div>
+          </form>
+          <div class="sent-mail-heading">
+            <h3>送信ボックス</h3>
+            <p id="sentMailCountLabel" class="muted">0件・送信後90日で自動削除</p>
+          </div>
+          <div id="sentMailList" class="sent-mail-list" aria-live="polite"></div>
+        </section>
+
+        <section id="announcementsPanel" class="admin-panel announcements-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>お知らせ管理</h2>
+              <p class="muted">Webアプリのお知らせを追加・編集します。</p>
+              <p id="announcementLatestLabel" class="panel-latest-label">最終更新：お知らせはまだありません</p>
+            </div>
+          </div>
+          <form id="announcementForm" class="announcement-form">
+            <input id="announcementId" type="hidden">
+            <label><span>日付</span><input id="announcementDate" type="date" required></label>
+            <label><span>タイトル</span><input id="announcementTitleInput" type="text" maxlength="100" required></label>
+            <label class="wide"><span>概要</span><textarea id="announcementSummary" maxlength="500" required></textarea></label>
+            <label class="wide"><span>リンク（任意・https）</span><input id="announcementUrl" type="url" maxlength="500" placeholder="https://"></label>
+            <div class="announcement-form-actions wide">
+              <button id="cancelAnnouncementEditButton" class="text-button" type="button" hidden>編集をやめる</button>
+              <button id="saveAnnouncementButton" class="primary-button" type="submit">追加</button>
+            </div>
+          </form>
+          <div id="adminAnnouncementList" class="admin-announcement-list" aria-live="polite"></div>
+        </section>
+
+        <section id="activityPanel" class="admin-panel activity-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>管理操作履歴</h2>
+              <p id="activityCountLabel" class="muted">直近0件</p>
+            </div>
+          </div>
+          <div id="activityList" class="activity-list" aria-live="polite"></div>
+        </section>
+      </div>
+    </main>
+
+    <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+    <script type="module" src="./admin.mjs?v=1.0.54"></script>
+  </body>
+</html>

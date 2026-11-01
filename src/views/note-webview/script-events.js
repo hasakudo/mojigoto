@@ -1,6 +1,7 @@
 function getEventsScript() {
   return `
   function requestCloseNote() {
+    if (typeof sendNoteDisplaySnapshot === "function") sendNoteDisplaySnapshot();
     if (dirty) {
       vscode.postMessage({
         type: "requestClose",
@@ -173,9 +174,6 @@ function getEventsScript() {
   function registerTitleEvents() {
     titleInput.addEventListener("input", () => {
       state.title = titleInput.value;
-      for (const group of state.groups) {
-        touchAutoSyncedItemMemos(group?.items);
-      }
       markDirty();
       renderPreview();
     });
@@ -257,6 +255,24 @@ function getEventsScript() {
       saveCurrentNote();
     });
 
+    document.getElementById("refreshNoteBtn")?.addEventListener("click", () => {
+      vscode.postMessage({
+        type: "requestRefreshNote",
+        dirty,
+        payload: collectPayload(),
+        revision: changeRevision,
+      });
+    });
+
+    document.getElementById("noteBackupBtn")?.addEventListener("click", () => {
+      vscode.postMessage({
+        type: "openNoteBackupHistory",
+        dirty,
+        payload: collectPayload(),
+        revision: changeRevision,
+      });
+    });
+
     document.getElementById("closeBtn")?.addEventListener("click", () => {
       requestCloseNote();
     });
@@ -328,12 +344,19 @@ function getEventsScript() {
         event.preventDefault();
         const navId = navEl.dataset.navId;
         if (!navId) return;
-        jumpFromPreview(navId);
+        scrollToEditorNavId(navId);
       }
     };
   }
 
   function handleMenuAction(action, menuActionBtn) {
+    if (action === "toggleMemoAutoSyncDefault") {
+      if (menuActionBtn.disabled) return;
+      menuActionBtn.disabled = true;
+      setMoreMenuOpen(false);
+      vscode.postMessage({ type: "updateNoteMemoAutoSyncDefault", enabled: !initial.noteMemoAutoSyncDefault });
+      return;
+    }
     if (action === "saveTemplate") {
       setMoreMenuOpen(false);
       vscode.postMessage({
@@ -504,6 +527,19 @@ function getEventsScript() {
     });
   }
 
+  function applyNoteUiSettings(payload) {
+    const scale = Number(payload?.fontScale || 1);
+    document.body.style.setProperty("--mojigoto-content-font-scale", String(Math.min(1.6, Math.max(0.8, scale))));
+    initial.noteMemoAutoSyncDefault = Boolean(payload?.noteMemoAutoSyncDefault);
+    if (autoSaveBadgeEl) autoSaveBadgeEl.hidden = !Boolean(payload?.autoSaveEnabled);
+    const button = document.getElementById("noteMemoAutoSyncDefaultBtn");
+    if (button) {
+      button.textContent = "構想メモへの自動反映（既定）: " + (initial.noteMemoAutoSyncDefault ? "ON" : "OFF");
+      button.setAttribute("aria-pressed", String(initial.noteMemoAutoSyncDefault));
+    }
+    renderGroups();
+  }
+
   function registerMessageEvents() {
     window.addEventListener("keydown", handleNoteShortcut);
     window.addEventListener("message", (event) => {
@@ -519,11 +555,14 @@ function getEventsScript() {
       }
 
       if (msg.type === "webviewUiSettingsChanged") {
-        const scale = Number(msg.payload?.fontScale || 1);
-        document.body.style.setProperty(
-          "--mojigoto-content-font-scale",
-          String(Math.min(1.6, Math.max(0.8, scale))),
-        );
+        applyNoteUiSettings(msg.payload);
+        return;
+      }
+      if (msg.type === "noteMemoAutoSyncDefaultResult") {
+        const button = document.getElementById("noteMemoAutoSyncDefaultBtn");
+        if (button) button.disabled = false;
+        applyNoteUiSettings(msg.payload);
+        setStatus(msg.error || (msg.cancelled ? "既定の変更をキャンセルしました。" : "構想メモへの自動反映の既定を更新しました。個別指定が優先されます。"), true, Boolean(msg.error));
         return;
       }
 
@@ -533,6 +572,7 @@ function getEventsScript() {
       }
 
       if (msg.type === "noteSaved") {
+        if (msg.storageRevision) state.storageRevision = msg.storageRevision;
         const autoSyncUpdates = Array.isArray(msg.autoConceptSyncUpdates)
           ? msg.autoConceptSyncUpdates
           : [];
@@ -554,6 +594,9 @@ function getEventsScript() {
           item.memo.conceptMemoSyncedAt = String(
             update?.conceptMemoSyncedAt || "",
           );
+          item.memo.conceptMemoSyncFingerprint = String(
+            update?.conceptMemoSyncFingerprint || "",
+          );
         }
 
         clearDirty(msg.revision);
@@ -573,6 +616,10 @@ function getEventsScript() {
       }
 
       if (msg.type === "noteReloaded") {
+        if (dirty && (msg.resetDirty !== true || (msg.revision !== undefined && Number(msg.revision) < changeRevision))) {
+          setStatus("外部更新があります。未保存内容を退避してから最新の内容へ更新してください。", true, true);
+          return;
+        }
         const next = msg?.payload || {};
 
         state = {
@@ -582,21 +629,36 @@ function getEventsScript() {
             : [],
         };
 
+        if (typeof resetNoteReplaceSession === "function") resetNoteReplaceSession();
+
         if (!state.groups.length) {
           state.groups = [createGroup()];
         }
 
         titleInput.value = state.title || "";
+        if (noteWorkTitleEl) {
+          const nextWorkTitle = String(
+            next.workTitle || next.workName || "未設定",
+          ).trim();
+          noteWorkTitleEl.textContent = "作品: " + nextWorkTitle;
+        }
+        if (msg.resetDirty === true) {
+          clearDirty(msg.revision ?? changeRevision);
+        }
         if (isAddressBookOpen) {
           renderAddressBook();
         }
         renderGroups();
         updateDirtyUi();
         applyPreviewOnly();
+        renderPreview();
         stabilizePreviewRender();
 
         if (isBoardOpen) {
           renderBoard();
+        }
+        if (msg.showRefreshStatus === true) {
+          setStatus("最新の内容へ更新しました。", true);
         }
         return;
       }
@@ -657,6 +719,7 @@ function getEventsScript() {
       }
 
       if (msg.type === "conceptMemoCreatedFromNoteItem") {
+        const payload = msg.payload || {};
         const conceptMemoId = String(msg?.payload?.conceptMemoId || "");
         const groupId = String(msg?.payload?.groupId || "");
         const itemId = String(msg?.payload?.itemId || "");
@@ -664,7 +727,7 @@ function getEventsScript() {
 
         if (!conceptMemoId || !groupId || !itemId) {
           setStatus(
-            mode === "updated" ? "構想メモを更新しました。" : "構想メモへコピーしました。",
+            mode === "updated" ? "構想メモへ反映しました。" : "構想メモを作成しました。",
             true,
           );
           return;
@@ -673,7 +736,7 @@ function getEventsScript() {
         const group = state.groups.find((g) => g.id === groupId);
         if (!group) {
           setStatus(
-            mode === "updated" ? "構想メモを更新しました。" : "構想メモへコピーしました。",
+            mode === "updated" ? "構想メモへ反映しました。" : "構想メモを作成しました。",
             true,
           );
           return;
@@ -684,7 +747,7 @@ function getEventsScript() {
         );
         if (!item || item.kind !== "entry") {
           setStatus(
-            mode === "updated" ? "構想メモを更新しました。" : "構想メモへコピーしました。",
+            mode === "updated" ? "構想メモへ反映しました。" : "構想メモを作成しました。",
             true,
           );
           return;
@@ -710,12 +773,13 @@ function getEventsScript() {
 
         item.memo.updatedAt = new Date().toISOString();
         item.memo.conceptMemoSyncedAt = item.memo.updatedAt;
+        item.memo.conceptMemoSyncFingerprint = String(payload?.syncFingerprint || "");
         markDirty();
         renderGroups();
         refreshViewsAfterItemMemoChange(item.id, item.memo.updatedAt);
 
         setStatus(
-          mode === "updated" ? "構想メモを更新しました。" : "構想メモへコピーしました。",
+          mode === "updated" ? "構想メモへ反映しました。" : "構想メモを作成しました。",
           true,
         );
 
@@ -754,8 +818,12 @@ function getEventsScript() {
     window.addEventListener("pageshow", rerenderPreviewOnVisible);
 
     window.addEventListener("resize", () => {
+      positionMoreMenu();
       rerenderPreviewOnVisible();
     });
+    document.addEventListener("scroll", positionMoreMenu, true);
+    window.visualViewport?.addEventListener("resize", positionMoreMenu);
+    window.visualViewport?.addEventListener("scroll", positionMoreMenu);
   }
 
   function registerNoteEvents() {

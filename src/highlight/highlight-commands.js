@@ -136,7 +136,9 @@ function getHighlightGroupsDefaultValue() {
       label: "見出し",
       enabled: false,
       countable: false,
-      regex: "[#]",
+      type: "lineRule",
+      rule: "heading",
+      regex: "^(#{1,3})(?!#)(?=\\s|$)",
       style: {
         color: "rgba(218, 191, 191, 0.85)",
         fontWeight: "bold",
@@ -172,6 +174,58 @@ function getHighlightGroupsDefaultValue() {
   ];
 }
 
+const HEADING_REGEX = "^(#{1,3})(?!#)(?=\\s|$)";
+
+function normalizeStoredHeadingGroups(groups) {
+  if (!Array.isArray(groups)) {
+    return { groups, changed: false };
+  }
+
+  let changed = false;
+  const normalized = groups.map((group) => {
+    if (String(group?.name || "").toLowerCase() !== "heading") {
+      return group;
+    }
+
+    const words = Array.isArray(group?.words) ? group.words : [];
+    if (
+      group?.type !== "lineRule" ||
+      group?.rule !== "heading" ||
+      group?.regex !== HEADING_REGEX ||
+      words.length > 0 ||
+      !Array.isArray(group?.words)
+    ) {
+      changed = true;
+    }
+
+    return {
+      ...group,
+      type: "lineRule",
+      rule: "heading",
+      words: [],
+      regex: HEADING_REGEX,
+    };
+  });
+
+  return { groups: normalized, changed };
+}
+
+async function migrateLegacyHeadingHighlightGroup() {
+  const cfg = vscode.workspace.getConfiguration("mojigoto");
+  const inspected = cfg.inspect("highlightGroups");
+  const current = inspected?.workspaceValue;
+  const normalized = normalizeStoredHeadingGroups(current);
+
+  if (!normalized.changed) return false;
+
+  await cfg.update(
+    "highlightGroups",
+    normalized.groups,
+    vscode.ConfigurationTarget.Workspace,
+  );
+  return true;
+}
+
 async function ensureWorkspaceHighlightGroupsSetting() {
   const wf = vscode.workspace.workspaceFolders?.[0];
   if (!wf) {
@@ -190,6 +244,8 @@ async function ensureWorkspaceHighlightGroupsSetting() {
       getHighlightGroupsDefaultValue(),
       vscode.ConfigurationTarget.Workspace,
     );
+  } else {
+    await migrateLegacyHeadingHighlightGroup();
   }
 
   const settingsUri = vscode.Uri.joinPath(wf.uri, ".vscode", "settings.json");
@@ -244,6 +300,13 @@ async function toggleHighlightsEnabled(deps = {}) {
 
 function registerHighlightCommands(context, deps = {}) {
   const { highlightManager } = deps;
+
+  void migrateLegacyHeadingHighlightGroup().catch((error) => {
+    console.warn(
+      "もじごと: 見出し用ハイライト設定を更新できませんでした。",
+      error,
+    );
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("mojigoto.refreshHighlights", () => {
@@ -362,6 +425,8 @@ async function applyHighlightGroupEnabled(name, enabled, deps = {}) {
 
 module.exports = {
   getHighlightGroupsDefaultValue,
+  normalizeStoredHeadingGroups,
+  migrateLegacyHeadingHighlightGroup,
   ensureWorkspaceHighlightGroupsSetting,
   getPreferredHighlightEditor,
   registerHighlightCommands,

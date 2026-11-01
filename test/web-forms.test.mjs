@@ -1,0 +1,120 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("利用申込と問い合わせフォームは必要項目と同意確認を備える", () => {
+  const application = read("web/apply/index.html");
+  const contact = read("web/contact/index.html");
+  const script = read("web/forms.mjs");
+  assert.match(application, /data-public-form="application"/);
+  assert.match(application, /name="requestKind"/);
+  assert.match(application, /value="withdraw"/);
+  assert.match(application, /name="discovery"/);
+  assert.match(application, /name="message"[^>]*maxlength="2000"/);
+  assert.match(contact, /data-public-form="contact"/);
+  assert.match(contact, /name="subject"/);
+  assert.match(contact, /name="message"[^>]*minlength="10"[^>]*maxlength="3000"[^>]*required/);
+  assert.match(application, /name="privacyConsent"/);
+  assert.match(contact, /name="privacyConsent"/);
+  assert.match(script, /challenges\.cloudflare\.com\/turnstile/);
+  assert.match(script, /action: form\.dataset\.publicForm/);
+  assert.match(script, /api\/forms\/submit/);
+  assert.match(script, /HTTP \$\{response\.status\}/);
+  assert.match(script, /form\.classList\.add\("completed"\)/);
+  assert.match(script, /applicationEmailLabel/);
+});
+
+test("公開フォームAPIはTurnstile・送信制限・サーバー保存を行う", () => {
+  const bootstrap = read("web/api/forms/bootstrap.php");
+  const endpoint = read("web/api/forms/submit/index.php");
+  const privateConfig = read("web/api/auth/config.example.php");
+  const publicConfig = read("web/config.production.example.json");
+  assert.match(bootstrap, /siteverify/);
+  assert.match(bootstrap, /\$result\['hostname'\]/);
+  assert.match(bootstrap, /hash_hmac\('sha256'/);
+  assert.match(bootstrap, /count\(\$own\) >= 5/);
+  assert.match(bootstrap, /90 \* 86400/);
+  assert.match(bootstrap, /\$envelopeSender = '-f'/);
+  assert.match(bootstrap, /adminAccepted/);
+  assert.match(bootstrap, /replyAccepted/);
+  assert.match(bootstrap, /内容を確認のうえ、必要に応じてご連絡いたします/);
+  assert.match(bootstrap, /利用は管理者が申請を確認のうえ、開始となります/);
+  assert.match(bootstrap, /お問い合わせ: \{\$contactUrl\}/);
+  assert.match(bootstrap, /'friend' => '知人'/);
+  assert.match(bootstrap, /管理画面で対応状況の更新や必要な設定操作を行ってください/);
+  assert.match(bootstrap, /管理画面: \{\$adminUrl\}/);
+  assert.match(bootstrap, /管理画面ではメールアドレスを伏せ字で表示します/);
+  assert.doesNotMatch(bootstrap, /\$adminBody\s*=\s*[^;]*\{\$record\['email'\]\}/s);
+  assert.match(bootstrap, /function forms_membership_mail/);
+  assert.match(bootstrap, /利用登録が完了しました/);
+  assert.match(bootstrap, /利用解除が完了しました/);
+  assert.match(endpoint, /forms_verify_turnstile/);
+  assert.match(endpoint, /catch \(LogicException/);
+  assert.match(endpoint, /privacyConsent/);
+  assert.match(endpoint, /forms_mail/);
+  assert.match(endpoint, /forms_assert_content_allowed/);
+  assert.match(endpoint, /\$type === 'contact' \? 10 : 0/);
+  assert.match(bootstrap, /\$length < \$minLength/);
+  assert.match(endpoint, /'mailAccepted'/);
+  assert.match(endpoint, /\['join', 'withdraw'\]/);
+  assert.match(privateConfig, /'turnstile_secret'/);
+  assert.match(privateConfig, /'form_notification_email'/);
+  assert.match(privateConfig, /'form_blocked_terms'/);
+  assert.match(publicConfig, /"turnstileSiteKey"/);
+  assert.match(bootstrap, /function forms_normalize_blocked_terms/);
+  assert.match(bootstrap, /入力内容に送信できない語句が含まれています/);
+  assert.match(bootstrap, /お問い合わせが届きました/);
+  assert.match(bootstrap, /利用申込の申請が届きました/);
+  assert.match(bootstrap, /利用解除の申請が届きました/);
+});
+
+test("管理画面で受付確認と申込メールアドレスの招待追加ができる", () => {
+  const html = read("web/admin/index.html");
+  const script = read("web/admin/admin.mjs");
+  const endpoint = read("web/api/admin/submissions/index.php");
+  assert.match(html, /id="submissionList"/);
+  assert.match(script, /api\/admin\/submissions/);
+  assert.match(script, /招待へ追加/);
+  assert.match(script, /submission-message-details/);
+  assert.match(script, /initializeCollapsiblePanels/);
+  assert.match(script, /notificationNotice/);
+  assert.match(endpoint, /auth_mutate_user_registry/);
+  assert.match(endpoint, /requestKind/);
+  assert.match(endpoint, /forms_membership_mail/);
+  assert.match(endpoint, /\['mark_open', 'mark_handled', 'approve', 'remove'\]/);
+  assert.match(endpoint, /\$input\['ids'\]/);
+  assert.match(endpoint, /count\(\$targets\) !== count\(\$ids\)/);
+  assert.match(endpoint, /X_CSRF_TOKEN/);
+  const settingsEndpoint = read("web/api/admin/form-settings/index.php");
+  assert.match(html, /id="formSettingsForm"/);
+  assert.match(script, /api\/admin\/form-settings\//);
+  assert.match(settingsEndpoint, /form_settings_require_admin/);
+  assert.match(settingsEndpoint, /HTTP_X_CSRF_TOKEN/);
+  assert.match(settingsEndpoint, /forms_save_settings/);
+});
+
+test("受付データと認証データの公開アクセスを拒否する", () => {
+  const formsHtaccess = read("web/api/forms/.htaccess");
+  const dataHtaccess = read("web/api/auth/data/.htaccess");
+  assert.match(formsHtaccess, /DirectoryIndex index\.php/);
+  assert.doesNotMatch(formsHtaccess, /DirectoryIndex disabled/);
+  assert.match(formsHtaccess, /Require all denied/);
+  assert.match(dataHtaccess, /Require all denied/);
+});
+
+test("保存期間を過ぎた受付・利用者・管理履歴をCLIで整理できる", () => {
+  const cleanup = read("web/api/maintenance/cleanup.php");
+  const htaccess = read("web/api/maintenance/.htaccess");
+  const auth = read("web/api/auth/bootstrap.php");
+  assert.match(cleanup, /PHP_SAPI !== 'cli'/);
+  assert.match(cleanup, /auth_mutate_user_registry/);
+  assert.match(cleanup, /forms_mutate_submissions/);
+  assert.match(cleanup, /forms_mutate_sent_mail/);
+  assert.match(cleanup, /forms_retention_notice_mail/);
+  assert.match(cleanup, /83 \* 86400/);
+  assert.match(auth, /90 \* 86400/);
+  assert.match(auth, /365 \* 86400/);
+  assert.match(htaccess, /Require all denied/);
+});

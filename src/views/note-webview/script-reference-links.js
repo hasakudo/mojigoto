@@ -11,6 +11,8 @@ function getReferenceLinksScript() {
       targetNoteType: "reference",
     };
     let referenceSearchTimer = null;
+    let referenceLabelRequestId = 0;
+    let pendingReferenceLabel = null;
 
     function getReferenceSource() {
       const group = (Array.isArray(state?.groups) ? state.groups : []).find(
@@ -43,7 +45,7 @@ function getReferenceLinksScript() {
     }
 
     function referenceLinkKey(link) {
-      return [link?.noteType === "plot" ? "plot" : "reference", link?.noteId || "", link?.groupId || "", link?.itemId || ""].join(":");
+      return (link?.importTarget?.workId ? link.importTarget.workId + ":" : "") + [link?.noteType === "plot" ? "plot" : "reference", link?.noteId || "", link?.groupId || "", link?.itemId || ""].join(":");
     }
 
     function isReferenceLinked(result) {
@@ -66,6 +68,9 @@ function getReferenceLinksScript() {
           + '<button class="relatedReferenceOpen" type="button" data-reference-action="open-linked"'
           + ' data-group-id="' + esc(groupId) + '" data-item-id="' + esc(item.id) + '"'
           + ' data-reference-key="' + key + '" title="関連ノートを右側で開く">' + label + '</button>'
+          + (link.itemKind === "divider" ? '<button class="relatedReferenceRename" type="button" data-reference-action="choose-label"'
+            + ' data-group-id="' + esc(groupId) + '" data-item-id="' + esc(item.id) + '" data-reference-key="' + key
+            + '" title="リンク名を区分名・補足から選ぶ" aria-label="リンク名を区分名・補足から選ぶ">✎</button>' : '')
           + '<button class="relatedReferenceRemove" type="button" data-reference-action="remove-link"'
           + ' data-group-id="' + esc(groupId) + '" data-item-id="' + esc(item.id) + '"'
           + ' data-reference-key="' + key + '" title="関連付けを解除" aria-label="関連付けを解除">×</button>'
@@ -124,11 +129,20 @@ function getReferenceLinksScript() {
         const preview = result.preview
           ? '<div class="referenceSearchPreview">' + esc(result.preview) + '</div>'
           : "";
+        const linkedReference = getRelatedReferences(getReferenceSource()?.item).find((link) => referenceLinkKey(link) === referenceLinkKey(result));
+        const selectedLabel = linkedReference?.itemLabel || result.itemLabel;
+        const labelChoice = result.itemKind === "divider" && result.dividerLabel && result.dividerValue && result.dividerLabel !== result.dividerValue
+          ? '<label class="referenceLinkLabelChoice">リンク名 <select data-reference-label-index="' + resultIndex + '" aria-label="関連リンクの表示名">'
+            + (selectedLabel && selectedLabel !== result.dividerLabel && selectedLabel !== result.dividerValue ? '<option value="current" selected>現在の名前：' + esc(selectedLabel) + '</option>' : '')
+            + '<option value="label"' + (selectedLabel === result.dividerLabel ? ' selected' : '') + '>区分名：' + esc(result.dividerLabel) + '</option>'
+            + '<option value="value"' + (selectedLabel !== result.dividerLabel ? ' selected' : '') + '>補足：' + esc(result.dividerValue) + '</option></select></label>'
+          : "";
         return '<article class="referenceSearchResult">'
           + '<div class="referenceSearchResultMeta"><span class="referenceSearchKind">' + kindLabel + '</span>'
           + '<span>' + esc(getRelatedNoteTypeLabel(result.noteType) + ": " + (result.noteTitle || "無題")) + '</span>' + groupLabel + '</div>'
-          + '<div class="referenceSearchResultTitle">' + esc(result.itemLabel || "無題") + '</div>'
+          + '<div class="referenceSearchResultTitle">' + esc(selectedLabel || "無題") + '</div>'
           + preview
+          + labelChoice
           + '<div class="referenceSearchResultActions">'
           + '<button class="secondary" type="button" data-reference-action="open-result" data-result-index="' + resultIndex + '">右側で開く</button>'
           + '<button class="' + (linked ? "secondary" : "primary") + '" type="button" data-reference-action="toggle-result-link" data-result-index="' + resultIndex + '">'
@@ -224,6 +238,21 @@ function getReferenceLinksScript() {
     }
 
     function registerReferenceLinkEvents() {
+      document.addEventListener("change", (event) => {
+        const select = event.target.closest("[data-reference-label-index]");
+        if (!select) return;
+        const result = referenceSearchState.results[Number(select.dataset.referenceLabelIndex)];
+        if (!result || result.itemKind !== "divider" || !["label", "value"].includes(select.value)) return;
+        result.itemLabel = String(select.value === "label" ? result.dividerLabel : result.dividerValue);
+        const link = getRelatedReferences(getReferenceSource()?.item).find((entry) => referenceLinkKey(entry) === referenceLinkKey(result));
+        if (link && link.itemLabel !== result.itemLabel) {
+          link.itemLabel = result.itemLabel;
+          markDirty();
+          renderGroups();
+          renderPreview();
+        }
+        renderReferenceSearchPanel();
+      });
       document.getElementById("closeReferenceSearchBtn")?.addEventListener("click", () => {
         setReferenceSearchOpen(false);
       });
@@ -273,7 +302,13 @@ function getReferenceLinksScript() {
           (entry) => referenceLinkKey(entry) === String(button.dataset.referenceKey || ""),
         );
         if (!link) return;
-        if (action === "open-linked") {
+        if (action === "choose-label") {
+          pendingReferenceLabel = {
+            requestId: ++referenceLabelRequestId, groupId: button.dataset.groupId,
+            itemId: button.dataset.itemId, key: referenceLinkKey(link), itemLabel: link.itemLabel,
+          };
+          vscode.postMessage({ type: "chooseRelatedNoteLabel", requestId: referenceLabelRequestId, target: link });
+        } else if (action === "open-linked") {
           openReferenceTarget(link);
         } else if (action === "remove-link") {
           sourceItem.relatedReferences = getRelatedReferences(sourceItem).filter(
@@ -289,6 +324,20 @@ function getReferenceLinksScript() {
     }
 
     function handleReferenceSearchMessage(msg) {
+      if (msg.type === "relatedNoteLabelChosen") {
+        const pending = pendingReferenceLabel;
+        if (!pending || msg.requestId !== pending.requestId) return true;
+        pendingReferenceLabel = null;
+        const item = findSourceItem(pending.groupId, pending.itemId);
+        const link = getRelatedReferences(item).find((entry) => referenceLinkKey(entry) === pending.key);
+        if (!link || link.itemLabel !== pending.itemLabel || !msg.itemLabel || link.itemLabel === msg.itemLabel) return true;
+        link.itemLabel = String(msg.itemLabel);
+        markDirty();
+        renderGroups();
+        renderPreview();
+        renderReferenceSearchPanel();
+        return true;
+      }
       if (msg.type !== "referenceSearchResults") return false;
       if (Number(msg.requestId) !== referenceSearchState.requestId) return true;
       referenceSearchState.loading = false;

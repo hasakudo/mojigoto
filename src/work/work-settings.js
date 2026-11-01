@@ -119,6 +119,7 @@ function getCurrentWorkSettings(context) {
     schemaVersion: 1,
     folderName: "",
     title: "",
+    subtitle: "",
     penName: "",
     genre: "",
     targetChars: 0,
@@ -128,6 +129,31 @@ function getCurrentWorkSettings(context) {
     updatedAt: "",
     ...data,
   };
+}
+
+function getWorkSettingsForDirectory(workDir) {
+  const root = String(workDir || "").trim();
+  if (!root) return null;
+
+  const candidates = [
+    path.join(root, ".mojigoto", "work.json"),
+    path.join(root, ".mojigoto", "singleWork.json"),
+  ];
+
+  for (const filePath of candidates) {
+    const data = readJsonFileSafe(filePath);
+    if (data && typeof data === "object") {
+      return {
+        schemaVersion: 1,
+        folderName: "",
+        title: "",
+        subtitle: "",
+        ...data,
+      };
+    }
+  }
+
+  return null;
 }
 
 function saveCurrentWorkSettingsPartial(context, patch) {
@@ -375,6 +401,7 @@ module.exports = {
   inferWorkNameFromManuscriptRoot,
   getCurrentWorkSettingsPath,
   getCurrentWorkSettings,
+  getWorkSettingsForDirectory,
   saveCurrentWorkSettingsPartial,
   getCurrentWorkTitleFromSettings,
   getCurrentWorkGoal,

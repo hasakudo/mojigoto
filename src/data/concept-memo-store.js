@@ -1,5 +1,13 @@
 const fs = require("fs/promises");
 const path = require("path");
+const { storageRevision, writeStructuredFile } = require("./structured-file-write");
+const {
+  createSyncConflictError,
+  hasSyncConflict,
+  noteMemoPayload,
+  notePayloadFromConcept,
+  syncFingerprint,
+} = require("./concept-sync");
 
 function getNowIsoString() {
   return new Date().toISOString();
@@ -25,6 +33,16 @@ function createEmptyConceptMemos() {
   };
 }
 
+function normalizeMemoFolderIds(memo = {}) {
+  const source = Array.isArray(memo?.folderIds)
+    ? memo.folderIds
+    : [memo?.folderId];
+  return source
+    .map((folderId) => String(folderId || "").trim())
+    .filter(Boolean)
+    .filter((folderId, index, values) => values.indexOf(folderId) === index);
+}
+
 function normalizeConceptMemos(data) {
   const folders = Array.isArray(data?.folders)
     ? data.folders
@@ -40,10 +58,24 @@ function normalizeConceptMemos(data) {
     version: Number(data?.version || 1),
     updatedAt: data?.updatedAt || new Date().toISOString(),
     memos: Array.isArray(data?.memos)
-      ? data.memos.map((memo) => ({
-          ...memo,
-          folderId: String(memo?.folderId || "").trim(),
-        }))
+      ? data.memos.map((memo) => {
+          const folderIds = normalizeMemoFolderIds(memo);
+          return {
+            ...memo,
+            folderIds,
+            folderId: folderIds[0] || "",
+            ...(memo?.source && typeof memo.source === "object"
+              ? {
+                  source: {
+                    ...memo.source,
+                    ...(typeof memo.source.autoSyncToNoteItemOverride === "boolean"
+                      ? { autoSyncToNoteItemOverride: memo.source.autoSyncToNoteItemOverride }
+                      : {}),
+                  },
+                }
+              : {}),
+          };
+        })
       : [],
     folders,
     commonTodoItems: Array.isArray(data?.commonTodoItems)
@@ -60,10 +92,10 @@ async function ensureParentDir(filePath) {
 async function readConceptMemos(filePath) {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    return normalizeConceptMemos(JSON.parse(raw));
+    return { ...normalizeConceptMemos(JSON.parse(raw)), storageRevision: storageRevision(raw) };
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return createEmptyConceptMemos();
+      return { ...createEmptyConceptMemos(), storageRevision: "missing" };
     }
     throw error;
   }
@@ -76,12 +108,12 @@ async function writeConceptMemos(filePath, data) {
   });
 
   await ensureParentDir(filePath);
-  await fs.writeFile(filePath, JSON.stringify(nextData, null, 2), "utf8");
-  return nextData;
+  return writeStructuredFile(filePath, nextData, data?.storageRevision);
 }
 
 function createConceptMemoDraft(overrides = {}) {
   const now = getNowIsoString();
+  const folderIds = normalizeMemoFolderIds(overrides);
 
   return {
     id: `memo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -91,7 +123,8 @@ function createConceptMemoDraft(overrides = {}) {
     listItems: [],
     todoItems: [],
     tags: [],
-    folderId: "",
+    folderIds,
+    folderId: folderIds[0] || "",
     isPinned: false,
     isArchived: false,
     showInDashboard: false,
@@ -100,6 +133,8 @@ function createConceptMemoDraft(overrides = {}) {
     order: 0,
     source: null,
     ...overrides,
+    folderIds,
+    folderId: folderIds[0] || "",
   };
 }
 
@@ -128,18 +163,39 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
     ? "note-item"
     : "";
 
-  const existingIndex = memos.findIndex((memo) =>
-    isSameNoteItemSource(memo, input),
+  // A matching item address can belong to an older, detached memo. Prefer
+  // the note's current reverse link, and never revive cleared/missing copies.
+  const isActive = (memo) => !["cleared", "missing"].includes(memo?.source?.status);
+  const linkedIndex = memos.findIndex((memo) =>
+    isActive(memo) && (Array.isArray(input?.linkedConceptMemoIds)
+        && input.linkedConceptMemoIds.includes(memo.id)
+        && memo.source?.kind === "noteItem"
+        && String(memo.source.itemId || "") === String(input?.itemId || "")),
   );
+  const hasLinkedIds = Array.isArray(input?.linkedConceptMemoIds) && input.linkedConceptMemoIds.length > 0;
+  const existingIndex = hasLinkedIds ? linkedIndex
+    : memos.findIndex((memo) => isActive(memo) && isSameNoteItemSource(memo, input));
 
   if (existingIndex >= 0) {
     const current = memos[existingIndex] || {};
 
     const memoBody = String(input?.memoBody || "");
     const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
+    const incomingPayload = noteMemoPayload({ type: memoType, body: memoBody, tags: input?.memoTags });
+    const incomingFingerprint = String(input?.syncFingerprint || "") || syncFingerprint(incomingPayload);
+    const currentFingerprint = syncFingerprint(notePayloadFromConcept(current));
+    const baseline = String(input?.baseSyncFingerprint || current?.source?.syncFingerprint || "");
+    if (input?.forceOverwrite !== true && hasSyncConflict(currentFingerprint, incomingFingerprint, baseline, input?.requireSyncBaseline)) {
+      throw createSyncConflictError();
+    }
+    const currentFolderIds = normalizeMemoFolderIds(current);
+    const folderIds = currentFolderIds.length
+      ? currentFolderIds
+      : [noteItemFolderId].filter(Boolean);
     const updatedMemo = {
       ...current,
-      folderId: String(current?.folderId || "").trim() || noteItemFolderId,
+      folderIds,
+      folderId: folderIds[0] || "",
       type: memoType,
       title: String(input?.heading || "").trim() || "無題メモ",
       ...(memoType === "list"
@@ -166,11 +222,15 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
         itemId: String(input?.itemId || ""),
         itemHeading: String(input?.heading || ""),
         autoSyncToConceptMemo: Boolean(input?.autoSyncToConceptMemo),
+        syncFingerprint: incomingFingerprint,
         ...(typeof current?.source?.autoSyncToNoteItem === "boolean"
           ? { autoSyncToNoteItem: current.source.autoSyncToNoteItem }
           : data?.autoSyncToNoteItemDefault
             ? { autoSyncToNoteItem: true }
             : {}),
+        ...(typeof current?.source?.autoSyncToNoteItemOverride === "boolean"
+          ? { autoSyncToNoteItemOverride: current.source.autoSyncToNoteItemOverride }
+          : {}),
         status: "active",
       },
     };
@@ -197,7 +257,10 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
 
   const memoBody = String(input?.memoBody || "");
   const memoType = String(input?.memoType || "text") === "list" ? "list" : "text";
+  const incomingPayload = noteMemoPayload({ type: memoType, body: memoBody, tags: input?.memoTags });
+  const incomingFingerprint = String(input?.syncFingerprint || "") || syncFingerprint(incomingPayload);
   const createdMemo = createConceptMemoDraft({
+    folderIds: [noteItemFolderId].filter(Boolean),
     folderId: noteItemFolderId,
     type: memoType,
     title: String(input?.heading || "").trim() || "無題メモ",
@@ -227,6 +290,7 @@ async function createConceptMemoFromNoteItem(filePath, input = {}) {
       itemId: String(input?.itemId || ""),
       itemHeading: String(input?.heading || ""),
       autoSyncToConceptMemo: Boolean(input?.autoSyncToConceptMemo),
+      syncFingerprint: incomingFingerprint,
       ...(data?.autoSyncToNoteItemDefault
         ? { autoSyncToNoteItem: true }
         : {}),
@@ -372,6 +436,7 @@ async function markConceptMemosMissingByNotePath(filePath, notePath) {
 module.exports = {
   getNowIsoString,
   createEmptyConceptMemos,
+  normalizeMemoFolderIds,
   normalizeConceptMemos,
   readConceptMemos,
   writeConceptMemos,

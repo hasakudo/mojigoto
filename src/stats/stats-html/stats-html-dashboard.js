@@ -329,6 +329,17 @@ function renderDashboardSummaryCard(state, esc) {
             <tr><th>総差分</th><td class="num">${esc(state.today?.deltaTotal ?? 0)}</td></tr>
             <tr><th>総文字数（最後の保存）</th><td class="num">${esc(state.today?.totalSaved ?? 0)}</td></tr>
           </table>
+
+          <div class="dashboardShareAction">
+            <button
+              type="button"
+              id="btnOpenProgressSharePreview"
+              class="button secondary"
+              title="SNS用の進捗カードを確認する"
+            >
+              SNS進捗プレビュー
+            </button>
+          </div>
         </section>
 
         <section class="dashboardSummaryCol">
@@ -351,9 +362,11 @@ function renderDashboardSummaryCard(state, esc) {
               </label>
             </div>
           </div>
-          ${showProgressGraph
-            ? renderDashboardProgressChart(state, esc)
-            : renderDashboardGoalTable(state, esc)}
+          ${
+            showProgressGraph
+              ? renderDashboardProgressChart(state, esc)
+              : renderDashboardGoalTable(state, esc)
+          }
         </section>
       </div>
     </div>
@@ -361,8 +374,42 @@ function renderDashboardSummaryCard(state, esc) {
 }
 
 function renderRetentionCard(state, esc) {
+  const settings = state.webviewSaveSettings || {};
+  const backup = state.backupSettings || { intervalMinutes: 0, maxPerFile: 50 };
+  const markdown = state.webMarkdown || {};
   return `
     <div class="card">
+      <div class="dashboardSummarySplit">
+      <section class="dashboardSummaryCol">
+      <h3>ノート・構想メモ・作品設定の保存</h3>
+      <label class="chip"><input type="checkbox" data-save-setting="webviewAutoSaveEnabled" ${settings.webviewAutoSaveEnabled !== false ? "checked" : ""}>自動保存（3画面共通）</label>
+      <div class="muted" style="margin-top:8px;">OFFでは手動保存が必要です。<br>原稿本文のVS Code標準Auto Saveとは異なる設定になります。</div>
+      <h3>バックアップ</h3>
+      <table class="dashboardBackupSettings">
+        <tr><th>自動バックアップ間隔</th><td class="num">${backup.intervalMinutes > 0 ? `${esc(backup.intervalMinutes)}分ごと（保存後）` : "OFF（0分）"}</td></tr>
+        <tr><th>保持件数</th><td class="num">${esc(backup.maxPerFile)}件／1ファイル</td></tr>
+      </table>
+      <p class="muted">自動保存とは別の設定です。保護した履歴は件数に含めません。</p>
+      <button id="btnOpenBackupSettings" type="button">バックアップ設定を開く</button>
+      </section>
+      <section class="dashboardSummaryCol">
+      <h3>項目メモと構想メモの自動反映</h3>
+      <div class="btnbar">
+        <label class="chip"><input type="checkbox" data-save-setting="noteMemoAutoSyncEnabled" ${settings.noteMemoAutoSyncEnabled ? "checked" : ""}>項目メモ → 構想メモ（既定）</label>
+        <label class="chip"><input type="checkbox" data-save-setting="conceptMemoAutoSyncEnabled" ${settings.conceptMemoAutoSyncEnabled ? "checked" : ""}>構想メモ → 項目メモ（既定）</label>
+      </div>
+      <p class="muted">保存時にリンク先へ反映、各メモの個別ON／OFFを優先。<br>既定をOFFにしても個別ONのメモは反映されます。双方に変更があったときは自動反映が停止されます。</p>
+      <details id="webMarkdownDetails" class="dashboardMarkdownDetails" ${markdown.error ? "open" : ""}>
+      <summary>Web読込用Markdown</summary>
+      <label class="chip"><input id="webMarkdownEnabled" type="checkbox" data-work-key="${esc(markdown.workKey || "")}" ${markdown.enabled ? "checked" : ""} ${markdown.available ? "" : "disabled"}>この作品のノートを自動更新</label>
+      <p class="muted">Webへファイルで取り込む人向けの設定です。<br>保存済みノートから最新版を1ファイルずつ作ります。<br>項目メモ・タグ・ふりがな・関連リンク・画像の関連付け・作品全体の呼び名一覧も含みます。<br>※ 画像ファイル本体は含みません。<br><strong>保存先：作品の .mojigoto/web-import/ 直下</strong><br>OFFでも生成済みファイルは残ります。</p>
+      <button id="webMarkdownRegenerate" type="button" ${markdown.enabled ? "" : "hidden"} ${markdown.available && markdown.enabled ? "" : "disabled"}>今すぐ更新</button>
+      <div id="webMarkdownNotice" role="${markdown.error ? "alert" : "status"}" ${markdown.error ? "" : "hidden"}><span id="webMarkdownStatus">${esc(markdown.error || "")}</span> <button id="webMarkdownNoticeClose" type="button">閉じる</button></div>
+      </details>
+      </section>
+      </div>
+      <div id="saveSettingsNotice" role="status" hidden><span id="saveSettingsStatus"></span> <button id="saveSettingsNoticeClose" type="button">閉じる</button></div>
+      <h3>記録と集計</h3>
       <table>
         <tr><th>日時ログ保存間隔</th><td class="num">${esc(state.retention?.eventIntervalLabel ?? "-")}</td></tr>
         <tr><th>日時ログ保持</th><td class="num">${esc(state.retention?.eventsRetentionLabel ?? "-")} / 最大${esc(state.retention?.eventsMaxCountLabel ?? "-")}</td></tr>
@@ -396,7 +443,7 @@ function renderRetentionSection(state, esc) {
         <span id="retentionToggleIcon" class="collapsibleToggleIcon">▼</span>
       </button>
 
-      <div id="retentionSectionBody" class="collapsibleBody">
+      <div id="retentionSectionBody" class="collapsibleBody" data-initial-open="${state.openSaveSettings === true}">
         ${renderRetentionCard(state, esc)}
       </div>
     </div>
@@ -454,6 +501,79 @@ function renderDashboardNoteModal() {
   `;
 }
 
+function renderProgressShareModal(state = {}) {
+  const logoDataUri = String(state?.progressShareLogoDataUri || "");
+  return `
+    <div id="progressShareModalOverlay" class="dashboardModalOverlay progressShareModalOverlay">
+      <div
+        id="progressShareModal"
+        class="dashboardModal progressShareModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="progressShareModalTitle"
+      >
+        <div class="dashboardModalHeader progressShareModalHeader">
+          <div class="dashboardModalTitleWrap">
+            <div class="progressShareEyebrow">SNS PROGRESS</div>
+            <h3 id="progressShareModalTitle" class="dashboardModalTitle">進捗画像のプレビュー</h3>
+            <div class="dashboardModalMeta">画像へ載せる内容を選べます。作品名をOFFにすると、作成する画像へ作品名を載せません。</div>
+          </div>
+          <button
+            id="progressShareModalClose"
+            class="button secondary dashboardModalClose"
+            type="button"
+          >閉じる</button>
+        </div>
+
+        <div class="progressShareLayout">
+          <section class="progressShareOptions" aria-label="表示項目">
+            <label class="progressShareDateField">まとめ方
+              <select id="progressShareMode">
+                <option value="daily">日別（直近7日）</option>
+                <option value="monthly">月間（直近6か月）</option>
+                <option value="annual">年間（指定年1～12月）</option>
+              </select>
+            </label>
+            <label id="progressShareDateField" class="progressShareDateField">対象日
+              <input id="progressShareDateSelect" type="date">
+            </label>
+            <label id="progressShareYearField" class="progressShareDateField" hidden>対象年
+              <input id="progressShareYearSelect" type="number" min="2000" max="2100" step="1">
+            </label>
+            <details class="progressShareRetentionHelp"><summary aria-label="年間集計の保存期間について">？</summary><div>年間集計は保存されている進捗履歴だけが対象です。保持期間を過ぎた履歴は集計できません。Dashboardの「保存設定」→「進捗・更新ファイル履歴保持」を確認し、365日の場合は400日程度へ変更してください。Webからは保持日数を確認・変更できません。</div></details>
+            <div class="progressShareOptionsTitle">表示項目</div>
+            <label><input type="checkbox" data-progress-share-option="title" checked> 作品名</label>
+            <label><input type="checkbox" data-progress-share-option="graph" checked> <span id="progressShareGraphLabel">7日間グラフ</span></label>
+            <label class="progressShareDailyOnly"><input type="checkbox" data-progress-share-option="total" checked> 総文字数</label>
+            <label class="progressShareDailyOnly"><input type="checkbox" data-progress-share-option="today" checked> 対象日の進捗</label>
+            <label class="progressShareDailyOnly"><input type="checkbox" data-progress-share-option="week" checked> 7日間の合計</label>
+            <label class="progressShareMonthlyOnly" hidden><input type="checkbox" data-progress-share-option="works" checked> 作品ごとの今月差分</label>
+            <label class="progressShareAnnualOnly" hidden><input type="checkbox" data-progress-share-option="annualWorks" checked> 作品ごとの年間差分</label>
+            <label><input type="checkbox" data-progress-share-option="notes" checked> ノート更新数</label>
+            <label><input type="checkbox" data-progress-share-option="concepts" checked> 構想メモ更新数</label>
+          </section>
+
+          <div class="progressSharePreviewStage">
+            <div id="progressSharePreviewScaler" class="progressSharePreviewScaler">
+              <article id="progressShareCard" class="progressShareCard" aria-label="SNS進捗カードのプレビュー"></article>
+            </div>
+          </div>
+        </div>
+
+        <div class="progressShareFooter">
+          <span id="progressShareCopyStatus" role="status" aria-live="polite">幅720px・内容に合わせた縦長PNG画像としてコピーします。</span>
+          <div class="progressShareOutputActions">
+            <button id="progressShareTextButton" class="button secondary" type="button">投稿文をコピー</button>
+            <button id="progressShareSaveButton" class="button secondary" type="button">PNGを保存</button>
+            <button id="progressShareCopyButton" class="button" type="button">画像をコピー</button>
+          </div>
+        </div>
+        <img id="progressShareLogoSource" class="progressShareLogoSource" src="${logoDataUri}" alt="" aria-hidden="true">
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboardNotesDataScript(state) {
   const data = JSON.stringify(state?.dashboardNotes || {}).replace(
     /</g,
@@ -461,6 +581,18 @@ function renderDashboardNotesDataScript(state) {
   );
   return `
     <script type="application/json" id="dashboardNotesData">
+      ${data}
+    </script>
+  `;
+}
+
+function renderProgressSummaryDataScript(state) {
+  const data = JSON.stringify(state?.progressSummaries || { today: state?.progressSummary || {} }).replace(
+    /</g,
+    "\\u003c",
+  );
+  return `
+    <script type="application/json" id="progressSummaryData">
       ${data}
     </script>
   `;
@@ -495,5 +627,7 @@ function renderDashboardTab(state, esc) {
 module.exports = {
   renderDashboardNoteModal,
   renderDashboardNotesDataScript,
+  renderProgressShareModal,
+  renderProgressSummaryDataScript,
   renderDashboardTab,
 };

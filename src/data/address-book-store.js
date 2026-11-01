@@ -1,5 +1,9 @@
 const fs = require("fs/promises");
 const path = require("path");
+const { EventEmitter } = require("events");
+const { storageRevision, writeStructuredFile } = require("./structured-file-write");
+const changes = new EventEmitter();
+changes.setMaxListeners(0);
 
 const { isSingleMode } = require("../core/mojigoto-context");
 const {
@@ -10,7 +14,7 @@ const { makeId } = require("../core/path-utils");
 const { listNoteFiles, readNoteFile } = require("./note-store");
 
 function getAddressBookPath(workDir = "") {
-  const root = isSingleMode()
+  const root = workDir ? getMojigotoDirForWork(workDir) : isSingleMode()
     ? getMojigotoDirForSingle()
     : getMojigotoDirForWork(workDir);
   return root ? path.join(root, "address-book.json") : "";
@@ -73,6 +77,7 @@ function normalizeWorkAddressBook(value) {
         .filter(Boolean),
     )],
     updatedAt: String(value?.updatedAt || ""),
+    storageRevision: value?.storageRevision,
   };
 }
 
@@ -136,7 +141,16 @@ async function collectAddressBookSources(workDir = "") {
   const candidates = [];
   const notes = [];
   for (const type of ["reference", "plot"]) {
-    const files = await listNoteFiles(type, { fsPath: workDir });
+    const directory = workDir ? path.join(workDir, ".mojigoto", type === "plot" ? "plots" : "references") : "";
+    let files;
+    if (directory) {
+      try {
+        files = (await fs.readdir(directory, { withFileTypes: true }))
+          .filter((entry) => entry.isFile() && /\.json$/i.test(entry.name))
+          .map((entry) => ({ name: entry.name, fsPath: path.join(directory, entry.name) }))
+          .sort((a, b) => a.name.localeCompare(b.name, "ja", { numeric: true }));
+      } catch (error) { if (error.code !== "ENOENT") throw error; files = []; }
+    } else files = await listNoteFiles(type, { fsPath: workDir });
     for (const file of files) {
       try {
         const note = await readNoteFile(file.fsPath, type);
@@ -196,23 +210,26 @@ function migrateLegacyNoteAddressBooks(book, notes, candidates) {
   return changed;
 }
 
-async function saveWorkAddressBook(workDir, value) {
+async function saveWorkAddressBook(workDir, value, { source } = {}) {
   const filePath = getAddressBookPath(workDir);
   if (!filePath) throw new Error("呼び名一覧の保存先を取得できませんでした。");
   const payload = normalizeWorkAddressBook(value);
   payload.updatedAt = new Date().toISOString();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
-  return payload;
+  const saved = await writeStructuredFile(filePath, payload, value?.storageRevision);
+  changes.emit("saved", { filePath, book: saved, source });
+  void require("../export/web-note-markdown").regenerate(path.dirname(filePath));
+  return saved;
 }
 
 async function loadWorkAddressBook(workDir = "") {
   const filePath = getAddressBookPath(workDir);
   let book = normalizeWorkAddressBook({});
   try {
-    book = normalizeWorkAddressBook(JSON.parse(await fs.readFile(filePath, "utf8")));
-  } catch {
-    // 初回は空の一覧を使う
+    const raw = await fs.readFile(filePath, "utf8");
+    book = { ...normalizeWorkAddressBook(JSON.parse(raw)), storageRevision: storageRevision(raw) };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    book.storageRevision = "missing";
   }
 
   const { candidates, notes } = await collectAddressBookSources(workDir);
@@ -271,6 +288,10 @@ function buildAddressBookExport(value, format, workTitle = "") {
 }
 
 module.exports = {
+  onWorkAddressBookChanged(listener) {
+    changes.on("saved", listener);
+    return { dispose: () => changes.off("saved", listener) };
+  },
   getAddressBookPath,
   normalizeWorkAddressBook,
   collectAddressBookSources,

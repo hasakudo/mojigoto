@@ -1,4 +1,8 @@
+const { createConceptMemoMessageHandler } = require("./concept-memo/host-actions");
+const { createConceptMemoPanelLifecycle } = require("./concept-memo/host-lifecycle");
+const { buildConceptMemoDataFromMessage } = require("./concept-memo/edit-message");
 const vscode = require("vscode");
+const { registerRestorableWebview, withRestoredWebviews, webviewFileKey } = require("./shared/restored-webviews");
 const path = require("path");
 const { isSingleMode } = require("../core/mojigoto-context");
 const { triggerStatsRefresh } = require("../stats/stats-utils");
@@ -8,7 +12,11 @@ const {
   readConceptMemos,
   writeConceptMemos,
 } = require("../data/concept-memo-store");
-const { applyConceptMemoToNoteItem } = require("../data/note-store");
+const { applyConceptMemoToNoteItem, readNoteFile } = require("../data/note-store");
+const { refreshConceptSourceStatuses } = require("../data/concept-source-status");
+const { readConceptNoteIndex } = require("../data/concept-note-order");
+const { notePayloadFromConcept, syncFingerprint } = require("../data/concept-sync");
+const { isConceptMemoAutoSyncEnabled } = require("../data/memo-auto-sync");
 const {
   readCommonTodoItems,
   writeCommonTodoItems,
@@ -22,6 +30,14 @@ const {
 } = require("./concept-memo/concept-memo-html");
 const { resolveActualNotePath } = require("../core/mojigoto-paths");
 const { setWebviewPanelThemeIcon } = require("./shared/webview-panel-icon");
+const { MOJIGOTO_ICONS } = require("../ui/mojigoto-icons");
+const {
+  getWorkSettingsForDirectory,
+} = require("../work/work-settings");
+const {
+  createStructuredBackup,
+  openStructuredBackupHistory,
+} = require("../backup/structured-data-backup");
 
 const openConceptMemoPanels = new Map();
 
@@ -40,11 +56,16 @@ function getWebviewUiSettings() {
     fontScale: fontScalePercent / 100,
     autoSaveEnabled: config.get("webviewAutoSaveEnabled", true) !== false,
     autoSaveDelayMs: Math.round(autoSaveDelaySeconds * 1000),
+    conceptMemoAutoSyncDefault:
+      config.get("conceptMemoAutoSyncEnabled", false) === true,
   };
 }
 
 async function readConceptMemosWithSharedTodo(filePath) {
-  const data = await readConceptMemos(filePath);
+  const data = await refreshConceptSourceStatuses(await readConceptMemos(filePath), {
+    readNoteFile,
+    resolveNotePath: (notePath, type) => resolveActualNotePath(notePath, path.dirname(path.dirname(filePath)), type),
+  });
   let commonTodoItems;
 
   try {
@@ -113,6 +134,21 @@ function getConceptMemoPanelTitle(options = {}) {
   return "構想メモ";
 }
 
+function resolveConceptMemoWorkIdentity(options = {}) {
+  let workDir = String(options.workDir || "").trim();
+  if (!workDir && options.filePath) {
+    const dataDir = path.dirname(options.filePath);
+    if (path.basename(dataDir).toLowerCase() === ".mojigoto") workDir = path.dirname(dataDir);
+  }
+  // Resolve the restored tab's own work, independently of the currently active work.
+  const settings = workDir ? getWorkSettingsForDirectory(workDir) : null;
+  const workTitle = String(settings?.title || "").trim()
+    || String(settings?.folderName || "").trim()
+    || String(options.workTitle || "").trim()
+    || (workDir ? path.basename(workDir) : "");
+  return { workDir, workTitle };
+}
+
 function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
   const {
     filePath,
@@ -128,7 +164,7 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
     },
   } = options;
 
-  setWebviewPanelThemeIcon(panel, "lightbulb");
+  setWebviewPanelThemeIcon(panel, MOJIGOTO_ICONS.conceptMemo);
 
   const conceptMemoFilePathKey = path.normalize(filePath);
 
@@ -156,10 +192,19 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
     }),
   );
 
+  const lifecycle = createConceptMemoPanelLifecycle(panel);
+  panel.__mojigotoConceptMemoLifecycle = lifecycle;
+  function postMessage(message) { return lifecycle.postMessage(message); }
   let autoSaveTimer = null;
   const settingsDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration("mojigoto.webviewFontScalePercent")) {
-      panel.webview.postMessage({
+    if (lifecycle.disposed) return;
+    if (
+      event.affectsConfiguration("mojigoto.webviewFontScalePercent") ||
+      event.affectsConfiguration("mojigoto.conceptMemoAutoSyncEnabled") ||
+      event.affectsConfiguration("mojigoto.webviewAutoSaveEnabled") ||
+      event.affectsConfiguration("mojigoto.webviewAutoSaveDelaySeconds")
+    ) {
+      postMessage({
         type: "webviewUiSettingsChanged",
         payload: getWebviewUiSettings(),
       });
@@ -168,14 +213,15 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
       event.affectsConfiguration("mojigoto.webviewAutoSaveEnabled") &&
       !getWebviewUiSettings().autoSaveEnabled
     ) {
-      if (autoSaveTimer) clearTimeout(autoSaveTimer);
+      if (autoSaveTimer) lifecycle.clearTimeout(autoSaveTimer);
       autoSaveTimer = null;
     }
   });
 
   panel.onDidDispose(() => {
+    lifecycle.dispose();
     settingsDisposable.dispose();
-    openConceptMemoPanels.delete(filePath);
+    if (openConceptMemoPanels.get(filePath) === panel) openConceptMemoPanels.delete(filePath);
     if (openConceptMemoPanels.get(conceptMemoFilePathKey) === panel) {
       openConceptMemoPanels.delete(conceptMemoFilePathKey);
     }
@@ -183,33 +229,32 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
 
   let currentData = initialData;
   let saveQueue = Promise.resolve();
+  const ownConceptRevisions = new Set();
+
+  function resolveLatestWorkTitle() {
+    return resolveConceptMemoWorkIdentity({
+      filePath, workDir, workTitle: panel.__mojigotoConceptMemoWorkTitle,
+    }).workTitle;
+  }
 
   function buildDataFromMessage(message) {
-    return {
-      version: 1,
-      updatedAt: new Date().toISOString(),
-      memos: Array.isArray(message?.payload?.memos)
-        ? message.payload.memos
-        : [],
-      folders: Array.isArray(message?.payload?.folders)
-        ? message.payload.folders
-        : [],
-      commonTodoItems: [],
-      autoSyncToNoteItemDefault: Boolean(
-        message?.payload?.autoSyncToNoteItemDefault,
-      ),
-    };
+    return buildConceptMemoDataFromMessage(message, currentData, ownConceptRevisions);
   }
 
   async function syncEnabledConceptMemosToNoteItems(data) {
     const updatedNotePaths = new Set();
     const errors = [];
+    let reflectedCount = 0;
+    let metadataChanged = false;
     for (const memo of Array.isArray(data?.memos) ? data.memos : []) {
       const source = memo?.source || {};
       if (
         String(source.kind || "") !== "noteItem" ||
-        !source.autoSyncToNoteItem ||
-        String(source.status || "active") === "missing"
+        !isConceptMemoAutoSyncEnabled(
+          source,
+          getWebviewUiSettings().conceptMemoAutoSyncDefault,
+        ) ||
+        ["missing", "cleared"].includes(String(source.status || "active"))
       ) {
         continue;
       }
@@ -220,23 +265,39 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
           workDir,
           String(source.noteType || "plot"),
         );
-        const isList = String(memo?.type || "text") === "list";
+        const syncPayload = notePayloadFromConcept(memo);
+        if (syncFingerprint(syncPayload) === String(source.syncFingerprint || "")) continue;
         const result = await applyConceptMemoToNoteItem({
           memoId: String(memo?.id || ""),
           notePath: resolvedNotePath,
           noteType: String(source.noteType || "plot"),
           groupId: String(source.groupId || ""),
           itemId: String(source.itemId || ""),
-          memoBody: isList
-            ? (Array.isArray(memo?.listItems) ? memo.listItems : [])
-                .map((item) => String(item?.text || "").trim())
-                .filter(Boolean)
-                .join("\n")
-            : String(memo?.body || ""),
-          memoType: isList ? "list" : "text",
-          memoTags: Array.isArray(memo?.tags) ? memo.tags : [],
+          memoBody: syncPayload.body,
+          memoType: syncPayload.type,
+          memoTags: syncPayload.tags,
+          syncFingerprint: syncFingerprint(syncPayload),
+          baseSyncFingerprint: String(source.syncFingerprint || ""),
+          requireSyncBaseline: true,
         });
-        if (result?.updated) updatedNotePaths.add(resolvedNotePath);
+        if (result?.updated) {
+          updatedNotePaths.add(resolvedNotePath);
+          reflectedCount += 1;
+        }
+        const fingerprint = syncFingerprint(syncPayload);
+        if (source.syncFingerprint !== fingerprint) {
+          memo.source = { ...source, syncFingerprint: fingerprint, syncedAt: new Date().toISOString(), status: "active" };
+          metadataChanged = true;
+        }
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (metadataChanged) {
+      try {
+        const saved = await writeConceptMemos(filePath, data);
+        Object.assign(data, saved);
+        ownConceptRevisions.add(saved.storageRevision);
       } catch (error) {
         errors.push(error);
       }
@@ -248,7 +309,7 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
         [...updatedNotePaths].map((notePath) => notifyNoteUpdated(notePath)),
       );
     }
-    return errors;
+    return { errors, reflectedCount };
   }
 
   async function persistConceptMemos(message, notifyWebview = true) {
@@ -261,36 +322,51 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
     saveQueue = saveQueue
       .catch(() => undefined)
       .then(async () => {
-        const [savedConceptMemos, savedCommonTodoItems] = await Promise.all([
-          writeConceptMemos(filePath, buildDataFromMessage(message)),
-          writeCommonTodoItems(nextCommonTodoItems),
-        ]);
+        const draft = buildDataFromMessage(message);
+        const savedConceptMemos = await writeConceptMemos(filePath, draft);
+        ownConceptRevisions.add(message?.payload?.storageRevision || draft.storageRevision);
+        ownConceptRevisions.add(savedConceptMemos.storageRevision);
+        currentData = { ...currentData, ...savedConceptMemos };
+        const savedCommonTodoItems = await writeCommonTodoItems(nextCommonTodoItems);
 
         const nextData = {
           ...savedConceptMemos,
           commonTodoItems: savedCommonTodoItems,
         };
-        const syncErrors = await syncEnabledConceptMemosToNoteItems(nextData);
-        if (syncErrors.length) {
-          panel.webview.postMessage({
+        const syncResult = await syncEnabledConceptMemosToNoteItems(nextData);
+        currentData = nextData;
+        if (syncResult.errors.length) {
+          postMessage({
             type: "showToast",
-            message: `出典元へ反映できなかったメモが${syncErrors.length}件あります。`,
+            message: `出典元への反映または同期情報の保存が${syncResult.errors.length}件完了していません。`,
             isError: true,
           });
         }
-        return nextData;
+        return { data: nextData, reflectedCount: syncResult.reflectedCount, syncErrorCount: syncResult.errors.length };
       });
-    currentData = await saveQueue;
+    const saveResult = await saveQueue;
+    currentData = saveResult.data;
+    const savedData = saveResult.data;
+    const backupIntervalMinutes = Number(vscode.workspace.getConfiguration("mojigoto").get("backupIntervalMinutes", 0));
+    await createStructuredBackup({
+      filePath,
+      targetType: "conceptMemo",
+      reason: "automatic",
+      intervalMinutes: backupIntervalMinutes,
+      content: `${JSON.stringify(savedData, null, 2)}\n`,
+    }).catch((error) => console.warn("[mojigoto] automatic concept memo backup failed", error));
     await notifyCommonTodoUpdated(panel);
 
     if (notifyWebview) {
-      panel.webview.postMessage({
+      postMessage({
         type: "conceptMemosSaved",
         payload: {
           filePath,
           workDir,
           workTitle,
-          data: currentData,
+          data: savedData,
+          reflectedCount: saveResult.reflectedCount,
+          syncErrorCount: saveResult.syncErrorCount,
           selectedMemoId: message.payload?.selectedMemoId || "",
           revision,
           autoSave: Boolean(message.autoSave),
@@ -298,275 +374,34 @@ function attachConceptMemoPanel(context, treeProvider, panel, options = {}) {
         },
       });
     }
-    return currentData;
+    return savedData;
   }
 
-  panel.webview.onDidReceiveMessage(async (message) => {
-    if (!message || typeof message !== "object") return;
-
-    switch (message.type) {
-      case "ready":
-        panel.webview.postMessage({
-          type: "loadConceptMemos",
-          payload: {
-            filePath,
-            workDir,
-            workTitle,
-            data: currentData,
-            selectedMemoId,
-            initialQuickFilters,
-          },
-        });
-        break;
-
-      case "createMemo": {
-        const memos = Array.isArray(currentData?.memos)
-          ? [...currentData.memos]
-          : [];
-        const nextMemo = createConceptMemoDraft({
-          order: memos.length,
-          title: "新規メモ",
-          folderId: String(message.payload?.folderId || "").trim(),
-        });
-
-        memos.unshift(nextMemo);
-        currentData = {
-          ...currentData,
-          updatedAt: new Date().toISOString(),
-          memos,
-        };
-
-        panel.webview.postMessage({
-          type: "loadConceptMemos",
-          payload: {
-            filePath,
-            workDir,
-            workTitle,
-            data: currentData,
-            selectedMemoId: nextMemo.id,
-            initialQuickFilters,
-          },
-        });
-
-        break;
-      }
-
-      case "saveConceptMemos": {
-        try {
-          if (autoSaveTimer) {
-            clearTimeout(autoSaveTimer);
-            autoSaveTimer = null;
-          }
-          await persistConceptMemos(message, true);
-
-          await triggerStatsRefresh();
-
-        } catch (error) {
-          panel.webview.postMessage({
-            type: "conceptMemosSaveError",
-            message: error.message || String(error),
-          });
-
-          panel.webview.postMessage({
-            type: "showToast",
-            message: "保存に失敗しました。",
-            isError: true,
-          });
-        }
-        break;
-      }
-
-      case "scheduleConceptMemosSave": {
-        if (autoSaveTimer) clearTimeout(autoSaveTimer);
-        const uiSettings = getWebviewUiSettings();
-        if (!uiSettings.autoSaveEnabled) {
-          autoSaveTimer = null;
-          break;
-        }
-        const pendingMessage = {
-          payload: message.payload || {},
-          revision: Number(message.revision || 0),
-          autoSave: true,
-        };
-        autoSaveTimer = setTimeout(() => {
-          autoSaveTimer = null;
-          persistConceptMemos(pendingMessage, true)
-            .then(() => triggerStatsRefresh())
-            .catch(() => {});
-        }, uiSettings.autoSaveDelayMs);
-        break;
-      }
-
-      case "dirtyStateChanged":
-        panel.title = `${message.dirty ? "● " : ""}${title}`;
-        break;
-
-      case "applyConceptMemoToNoteItem": {
-        try {
-          const payload = message.payload || {};
-          const resolvedNotePath = resolveActualNotePath(
-            String(payload.notePath || ""),
-            workDir,
-            String(payload.noteType || "plot"),
-          );
-
-          await applyConceptMemoToNoteItem({
-            ...payload,
-            notePath: resolvedNotePath,
-          });
-
-          const { notifyNoteUpdated } = require("./note-webview");
-          await notifyNoteUpdated(resolvedNotePath);
-
-          panel.webview.postMessage({
-            type: "conceptMemoAppliedToNoteItem",
-            payload: {
-              autoSaveAfterApply: Boolean(message?.payload?.autoSaveAfterApply),
-            },
-          });
-        } catch (error) {
-          panel.webview.postMessage({
-            type: "showToast",
-            message: `項目メモへの反映に失敗しました: ${error.message || String(error)}`,
-            isError: true,
-          });
-        }
-        break;
-      }
-
-      case "openSourceNoteFromConceptMemo": {
-        try {
-          const payload = message.payload || {};
-          const resolvedNotePath = resolveActualNotePath(
-            String(payload.notePath || ""),
-            workDir,
-            String(payload.noteType || "plot"),
-          );
-
-          const { openNoteWebview } = require("./note-webview");
-
-          await openNoteWebview(context, treeProvider, {
-            filePath: resolvedNotePath,
-            type: String(payload.noteType || "plot"),
-            workDir,
-            workName: workTitle,
-            focusGroupId: String(payload.groupId || ""),
-            focusItemId: String(payload.itemId || ""),
-            openItemMemo: true,
-          });
-        } catch (error) {
-          panel.webview.postMessage({
-            type: "showToast",
-            message: `ノートを開けませんでした: ${error.message || String(error)}`,
-            isError: true,
-          });
-        }
-        break;
-      }
-
-      case "confirmDeleteMemo": {
-        const titleText = String(message.payload?.title || "無題メモ");
-        const picked = await vscode.window.showWarningMessage(
-          `「${titleText}」を削除しますか？`,
-          { modal: true },
-          "削除",
-          "キャンセル",
-        );
-
-        if (picked === "削除") {
-          panel.webview.postMessage({
-            type: "deleteMemoConfirmed",
-            memoId: message.payload?.memoId || "",
-          });
-        }
-        break;
-      }
-
-      case "confirmBulkDeleteMemos": {
-        const memoIds = Array.isArray(message.payload?.memoIds)
-          ? message.payload.memoIds
-          : [];
-        const count = Number(message.payload?.count || memoIds.length || 0);
-
-        if (!memoIds.length) {
-          break;
-        }
-
-        const picked = await vscode.window.showWarningMessage(
-          `選択した ${count} 件のメモを削除しますか？`,
-          { modal: true },
-          "削除",
-          "キャンセル",
-        );
-
-        if (picked === "削除") {
-          panel.webview.postMessage({
-            type: "bulkDeleteMemosConfirmed",
-            payload: {
-              memoIds,
-            },
-          });
-        }
-        break;
-      }
-
-      case "confirmCloseConceptMemos": {
-        const dirty = Boolean(message.payload?.isDirty);
-
-        if (!dirty) {
-          panel.dispose();
-          break;
-        }
-
-        const picked = await vscode.window.showWarningMessage(
-          "未保存の変更があります。このまま閉じますか？",
-          { modal: true },
-          "閉じる",
-          "キャンセル",
-        );
-
-        if (picked === "閉じる") {
-          panel.dispose();
-        }
-        break;
-      }
-
-      case "copyConceptMemoText": {
-        try {
-          const text = String(message.payload?.text || "");
-          if (!text.trim()) {
-            panel.webview.postMessage({
-              type: "showToast",
-              message: "本文が空のためコピーできません。",
-              isError: true,
-            });
-            break;
-          }
-
-          await vscode.env.clipboard.writeText(text);
-
-          panel.webview.postMessage({
-            type: "showToast",
-            message:
-              "メモをコピーしました。貼り付けたい場所で Ctrl+V / Cmd+V を押してください。",
-          });
-        } catch (error) {
-          panel.webview.postMessage({
-            type: "showToast",
-            message: `コピーに失敗しました: ${error.message || String(error)}`,
-            isError: true,
-          });
-        }
-        break;
-      }
-
-      default:
-        break;
-    }
-  });
+  const session = {
+    get currentData() { return currentData; },
+    set currentData(value) { currentData = value; },
+    get saveQueue() { return saveQueue; },
+    get autoSaveTimer() { return autoSaveTimer; },
+    set autoSaveTimer(value) { autoSaveTimer = value; },
+  };
+  panel.webview.onDidReceiveMessage(createConceptMemoMessageHandler({
+    vscode, path, context, treeProvider, panel, filePath, workDir, workTitle, title,
+    selectedMemoId, initialQuickFilters, createConceptMemoDraft, readConceptNoteIndex,
+    readConceptMemosWithSharedTodo, resolveLatestWorkTitle, getConceptMemoPanelTitle,
+    getWebviewUiSettings, persistConceptMemos, openStructuredBackupHistory,
+    triggerStatsRefresh, resolveActualNotePath, applyConceptMemoToNoteItem,
+    postMessage, lifecycle, session,
+    getNoteWebview: () => require("./note-webview"),
+    isCurrentPanel: () => openConceptMemoPanels.get(filePath) === panel,
+  }));
 }
 
 async function openConceptMemoWebview(context, treeProvider, options = {}) {
+  return withRestoredWebviews(vscode, "mojigotoConceptMemos", () => openConceptMemoWebviewReady(context, treeProvider, options));
+}
+
+async function openConceptMemoWebviewReady(context, treeProvider, options = {}) {
+  options = { ...options, ...resolveConceptMemoWorkIdentity(options) };
   const {
     filePath,
     workDir = "",
@@ -597,14 +432,16 @@ async function openConceptMemoWebview(context, treeProvider, options = {}) {
     return;
   }
 
-  const existingPanel = openConceptMemoPanels.get(filePath);
+  const existingPanel = openConceptMemoPanels.get(filePath) || [...openConceptMemoPanels.values()].find(panel => webviewFileKey(panel.__mojigotoConceptMemoFilePath) === webviewFileKey(filePath));
   if (existingPanel) {
     existingPanel.title = title;
+    existingPanel.__mojigotoConceptMemoWorkDir = workDir;
+    existingPanel.__mojigotoConceptMemoWorkTitle = workTitle;
     existingPanel.reveal(viewColumn, preserveFocus);
 
     try {
       const nextData = await readConceptMemosWithSharedTodo(filePath);
-      existingPanel.webview.postMessage({
+      existingPanel.__mojigotoConceptMemoLifecycle?.postMessage({
         type: "loadConceptMemos",
         payload: {
           filePath,
@@ -654,17 +491,17 @@ async function openConceptMemoWebview(context, treeProvider, options = {}) {
 }
 
 function createConceptMemoSerializer(context, treeProvider) {
-  return vscode.window.registerWebviewPanelSerializer("mojigotoConceptMemos", {
+  return registerRestorableWebview(vscode, "mojigotoConceptMemos", {
     async deserializeWebviewPanel(webviewPanel, webviewState) {
       const state = webviewState || {};
       const filePath = String(state?.filePath || "").trim();
-      const workDir = String(state?.workDir || "").trim();
-      const workTitle = String(state?.workTitle || "").trim();
 
       if (!filePath) {
         webviewPanel.dispose();
         return;
       }
+
+      const { workDir, workTitle } = resolveConceptMemoWorkIdentity({ ...state, filePath });
 
       let initialData;
       try {
@@ -684,7 +521,7 @@ function createConceptMemoSerializer(context, treeProvider) {
   });
 }
 
-async function notifyConceptMemoUpdated(conceptMemoFilePath) {
+async function notifyConceptMemoUpdated(conceptMemoFilePath, { sourceNamesOnly = false } = {}) {
   if (!conceptMemoFilePath) return false;
 
   const conceptMemoFilePathKey = path.normalize(conceptMemoFilePath);
@@ -695,14 +532,26 @@ async function notifyConceptMemoUpdated(conceptMemoFilePath) {
 
   if (!panel) return false;
 
+  if (sourceNamesOnly) {
+    const data = await refreshConceptSourceStatuses(await readConceptMemos(conceptMemoFilePath), {
+      readNoteFile,
+      resolveNotePath: (notePath, type) => resolveActualNotePath(notePath, path.dirname(path.dirname(conceptMemoFilePath)), type),
+    });
+    await panel.__mojigotoConceptMemoLifecycle?.postMessage({
+      type: "conceptMemoSourceNamesUpdated",
+      payload: { memos: data.memos.map((memo) => ({ id: memo.id, source: memo.source })) },
+    });
+    return true;
+  }
+
   const nextData = await readConceptMemosWithSharedTodo(conceptMemoFilePath);
 
-  panel.webview.postMessage({
+  panel.__mojigotoConceptMemoLifecycle?.postMessage({
     type: "conceptMemosReloaded",
     payload: {
       filePath: conceptMemoFilePath,
-      workDir: "",
-      workTitle: "",
+      workDir: String(panel.__mojigotoConceptMemoWorkDir || ""),
+      workTitle: String(panel.__mojigotoConceptMemoWorkTitle || ""),
       data: nextData,
     },
   });
@@ -724,7 +573,7 @@ async function notifyCommonTodoUpdated(excludedPanel = null) {
 
       try {
         const data = await readConceptMemosWithSharedTodo(filePath);
-        panel.webview.postMessage({
+        panel.__mojigotoConceptMemoLifecycle?.postMessage({
           type: "conceptMemosReloaded",
           payload: {
             filePath,

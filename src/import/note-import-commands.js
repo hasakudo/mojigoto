@@ -116,6 +116,17 @@ async function runNoteItemAppendImportFlow(
     fileName: path.basename(filePath),
   });
 
+  if (!parsed.ok) return parsed;
+  const memoCount = parsed.entries.filter((entry) => entry.memo).length;
+  if (memoCount) {
+    const picked = await vscode.window.showQuickPick([
+      { label: "項目メモも挿入する", description: `${memoCount}件の項目メモを、項目と一緒に挿入します`, include: true },
+      { label: "項目メモは挿入しない", description: "項目名と詳細本文だけを挿入します", include: false },
+    ], { title: "項目の下へインポート", placeHolder: "項目メモを含めるか選んでください", ignoreFocusOut: true });
+    if (!picked) return { ok: false, cancelled: true };
+    const { prepareImportedGroups } = require("./note-memo-options");
+    parsed.entries = prepareImportedGroups([{ items: parsed.entries }], picked.include)[0].items;
+  }
   return parsed;
 }
 

@@ -352,48 +352,37 @@ async function buildDoctorReport(context, deps = {}) {
     const linkPath = workDir ? path.join(workDir, "manuscript") : "";
 
     if (effectiveWorkRoot && existsPath(effectiveWorkRoot)) {
-      pushCheck(
-        report,
-        existsPath(workDir) ? "ok" : "error",
-        "_WORK フォルダ",
-        workDir || "_WORK が解決できません",
-      );
-
-      pushCheck(
-        report,
-        existsPath(linkPath) ? "ok" : "error",
-        "_WORK/manuscript",
-        linkPath || "_WORK/manuscript が解決できません",
-      );
-
-      if (!existsPath(workDir)) {
-        pushRepair(report, `_WORK を作成: ${workDir}`);
-      }
-
-      if (!existsPath(linkPath)) {
-        pushRepair(report, `_WORK/manuscript を作成: ${linkPath}`);
-      }
-
-      if (
-        report.manuscriptRoot &&
-        linkPath &&
-        report.manuscriptRoot !== linkPath
-      ) {
+      const directRoot = report.manuscriptRoot && existsPath(report.manuscriptRoot)
+        && path.resolve(report.manuscriptRoot) !== path.resolve(linkPath);
+      if (directRoot) {
+        pushCheck(report, "ok", "View原稿（直接参照）", report.manuscriptRoot);
+      } else {
         pushCheck(
           report,
-          "warn",
-          "manuscriptRoot と View 先の不一致",
-          `設定値: ${report.manuscriptRoot}\n   推奨: ${linkPath}`,
+          existsPath(workDir) ? "ok" : "error",
+          "_WORK フォルダ",
+          workDir || "_WORK が解決できません",
         );
-        pushRepair(
-          report,
-          `manuscriptRoot を _WORK/manuscript に修正: ${linkPath}`,
-        );
-      }
 
-      if (!report.manuscriptRoot && linkPath) {
-        pushCheck(report, "error", "mojigoto.manuscriptRoot", "未設定です");
-        pushRepair(report, `manuscriptRoot を設定: ${linkPath}`);
+        pushCheck(
+          report,
+          existsPath(linkPath) ? "ok" : "error",
+          "_WORK/manuscript",
+          linkPath || "_WORK/manuscript が解決できません",
+        );
+
+        if (!existsPath(workDir)) pushRepair(report, `_WORK を作成: ${workDir}`);
+        if (!existsPath(linkPath)) pushRepair(report, `_WORK/manuscript を作成: ${linkPath}`);
+
+        if (report.manuscriptRoot && linkPath && report.manuscriptRoot !== linkPath) {
+          pushCheck(report, "warn", "manuscriptRoot と View 先の不一致", `設定値: ${report.manuscriptRoot}\n   推奨: ${linkPath}`);
+          pushRepair(report, `manuscriptRoot を _WORK/manuscript に修正: ${linkPath}`);
+        }
+
+        if (!report.manuscriptRoot && linkPath) {
+          pushCheck(report, "error", "mojigoto.manuscriptRoot", "未設定です");
+          pushRepair(report, `manuscriptRoot を設定: ${linkPath}`);
+        }
       }
 
       // 作品候補数
@@ -591,8 +580,10 @@ async function repairFromReport(context, report, deps = {}) {
 
       const workDir = path.join(workRoot, "_WORK");
       const linkPath = path.join(workDir, "manuscript");
-
-      await fsp.mkdir(linkPath, { recursive: true });
+      const viewRoot = report.manuscriptRoot && existsPath(report.manuscriptRoot)
+        && path.resolve(report.manuscriptRoot) !== path.resolve(linkPath)
+        ? report.manuscriptRoot : linkPath;
+      await fsp.mkdir(viewRoot, { recursive: true });
 
       await cfg.update(
         "workRoot",
@@ -601,7 +592,7 @@ async function repairFromReport(context, report, deps = {}) {
       );
       await cfg.update(
         "manuscriptRoot",
-        linkPath,
+        viewRoot,
         vscode.ConfigurationTarget.Workspace,
       );
 
@@ -618,7 +609,7 @@ async function repairFromReport(context, report, deps = {}) {
       } catch {}
 
       vscode.window.showInformationMessage(
-        "もじごと: _WORK/manuscript を作成し、設定を修復しました。",
+        "もじごと: 原稿フォルダの設定を修復しました。",
       );
       return true;
     }

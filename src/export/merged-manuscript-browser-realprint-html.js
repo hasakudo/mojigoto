@@ -1,3 +1,5 @@
+const { safeFontFamily } = require("../preview/font-defaults");
+const { getMonoRubyAdvance, positionMonoRubyAnnotations, getMonoRubyStyle } = require('../preview/ruby-spacing');
 const {
   buildMergedManuscriptPrintBlocks,
   resolveMergedManuscriptRealPrintMetrics,
@@ -833,6 +835,10 @@ function renderDisplayTokenHtml(token, layoutOptions = {}) {
     token.hanging && /[！？!?]/.test(ch) ? " mjm-hanging-emphasis" : "";
 
   if (token.type === "ruby") {
+    const monoAdvance = getMonoRubyAdvance(token);
+    if (monoAdvance) {
+      return `<span class="mjm-ruby mjm-ruby-mono${hangingClass}${punctuationClass}" style="--mjm-mono-advance:${monoAdvance.toFixed(3)}em;${getMonoRubyStyle(token)}"><span class="mjm-ruby-base">${escapeHtml(token.displayText)}</span><span class="mjm-ruby-text">${escapeHtml(token.rubyText)}</span></span>`;
+    }
     const rubyMetrics = getRubyTokenMetrics(token);
     const useRubyTypographyAdjustments =
       layoutOptions?.useTypographyAdjustments !== false;
@@ -887,7 +893,7 @@ function renderDisplayLineHtml(line, layoutOptions = {}) {
     ? " mjm-line-tail-pushed"
     : "";
 
-  return `<div class="mjm-line${rubyClass}${pushoutTailClass}">${tokens
+  return `<div class="mjm-line${rubyClass}${pushoutTailClass}">${positionMonoRubyAnnotations(tokens)
     .map((token) => renderDisplayTokenHtml(token, layoutOptions))
     .join("")}</div>`;
 }
@@ -1569,7 +1575,7 @@ html, body {
 }
 
 body {
-  font-family: ${JSON.stringify(fontFamily)};
+  font-family: ${safeFontFamily(fontFamily)};
 }
 
 .realPrintDocument {
@@ -1796,6 +1802,25 @@ body {
   letter-spacing: -0.03em;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.mjm-ruby-mono {
+  inline-size: var(--mjm-mono-advance);
+  block-size: 1em;
+  margin: 0;
+  padding: 0;
+  letter-spacing: 0;
+}
+.mjm-ruby-mono .mjm-ruby-base {
+  display: block;
+  inline-size: 100%;
+  text-align: center;
+  letter-spacing: 0;
+}
+.mjm-ruby-mono .mjm-ruby-text {
+  inset-inline-start: var(--mjm-mono-position, 50%);
+  font-size: var(--mjm-mono-font, 0.5em);
+  letter-spacing: 0;
 }
 
 .mjm-bouten {

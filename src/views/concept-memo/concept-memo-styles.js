@@ -11,7 +11,7 @@ function getConceptMemoStyles() {
 
     .app {
       display: grid;
-      grid-template-columns: 350px minmax(0, 1fr) minmax(350px, 400px);
+      grid-template-columns: 350px minmax(0, 1fr) minmax(350px, 450px);
       min-height: calc(100vh - 58px);
       height: calc(100vh - 58px);
     }
@@ -144,7 +144,7 @@ function getConceptMemoStyles() {
         bottom: 58px;
         z-index: 40;
         display: block;
-        width: min(380px, calc(100vw - 16px));
+        width: min(450px, calc(100vw - 16px));
         padding: 8px;
         overflow: auto;
         border: 1px solid var(--vscode-panel-border);
@@ -237,6 +237,11 @@ function getConceptMemoStyles() {
       gap: 5px;
     }
 
+    .folderQuickList.isMeasuring {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
     .folderChip {
       max-width: 125px;
       display: inline-flex;
@@ -278,11 +283,82 @@ function getConceptMemoStyles() {
       color: var(--vscode-list-activeSelectionForeground);
     }
 
-    .folderOverflowSelect {
-      width: 100%;
+    .folderOverflowMenu {
+      position: relative;
       margin-top: 6px;
-      padding-top: 4px;
-      padding-bottom: 4px;
+    }
+
+    .folderOverflowMenu[hidden] {
+      display: none !important;
+    }
+
+    .folderOverflowMenu > summary {
+      min-height: 32px;
+      padding: 6px 30px 6px 10px;
+      border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      background: var(--vscode-dropdown-background, var(--vscode-input-background));
+      color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+      cursor: pointer;
+      box-sizing: border-box;
+      list-style-position: inside;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folderOverflowOptions {
+      position: absolute;
+      z-index: 70;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 230px;
+      padding: 6px;
+      overflow-y: auto;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 7px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .folderOverflowOption {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 7px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .folderOverflowOption:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .folderOverflowOption span:nth-child(2) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folderOverflowCount {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+    }
+
+    .folderOverflowClear {
+      align-self: flex-end;
+      margin-bottom: 4px;
+      padding: 4px 7px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 5px;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      cursor: pointer;
     }
 
     .folderManager {
@@ -412,6 +488,43 @@ function getConceptMemoStyles() {
       gap: 8px;
       flex-wrap: wrap;
       margin-left: auto;
+    }
+
+    .editorActionIconButton {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      min-width: 34px;
+      min-height: 34px;
+      padding: 6px;
+      flex: 0 0 auto;
+    }
+
+    .memoFolderOptions {
+      display: grid;
+      gap: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .memoFolderOption {
+      display: flex;
+      min-height: 30px;
+      gap: 7px;
+      align-items: center;
+      padding: 4px 6px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .memoFolderOption:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .memoFolderOption input {
+      flex: 0 0 auto;
+      margin: 0;
     }
 
     .editorHeaderBottom {
@@ -846,6 +959,19 @@ function getConceptMemoStyles() {
       display: none !important;
     }
 
+    .tagFilterChipRow {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .filterResetRow {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
+
     .bulkActionHeader {
       margin-bottom: 8px;
     }
@@ -1164,8 +1290,11 @@ function getConceptMemoStyles() {
       align-items: center;
     }
 
-    #openSearchPanelButton {
-      font-size: 1.6em;
+    .conceptActionIcon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+      pointer-events: none;
     }
 
     #memoEditorMoreButton {
@@ -1216,14 +1345,14 @@ function getConceptMemoStyles() {
     }
 
     .textarea {
-      min-height: 440px;
+      min-height: 340px;
       resize: vertical;
       line-height: 1.6;
     }
 
-    @media (max-width: 980px) {
+    @media (max-width: 1000px) {
       .textarea {
-        min-height: 400px;
+        min-height: 250px;
       }
     }
 
@@ -1295,6 +1424,24 @@ function getConceptMemoStyles() {
       opacity: 1;
       font-weight: 600;
       line-height: 1.55;
+    }
+
+    .autoSaveBadge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 9px;
+      border: 1px solid color-mix(in srgb, var(--vscode-testing-iconPassed, #3a9d5d) 45%, var(--vscode-panel-border));
+      border-radius: 999px;
+      color: var(--vscode-testing-iconPassed, #3a9d5d);
+      background: color-mix(in srgb, var(--vscode-testing-iconPassed, #3a9d5d) 12%, transparent);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .autoSaveBadge[hidden] {
+      display: none;
     }
 
     .sourceSummaryText {

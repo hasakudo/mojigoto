@@ -58,9 +58,10 @@ function getStatsRetentionSettings() {
     0,
     Number(cfg.get("eventsRetentionDays", 90)) || 90,
   );
+  const configuredDailyRetentionDays = Number(cfg.get("dailyRetentionDays", 400));
   const dailyRetentionDays = Math.max(
     0,
-    Number(cfg.get("dailyRetentionDays", 365)) || 365,
+    Number.isFinite(configuredDailyRetentionDays) ? configuredDailyRetentionDays : 400,
   );
 
   return {

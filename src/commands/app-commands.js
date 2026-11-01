@@ -11,6 +11,7 @@ function registerAppCommands(context, deps = {}) {
       pending: 0,
       error: "not implemented",
     }),
+    testSheetsWebhookConnection = async () => ({ protocolVersion: 1, capabilities: [] }),
     getPreviewUrl = () => "",
     runDoctor = null,
   } = deps;
@@ -65,6 +66,20 @@ function registerAppCommands(context, deps = {}) {
       } catch (e) {
         vscode.window.showErrorMessage(
           `もじごと: 日時ログの送信に失敗しました: ${String(e)}`,
+        );
+      }
+    }),
+
+    vscode.commands.registerCommand("mojigoto.testSheetsConnection", async () => {
+      try {
+        const result = await testSheetsWebhookConnection();
+        const version = Number(result?.protocolVersion || 1);
+        vscode.window.showInformationMessage(
+          `もじごと: Google Sheets連携へ接続できました（連携v${version}）`,
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `もじごと: Google Sheets連携を確認できませんでした: ${String(error?.message || error)}`,
         );
       }
     }),

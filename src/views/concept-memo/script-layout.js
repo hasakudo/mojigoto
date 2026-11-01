@@ -88,20 +88,13 @@ function getConceptMemoLayoutScript() {
       app.classList.toggle("isCommonTodoCollapsed", isCommonTodoCollapsed);
 
       if (toggleButton) {
-        toggleButton.textContent = isCommonTodoCollapsed
-          ? "共通TODOを表示"
-          : "共通TODOを隠す";
-        toggleButton.classList.toggle("isActive", !isCommonTodoCollapsed);
-        toggleButton.title = isCommonTodoCollapsed
-          ? "作品共通TODOを表示"
-          : "作品共通TODOを折りたたむ";
+        setConceptActionState(toggleButton, isCommonTodoCollapsed ? "作品共通TODOを表示" : "作品共通TODOを折りたたむ", !isCommonTodoCollapsed);
+        toggleButton.setAttribute("aria-expanded", String(!isCommonTodoCollapsed));
       }
 
       if (sidebarButton) {
-        sidebarButton.classList.toggle("isActive", !isCommonTodoCollapsed);
-        sidebarButton.title = isCommonTodoCollapsed
-          ? "作品共通TODOを表示"
-          : "作品共通TODOを折りたたむ";
+        setConceptActionState(sidebarButton, isCommonTodoCollapsed ? "作品共通TODOを表示" : "作品共通TODOを折りたたむ", !isCommonTodoCollapsed);
+        sidebarButton.setAttribute("aria-expanded", String(!isCommonTodoCollapsed));
       }
     }
 

@@ -1,6 +1,9 @@
+const { actionIcon } = require("../../views/shared/action-icons");
 const {
   renderDashboardNoteModal,
   renderDashboardNotesDataScript,
+  renderProgressShareModal,
+  renderProgressSummaryDataScript,
   renderDashboardTab,
 } = require("./stats-html-dashboard");
 const {
@@ -16,7 +19,7 @@ function renderHeader(state, esc) {
   <h1>Dashboard <span class="chip">${esc(state.exportedAtJst || "")}</span></h1>
   <div class="statsHeaderActions">
     <button id="btnCorrectStats">記録を補正</button>
-    <button id="btnRefresh">更新</button>
+    <button id="btnRefresh" class="statsIconButton" title="Dashboardを更新" aria-label="Dashboardを更新">${actionIcon("refresh")}</button>
   </div>
   </div>`;
 }
@@ -41,8 +44,10 @@ function renderBody(state, esc) {
     ${renderWritingMemoTab(state, esc)}
     ${renderHighlightTab(state, esc)}
     ${renderDashboardNoteModal()}
+    ${renderProgressShareModal(state)}
     ${renderWritingMemoStatusMenu()}
     ${renderDashboardNotesDataScript(state)}
+    ${renderProgressSummaryDataScript(state)}
   `;
 }
 

@@ -465,6 +465,13 @@ function registerPreviewCommands(context, deps = {}) {
       },
     },
   );
+  if (typeof vscode.workspace.onDidChangeConfiguration === "function") {
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration("mojigoto.defaultManuscriptFontFamily") && state.serverOk) {
+        void sendPreviewSettings({ state }).catch(() => {});
+      }
+    }));
+  }
   updateServerStatus(state);
 
   const serializer = createPreviewSerializer(context, state, {

@@ -200,9 +200,17 @@ function ensureFilesObj(files, dateJst) {
 }
 
 let _refreshStatsHandler = null;
+let _refreshStatsRegistration = null;
 
 function setStatsRefreshHandler(fn) {
+  const registration = {};
+  _refreshStatsRegistration = registration;
   _refreshStatsHandler = typeof fn === "function" ? fn : null;
+  return { dispose() {
+    if (_refreshStatsRegistration !== registration) return;
+    _refreshStatsRegistration = null;
+    _refreshStatsHandler = null;
+  } };
 }
 
 async function triggerStatsRefresh() {

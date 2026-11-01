@@ -1,4 +1,5 @@
 const vscode = require("vscode");
+const { registerRestorableWebview, withRestoredWebviews } = require("../views/shared/restored-webviews");
 const { setWebviewPanelThemeIcon } = require("../views/shared/webview-panel-icon");
 const { escapeHtml } = require("../core/path-utils");
 
@@ -314,6 +315,10 @@ function getOriginFromState(state) {
 }
 
 async function openPreviewWebview(context, state, options = {}) {
+  return withRestoredWebviews(vscode, "mojigoto.preview", () => openPreviewWebviewReady(context, state, options));
+}
+
+async function openPreviewWebviewReady(context, state, options = {}) {
   ensurePreviewState(state);
 
   const targetColumn = options.column ?? vscode.ViewColumn.Beside;
@@ -385,7 +390,7 @@ function createPreviewSerializer(context, state, options = {}) {
 
   const title = options.title || "もじごとプレビュー";
 
-  return vscode.window.registerWebviewPanelSerializer("mojigoto.preview", {
+  return registerRestorableWebview(vscode, "mojigoto.preview", {
     async deserializeWebviewPanel(webviewPanel) {
       state.panel = webviewPanel;
 
