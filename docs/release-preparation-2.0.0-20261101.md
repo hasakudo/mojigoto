@@ -14,3 +14,7 @@
 ローカルコミットと公開用VSIXの照合後、GitHubへの反映、Marketplace管理画面へのアップロードへ進む。README画像はGitHub側の更新後に反映される。ローカルの準備完了だけではGitHub・Marketplace・Web本番への公開完了を意味しない。Marketplaceは既存の `hasakudo.mojigoto` へ2.0.0をアップロードする。
 
 Webの本番反映とWeb配布ZIPの作成は別段階として扱う。
+
+## 依存関係の脆弱性対応
+
+GitHubへの反映後、VSIX作成ツールを更新。npm監査0件・全1,987テスト成功。修正前との同梱差分はpackage.jsonの開発用依存設定のみ。公開用VSIXは今回更新した `release/mojigoto-2.0.0.vsix` を使用する。[対応記録](dependency-security-20261101.md)。GitHub側のDependabotアラートは再解析後の表示で別途確認する。
